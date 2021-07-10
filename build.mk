@@ -317,7 +317,7 @@ Builder.outName = $(basename $(notdir $(call .,<)))
 Builder.outSuffix = $(suffix $(call .,<))
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
-Builder.message = \#:: $C[$A] → $@
+Builder.message = \#-- $C[$A] → $@
 Builder.echoCommand = $(if $(call .,message),@echo $(call _shellQuote,$(call .,message)))
 
 Builder.mkdirCommand = @mkdir -p $(dir $@)
@@ -412,7 +412,7 @@ Program++.inferClasses = Compile.c Compile++.cpp
 # programs.
 #
 Shell.exec = $(_exportPrefix)./$< $(call .,args)
-Shell.inferClasses = Program.c Program.cpp
+Shell.inferClasses = Program.c Program.o Program++.cpp
 Shell.args = #
 Shell.exports = #
 
@@ -422,7 +422,7 @@ _exportPrefix = $(foreach v,$(call .,exports),$v=$(call _shellQuote,$(call .,$v)
 # Exec[PROGRAM] : Run PROGRAM, capturing its output (stdout).
 #
 Exec.inherit = Shell Builder
-Exec.command = ( $(call .,exec) ) > $@.tmp && mv $@.tmp $@
+Exec.command = ( $(call .,exec) ) > $@ || rm $@
 Exec.outSuffix = .out
 
 
@@ -473,15 +473,30 @@ Remove.command = rm -f $A
 # Print[INPUT] : Write artifact to stdout.
 #
 Print.inherit = Phony
-Print.command = cat $<
+Print.command = @cat $<
+
+
+# Tar[INPUTS] : Construct a TAR file
+#
+Tar.inherit = Builder
+Tar.outSuffix = .tar
+Tar.outName = $(subst *,@,$A)
+Tar.command = tar -cvf $@ $^
 
 
 # Gzip[INPUT] :  Compress an artifact.
 #
 Gzip.inherit = Builder
-Gzip.command = cat $< | gzip - > $@.tmp && mv $@.tmp $@
+Gzip.command = cat $< | gzip - > $@ || rm $@
 Gzip.outSuffix = $(suffix $<).gz
 
+
+# Zip[INPUTS] : Construct a ZIP file
+#
+Zip.inherit = Builder
+Zip.outSuffix = .zip
+Zip.outName = $(subst *,@,$A)
+Zip.command = zip $@ $^
 
 # Unzip[OUT] : Extract from a zip file
 #
@@ -490,7 +505,7 @@ Gzip.outSuffix = $(suffix $<).gz
 #   its `in` property to specify the zip file.
 #
 Unzip.inherit = Builder
-Unzip.command = unzip -p $< $A > $@.tmp && mv $@.tmp $@
+Unzip.command = unzip -p $< $A > $@ || rm $@
 Unzip.in = $C.zip
 
 

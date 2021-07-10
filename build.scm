@@ -1,6 +1,5 @@
 ;; build.scm:  SCAM prototypes of functions for build.mk
 
-
 (require "core")
 (require "string")
 

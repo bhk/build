@@ -30,12 +30,12 @@ build.mk will output a description of the arguments, rather than build them.
 
 ## Aliases
 
+Aliases are names that may be used on the command line as goals.
+
 If your makefile defines a variable named `Goal.NAME`, then `NAME` is a
 valid *alias*.  The value of that variable describes all the targets that
 the alias will build.  It can contain instances, indirections, or ordinary
 target names.
-
-Alias names may be used on the Make command line, not anywhere else.
 
 Each alias may be given a command to execute by defining a variable named
 `Alias[NAME].command`.
@@ -47,10 +47,10 @@ variables that define it: `Goal.clean` and `Alias[clean].command`.
 
 An "indirection" is a word that names a variable that contains target
 descriptions.  Indirections may appear in certain contexts that expect
-multiple targets to be identified, namely: the command line arguments passed
-to make, and the `in` property of a build product.  In these contexts, an
-"expansion" step is performed, in which indirections are replaced with the
-targets they reference.
+multiple target names, namely: the command line arguments passed to make,
+and the `in` property of a build product.  In these contexts, an "expansion"
+step is performed, in which indirections are replaced with the targets they
+reference.
 
 There are two forms of indirections:
 

@@ -2,6 +2,6 @@
 
 A Make-based build tool.
 
-[Documentation](build.md)
+[Example Walk-Through](example.md)
 
-To run tests, run `make`.
+[Full Documentation](build.md)

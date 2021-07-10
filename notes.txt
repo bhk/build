@@ -1,76 +1,26 @@
+# Notes
 
-# make C[A].P
+## Todo
 
-Should this echo (like, `make help C[A].P`, but without decoration)?
+* Handle '$...' targets during $(end), and make $... rule a no-op.
 
-Or should this write the value to a file?  Print[C[A].P] would echo.
+* Incorporate $A more completely in Program[]
+  fssafe: encode [ ] , = : /
 
-# make Less[file]
+* Exec[a=X,FILE,a=Y]
+   - incorporate $A
 
-# make Shell[file,cmd:less]
+* Rewrites
 
+  Print.inherit = Rewrite ;  Print.rewrite = Exec[w=cat,$A]
 
-    - Copy class uses "TO" arg value, if present.
-    - Add Mkdir, Touch, Remove classes.
-    - Positional and named parameters in arguments: foo.c,bar.c,baz.c,O=3
-    - Builder.in uses _argValues
+  Rewrite.out = $(call get,out,$(call .,rewrite))
+  Rewrite.needs = $(call .,rewrite)
+  Rewrite.rule = #
 
+* Goal.X  -->  make_X
 
-# Walk-through
+* make C[A].P
 
-## Command-line goals define the roots of the graph; C[A] & nesting
-
-make Compile[hello.c]
-make Program[Compile[hello.c]]
-make Run[Program[Compile[hello.c]]]
-
-make Program[hello.c]
-make help Program[XXX].inferClasses
-make help Run[XXX].inferClasses
-make Run[hello.c]
-
-## Help describes, not builds, targets
-
-make help Run[hello.c]
-
-make Exec[hello.c]
-
-make help Exec[hello.c]
-
-make Print[hello.c]
-make Print[Exec[hello.c]]
-make Gzip[Exec[hello.c]]
-
-gunzip -c .out/Gzip_Exec_Program_Compile/hello.out.gz
-
-## Aliases
-
-Goal.default = Run[binsort.c]
-Goal.hello = Run[hello.c]
-
-make default
-make hello
-
-make help hello
-
-## Indirection
-
-export RUNS='Run[binsort.c] Run[hello.c]'
-make *RUNS
-
-export SRCS='hello.c binsort.c'
-make help Run*SRCS
-make Run*SRCS
-
-export RUNS='Run*SRCS'
-
-## combination
-
-| SRCS = hello.c binsort.c
-|
-| Goal.default = Exec*SRCS
-| Goal.deploy = Copy*Program*SRCS
-
-make clean
-make default deploy
-make default deploy DEBUG=%
+  Should this echo (like, `make help C[A].P`, but without decoration)?
+  Or should this write the value to a file?  Print[C[A].P] would echo.

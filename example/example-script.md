@@ -132,7 +132,7 @@ complex builds in a Makefile so they can invoked with a simple command, like
 `make` or `make deploy`.  Minion provides alias goals for this purpose.  An
 *alias goal* is a name that, when provided on the command line, causes a
 list of targets to be built.  To define one, define a variable named
-`Goal.NAME`, setting its value to the list of targets to be built.
+`make_NAME`, setting its value to the list of targets to be built.
 
 This next Makefile defines alias goals for "default" and "deploy":a
 

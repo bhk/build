@@ -70,7 +70,7 @@ _once = $(foreach K,~$1,$(if $(_memoIsSet),$($K),$(call _memoSet,$($1))))
 # Inspect targets/goals
 _isInstance = $(filter %],$1)
 _isIndirect = $(findstring *,$(word 1,$(subst [,[ ,$1)))
-_aliasInputs = $(addprefix *,$(call _isDefined,Goal.$1))
+_aliasInputs = $(addprefix *,$(call _isDefined,make_$1))
 
 # Translate goal $1 to a instance if a rule needs to be generated.
 _goalID = $(if $(or $(_isInstance),$(_isIndirect),$(_aliasInputs)),Alias[$1])
@@ -168,7 +168,7 @@ endef
 define _helpAlias
 Target "$1" is an alias defined by:
 
-   Goal.$1 = $(value Goal.$1)
+   make_$1 = $(value make_$1)
 
 $(call _helpDeps,Alias[$1])
 
@@ -208,7 +208,7 @@ _error_default: ; $(error Makefile included minion-start.mk but did not call `$$
 $$%: ; @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) help help_expr=$(call _shellQuote,$$$*)
 
 # Define an alias for `clean`.  User makefiles can override these.
-Goal.clean ?= # no dependencies
+make_clean ?= # no dependencies
 Alias[clean].command ?= rm -rf $(filter-out /% . ./,$(OUTDIR))
 
 end = $(eval $(value _epilogue))

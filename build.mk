@@ -187,9 +187,11 @@ endef
 
 # $1 = command line goals other than "help"
 _help! = \
-  $(if $1,,$(info $(_helpMessage)))\
-  $(foreach g,$1,\
-    $(info $(call _help$(call _goalType,$g),$g)))
+  $(if $(filter com%,$(origin help_expr)),\
+    $(info $(value help_expr) = $(call _q1,$(help_expr))),\
+    $(if $1,,$(info $(_helpMessage)))\
+    $(foreach g,$1,\
+      $(info $(call _help$(call _goalType,$g),$g))))
 
 
 #--------------------------------
@@ -200,7 +202,10 @@ _help! = \
 # nothing is listed on the command line)
 _error_default: ; $(error Makefile included build.mk but did not call `$$(end)`)
 
-$$%: ; @true $(info $(call _q1,$(call if,,,$$$*)))
+# Using "$*" in the following pattern rule we can capture the entirety of
+# the goal, including embedded spaces.  We re-invoke Make to evaluate the
+# string prior to the rule processing phase.
+$$%: ; @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) help help_expr=$(call _shellQuote,$$$*)
 
 # Define an alias for `clean`.  User makefiles can override these.
 Goal.clean = # no dependencies
@@ -317,7 +322,7 @@ Builder.outName = $(basename $(notdir $(call .,<)))
 Builder.outSuffix = $(suffix $(call .,<))
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
-Builder.message = \#-- $C[$A] → $@
+Builder.message = \#-> $C[$A]
 Builder.echoCommand = $(if $(call .,message),@echo $(call _shellQuote,$(call .,message)))
 
 Builder.mkdirCommand = @mkdir -p $(dir $@)

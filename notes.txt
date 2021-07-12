@@ -1,26 +1,83 @@
 # Notes
 
+
 ## Todo
 
-* Handle '$...' targets during $(end), and make $... rule a no-op.
+* Quiet mode
 
-* Incorporate $A more completely in Program[]
-  fssafe: encode [ ] , = : /
+* Goal.X  -->  make_X
+
+* Incorporate all of $A into .out
+   - use $A, *not* $<
+   - fs-safe encoding for = : /. /.. * ! # \ $ % ~ ? |
 
 * Exec[a=X,FILE,a=Y]
    - incorporate $A
 
-* Rewrites
+* Do not inherit Ancestor[A].P definitions
 
-  Print.inherit = Rewrite ;  Print.rewrite = Exec[w=cat,$A]
+
+## Invoking `include` at end, not at start
+
+  Reasons for include-at-start + $(end):
+   - modify a builtin class (discouraged)
+   - call exported functions *immediately* (discouraged)
+   - override Goal.clean
+
+  Benefits of include-at-end:
+   + simplicity
+   + enables 'alias mm make -f ...' as a use-anywhere command
+   + discourages modifying builtin classes (use inheritance)
+
+  Features to support include-at-end:
+   - Enable "end" by setting a variable
+   - Specify "modules" to be loaded after defns
+   - Export empty classes so Makefile can assign any property (ugh)
+   - Guard the default `Goal.clean` assignment
+
+
+## Rewrites
+
+Can we define, for example, "Print[A]" as "Exec[w=cat,A]" ?
 
   Rewrite.out = $(call get,out,$(call .,rewrite))
   Rewrite.needs = $(call .,rewrite)
   Rewrite.rule = #
+  Print.inherit = Rewrite
+  Print.rewrite = Exec[w=cat,$A]
 
-* Goal.X  -->  make_X
+     But: Print is not a sub-class.  Its properties are largely ignored.
+     Inheriting from it does not have the intended effect.
 
-* make C[A].P
+  Print[A] = Exec[w=cat,$A]
+
+     But: Also not a subclass, although this difference is more apparent
+     when you are defining it (but still unclear when you are just using
+     it).  New concept.  Complicates `get`.
+
+  Print.inherit = Exec
+  Print.execArgs = w=cat,$A
+
+     Exec needs to support it, but it has these benefits:
+       - .out is based on the *actual* Print[A]
+
+
+## Help[...] vs "make help ..."
+
+  "make help ..." must be processed prior to rule processing.
+
+
+## {property} notation
+
+    {x} --> ${call .,x}     \{x}  ->  {x}  \\{x} => ??
+
+    C.P = {x}
+    C.P! = ${call .,x}
+
+    Chain = C[A].P! C[A].P C.P! C.P Parent.P! Parent.P ...
+
+
+## make C[A].P
 
   Should this echo (like, `make help C[A].P`, but without decoration)?
   Or should this write the value to a file?  Print[C[A].P] would echo.

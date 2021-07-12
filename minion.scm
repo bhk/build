@@ -1,4 +1,4 @@
-;; build.scm:  SCAM prototypes of functions for build.mk
+;; minion.scm:  SCAM prototypes of functions for Minion
 
 (require "core")
 (require "string")
@@ -25,8 +25,8 @@
 (define (show fn-name ?vars-to ?vars-from)
   (define `fn-val (native-value fn-name))
   (print fn-name " = "
-         (subst "$`" "$$"       ;; SCAM runtime -> build.mk
-                "$  " "$(\\s)"  ;; SCAM runtime -> build.mk
+         (subst "$`" "$$"       ;; SCAM runtime -> Minion make
+                "$  " "$(\\s)"  ;; SCAM runtime -> Minion make
                 "$(&)" "$&"     ;; opt!
                 (swap fn-val vars-to vars-from))
          "\n"))
@@ -135,7 +135,7 @@
 (print)
 
 ;;----------------------------------------------------------------
-;; Functions defined in build.mk
+;; Functions defined by Minion
 ;;----------------------------------------------------------------
 
 (define `(bound? var)

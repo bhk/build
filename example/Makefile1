@@ -1,2 +1,1 @@
-include ../build.mk
-$(end)
+include ../minion.mk

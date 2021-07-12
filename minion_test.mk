@@ -1,4 +1,4 @@
-include build.mk
+include minion-start.mk
 
 true = $(if $1,1)
 not = $(if $1,,1)

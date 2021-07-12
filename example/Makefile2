@@ -1,8 +1,6 @@
-include ../build.mk
-
 sources = hello.c binsort.c
 
 Goal.default = Exec*sources
 Goal.deploy = Copy*Program*sources
 
-$(end)
+include ../minion.mk

@@ -3,7 +3,7 @@
 
 ## Introduction
 
-Here is an example command line session that introduces `build.mk`
+Here is an example command line session that introduces Minion
 functionality.  You can follow along typing the commands yourself in the
 `example` subdirectory of the project.
 
@@ -14,36 +14,34 @@ $ cp Makefile1 Makefile
 ```
 ```console
 $ cat Makefile
-include ../build.mk
-$(end)
+include ../minion.mk
 ```
 
 This Makefile doesn't describe anything to be built, but it does invoke
-`build.mk`, so when we type `make` in this directory, `build.mk` will
-process the goals.  A *goal* is target name that is listed on the command
-line.  Goals determine what Make actually does when it is invoked.
+Minion, so when we type `make` in this directory, Minion will process the
+goals.  A *goal* is target name that is listed on the command line.  Goals
+determine what Make actually does when it is invoked.
 
 
 ## Instances
 
-The salient feature of `build.mk` is instances.  An *instance* is a
-description of a built artifact, written as `CLASS[ARGUMENT]`.  With
-`build.mk`, instances may be provided as goals, or as arguments to other
-instances.  (Like other target names, instances may not contain whitespace
-characters.)
+The salient feature of Minion is instances.  An *instance* is a description
+of a built artifact, written as `CLASS[ARGUMENT]`.  With Minion, instances
+may be provided as goals, or as arguments to other instances.  (Like other
+target names, instances may not contain whitespace characters.)
 
 `ARGUMENT` typically is the name of an input to the build step.  `CLASS` is
-the name of a class that is defined in `build.mk` or in your Makefile.  To
-get started, let's use some classes built into `build.mk`:
+the name of a class that is defined by Minion or your Makefile.  To get
+started, let's use some classes built into Minion:
 
 ```console
 $ make Compile[hello.c]
-#-- Compile[hello.c] → .out/Compile/hello.o
+#-> Compile[hello.c]
 gcc -c -o .out/Compile/hello.o hello.c -Os -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror   -MMD -MP -MF .out/Compile/hello.o.d
 ```
 ```console
 $ make Program[Compile[hello.c]]
-#-- Program[Compile[hello.c]] → .out/Program_Compile/hello
+#-> Program[Compile[hello.c]]
 gcc -o .out/Program_Compile/hello .out/Compile/hello.o  
 ```
 ```console
@@ -69,7 +67,7 @@ so there is nothing to do.  Doing nothing, whenever possible, is what a
 build system is all about.
 
 To make things more clear, we can re-issue this command after invoking `make
-clean`, a target defined by `build.mk` that removes all generated artifacts.
+clean`, a target defined by Minion that removes all generated artifacts.
 (By the way, where *are* these generated artifacts?  By default, they go
 somewhere under a directory named ".out", but we ordinarily don't care where
 they reside, since we identify them by their instance names.)
@@ -80,9 +78,9 @@ rm -rf .out/
 ```
 ```console
 $ make Program[hello.c]
-#-- Compile[hello.c] → .out/Compile/hello.o
+#-> Compile[hello.c]
 gcc -c -o .out/Compile/hello.o hello.c -Os -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror   -MMD -MP -MF .out/Compile/hello.o.d
-#-- Program[hello.c] → .out/Program_Compile/hello
+#-> Program[hello.c]
 gcc -o .out/Program_Compile/hello .out/Compile/hello.o  
 ```
 
@@ -116,7 +114,7 @@ file, so its instances are *not* phony.
 
 ```console
 $ make Exec[hello.c]
-#-- Exec[hello.c] → .out/Exec_Program_Compile/hello.out
+#-> Exec[hello.c]
 ( ./.out/Program_Compile/hello  ) > .out/Exec_Program_Compile/hello.out || rm .out/Exec_Program_Compile/hello.out
 ```
 
@@ -140,8 +138,8 @@ Hello world.
 
 ## Help
 
-When the goal `help` appears on the command line, `build.mk` will describe
-all of the other goals on the command line, instead of building them.  This
+When the goal `help` appears on the command line, Minion will describe all
+of the other goals on the command line, instead of building them.  This
 gives us visibility into how things are being interpreted, and how they map
 to underlying Make primitives.
 
@@ -172,7 +170,7 @@ Output: .out/Exec_Program_Compile/hello.out
 
 Rule: 
   | .out/Exec_Program_Compile/hello.out : .out/Program_Compile/hello  
-  | 	@echo '#-- Exec[hello.c] → .out/Exec_Program_Compile/hello.out'
+  | 	@echo '#-> Exec[hello.c]'
   | 	@mkdir -p .out/Exec_Program_Compile/
   | 	( ./.out/Program_Compile/hello  ) > .out/Exec_Program_Compile/hello.out || rm .out/Exec_Program_Compile/hello.out
   | 
@@ -199,7 +197,7 @@ variable.
 
 ```console
 $ make Tar[*sources] sources='hello.c binsort.c'
-#-- Tar[*sources] → .out/Tar/@sources.tar
+#-> Tar[*sources]
 tar -cvf .out/Tar/@sources.tar hello.c binsort.c
 ```
 
@@ -226,9 +224,9 @@ It expands to the following targets:
 $ make Run*sources sources='hello.c binsort.c'
 ./.out/Program_Compile/hello 
 Hello world.
-#-- Compile[binsort.c] → .out/Compile/binsort.o
+#-> Compile[binsort.c]
 gcc -c -o .out/Compile/binsort.o binsort.c -Os -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror   -MMD -MP -MF .out/Compile/binsort.o.d
-#-- Program[binsort.c] → .out/Program_Compile/binsort
+#-> Program[binsort.c]
 gcc -o .out/Program_Compile/binsort .out/Compile/binsort.o  
 ./.out/Program_Compile/binsort 
 srch(7) = 5
@@ -238,7 +236,7 @@ srch(0) = 9
 ```
 ```console
 $ make Tar[Compile*sources] sources='hello.c binsort.c'
-#-- Tar[Compile*sources] → .out/Tar_Compile/Compile@sources.tar
+#-> Tar[Compile*sources]
 tar -cvf .out/Tar_Compile/Compile@sources.tar .out/Compile/hello.o .out/Compile/binsort.o
 ```
 
@@ -248,8 +246,8 @@ tar -cvf .out/Tar_Compile/Compile@sources.tar .out/Compile/hello.o .out/Compile/
 So far we haven't added anything to our Makefile, so we can only build what
 we explicitly describe on the command line.  We want to be able to describe
 complex builds in a Makefile so they can invoked with a simple command, like
-`make` or `make deploy`.  `build.mk` provides alias goals for this purpose.
-An *alias goal* is a name that, when provided on the command line, causes a
+`make` or `make deploy`.  Minion provides alias goals for this purpose.  An
+*alias goal* is a name that, when provided on the command line, causes a
 list of targets to be built.  To define one, define a variable named
 `Goal.NAME`, setting its value to the list of targets to be built.
 
@@ -260,30 +258,27 @@ $ cp Makefile2 Makefile
 ```
 ```console
 $ cat Makefile
-include ../build.mk
-
 sources = hello.c binsort.c
 
 Goal.default = Exec*sources
 Goal.deploy = Copy*Program*sources
 
-$(end)
+include ../minion.mk
 ```
 ```console
 $ make deploy
-#-- Copy[Program[hello.c]] → .out/Copy/hello
+#-> Copy[Program[hello.c]]
 cp .out/Program_Compile/hello .out/Copy/hello
-#-- Copy[Program[binsort.c]] → .out/Copy/binsort
+#-> Copy[Program[binsort.c]]
 cp .out/Program_Compile/binsort .out/Copy/binsort
 ```
 
-By the way, if no goals are provided on the command line, `build.mk`
-attempts to build the target named `default`, so these commands do the same
-thing:
+By the way, if no goals are provided on the command line, Minion attempts to
+build the target named `default`, so these commands do the same thing:
 
 ```console
 $ make
-#-- Exec[binsort.c] → .out/Exec_Program_Compile/binsort.out
+#-> Exec[binsort.c]
 ( ./.out/Program_Compile/binsort  ) > .out/Exec_Program_Compile/binsort.out || rm .out/Exec_Program_Compile/binsort.out
 ```
 ```console
@@ -292,84 +287,85 @@ $ make default
 
 ## Wrap-up
 
-We can use a debug feature of `build.mk` to see the Make rules that it
+We can use a debug feature of Minion to see the Make rules that it
 generates.  We bring this up just to illustrate what an equivalent Makefile
 would look like, if one were to write it by hand, instead of leveraging
-`build.mk`:
+Minion:
 
 ```console
-$ make default deploy DEBUG=%
-eval (Alias[default]): 
+$ make default deploy minion_debug=%
+all: 'Alias[default] Alias[deploy] Copy[Program[binsort.c]] Copy[Program[hello.c]] Exec[binsort.c] Exec[hello.c] Program[binsort.c] Program[hello.c] Compile[binsort.c] Compile[hello.c]'
+eval-Alias[default]: 
   | default : .out/Exec_Program_Compile/hello.out .out/Exec_Program_Compile/binsort.out  
   | 	@true 
   | 
   | .PHONY: default
   | 
-eval (Alias[deploy]): 
+eval-Alias[deploy]: 
   | deploy : .out/Copy/hello .out/Copy/binsort  
   | 	@true 
   | 
   | .PHONY: deploy
   | 
-eval (Copy[Program[binsort.c]]): 
+eval-Copy[Program[binsort.c]]: 
   | .out/Copy/binsort : .out/Program_Compile/binsort  
-  | 	@echo '#-- Copy[Program[binsort.c]] → .out/Copy/binsort'
+  | 	@echo '#-> Copy[Program[binsort.c]]'
   | 	@mkdir -p .out/Copy/
   | 	cp .out/Program_Compile/binsort .out/Copy/binsort
   | 
   | 
   | 
-eval (Copy[Program[hello.c]]): 
+eval-Copy[Program[hello.c]]: 
   | .out/Copy/hello : .out/Program_Compile/hello  
-  | 	@echo '#-- Copy[Program[hello.c]] → .out/Copy/hello'
+  | 	@echo '#-> Copy[Program[hello.c]]'
   | 	@mkdir -p .out/Copy/
   | 	cp .out/Program_Compile/hello .out/Copy/hello
   | 
   | 
   | 
-eval (Exec[binsort.c]): 
+eval-Exec[binsort.c]: 
   | .out/Exec_Program_Compile/binsort.out : .out/Program_Compile/binsort  
-  | 	@echo '#-- Exec[binsort.c] → .out/Exec_Program_Compile/binsort.out'
+  | 	@echo '#-> Exec[binsort.c]'
   | 	@mkdir -p .out/Exec_Program_Compile/
   | 	( ./.out/Program_Compile/binsort  ) > .out/Exec_Program_Compile/binsort.out || rm .out/Exec_Program_Compile/binsort.out
   | 
   | 
   | 
-eval (Exec[hello.c]): 
+eval-Exec[hello.c]: 
   | .out/Exec_Program_Compile/hello.out : .out/Program_Compile/hello  
-  | 	@echo '#-- Exec[hello.c] → .out/Exec_Program_Compile/hello.out'
+  | 	@echo '#-> Exec[hello.c]'
   | 	@mkdir -p .out/Exec_Program_Compile/
   | 	( ./.out/Program_Compile/hello  ) > .out/Exec_Program_Compile/hello.out || rm .out/Exec_Program_Compile/hello.out
   | 
   | 
   | 
-eval (Program[binsort.c]): 
+eval-Program[binsort.c]: 
   | .out/Program_Compile/binsort : .out/Compile/binsort.o  
-  | 	@echo '#-- Program[binsort.c] → .out/Program_Compile/binsort'
+  | 	@echo '#-> Program[binsort.c]'
   | 	@mkdir -p .out/Program_Compile/
   | 	gcc -o .out/Program_Compile/binsort .out/Compile/binsort.o  
   | 
   | 
   | 
-eval (Program[hello.c]): 
+eval-Program[hello.c]: 
   | .out/Program_Compile/hello : .out/Compile/hello.o  
-  | 	@echo '#-- Program[hello.c] → .out/Program_Compile/hello'
+  | 	@echo '#-> Program[hello.c]'
   | 	@mkdir -p .out/Program_Compile/
   | 	gcc -o .out/Program_Compile/hello .out/Compile/hello.o  
   | 
   | 
   | 
-eval (Compile[binsort.c]): 
+eval-Compile[binsort.c]: 
   | .out/Compile/binsort.o : binsort.c  
-  | 	@echo '#-- Compile[binsort.c] → .out/Compile/binsort.o'
+  | 	@echo '#-> Compile[binsort.c]'
   | 	@mkdir -p .out/Compile/
   | 	gcc -c -o .out/Compile/binsort.o binsort.c -Os -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror   -MMD -MP -MF .out/Compile/binsort.o.d
   | 
   | 
   | -include .out/Compile/binsort.o.d
-eval (Compile[hello.c]): 
+eval-Compile[hello.c]: 
   | .out/Compile/hello.o : hello.c  
-  | 	@echo '#-- Compile[hello.c] → .out/Compile/hello.o'
+  | 	@echo '#-> Compile[hello.c]'
   | 	@mkdir -p .out/Compile/
   | 	gcc -c -o .out/Compile/hello.o hello.c -Os -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror   -MMD -MP -MF .out/Compile/hello.o.d
   | 

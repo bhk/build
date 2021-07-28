@@ -15,6 +15,22 @@
 * Do not inherit Ancestor[A].P definitions
 
 
+## Special characters in filenames
+
+We could implement support for filenames that contain spaces and special
+characters by using SCAM-like !-encoding to represent these names (!1 = "!",
+!0 = " ", ...)  without whitespace.  Unlike SCAM, it would also encode all
+special Shell characters, so we can easily detect when quoting is needed.
+
+     Filename:              "A test!"
+     $(call !,A test!)  ->  "A!0test!1"   [Used internally everywhere]
+     $@, $<, $^, etc..  ->  "'A test!'"   [For command lines]
+     $(call _mf,...)    ->  "A\ test!"    [For Make target & prereqs]
+
+Also, expansion of variable indirections could recognize double quotes:
+
+     sources = "a 1.c" "a 2.c" "a 3.c"
+
 ## Invoking `include` at end, not at start
 
   Reasons for include-at-start + $(end):

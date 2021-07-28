@@ -1,4 +1,4 @@
-;; minion.scm:  SCAM prototypes of functions for Minion
+;; prototype.scm:  SCAM prototypes of functions for Minion
 
 (require "core")
 (require "string")
@@ -6,6 +6,26 @@
 ;;----------------------------------------------------------------
 ;; Utilities
 ;;----------------------------------------------------------------
+
+(define *var-functions* nil)
+
+;; Mark a function as safe to be replaced with a variable reference
+;;  $(call FN,$1)    -> $(FN)
+;;  $(call FN,$1,$2) -> $(FN)
+;; Must be non-recursive, and must not have optional arguments.
+;;
+(define (VF! fn-name)
+  (set *var-functions*
+       (append *var-functions* fn-name)))
+
+(define (omit-calls body)
+  (foldl (lambda (text fname)
+           (subst (.. "$(call " fname ",$1)")
+                  (.. "$(" fname ")")
+                  text))
+         body
+         *var-functions*))
+
 
 (define (swap fn names froms)
   (define `name (word 1 names))
@@ -20,17 +40,24 @@
       fn
       (swap reduced-fn (rest names) (rest froms))))
 
+
 ;; Output a SCAM function as Make code, renaming automatic vars.
 ;;
-(define (show fn-name ?vars-to ?vars-from)
-  (define `fn-val (native-value fn-name))
-  (print fn-name " = "
-         (subst "$`" "$$"       ;; SCAM runtime -> Minion make
-                "$  " "$(\\s)"  ;; SCAM runtime -> Minion make
-                "$(&)" "$&"     ;; opt!
-                (swap fn-val vars-to vars-from))
-         "\n"))
+(define (show fn-name ?vars-to-in ?vars-from-in)
+  ;; Avoid ";" since Minion uses $; for ","
+  (define `vars-to (or vars-to-in "w x"))
+  (define `vars-from (or vars-to-in "; ;;"))
 
+  (define `fn-val (native-value fn-name))
+
+  (print fn-name " = "
+         (subst "$`" "$$"          ;; SCAM runtime -> Minion make
+                "$  " "$(\\s)"     ;; SCAM runtime -> Minion make
+                "$(if ,,,)" "$;"   ;; SCAM runtime -> Minion make
+                "$(if ,,:,)" ":$;" ;; SCAM runtime -> Minion make
+                "$(&)" "$&"        ;; smaller, isn't it?
+                (omit-calls (swap fn-val vars-to vars-from)))
+         "\n"))
 
 ;;----------------------------------------------------------------
 ;; Argument string parsing
@@ -126,10 +153,10 @@
 (print (string-len (.. _argGroup _argHash _argHash2)))
 (print)
 
-(show "_argGroup" "w" ";")
-(show "_argHash2")
-(show "_argHash")
-(show "_hashGet")
+(show (native-name _argGroup))
+(show (native-name _argHash2))
+(show (native-name _argHash))
+(show (native-name _hashGet))
 
 (print "----------------------------------------------------------------")
 (print)
@@ -316,9 +343,9 @@
           (_supErr current-fn 1))
       (_supErr current-fn)))
 
-(show "_&")
-(show "get" "o A C & v" "; ;; ;;; ;;;; ;;;;;")
-(show "_getCA" "A C & v" "; ;; ;;; ;;;; ;;;;;")
-(show ".")
-(show "super" 0 1)
-(show "_supErr")
+(show (native-name _&))
+(show (native-name get) "o A C & v" "; ;; ;;; ;;;; ;;;;;")
+(show (native-name _getCA) "A C & v" "; ;; ;;; ;;;; ;;;;;")
+(show (native-name .))
+(show (native-name super) 0 1)
+(show (native-name _supErr))

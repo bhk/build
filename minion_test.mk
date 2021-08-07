@@ -117,24 +117,6 @@ $(call _expectEQ,$(call _goalType,C[c[*var]]),Instance)
 $(call _expectEQ,$(call _goalType,abc),Other)
 
 
-# _infer
-
-# $1 = IDs;  $2 = inferClasses  -->  IDs
-
-Cls.out = $(subst _,.,$A)
-$(call _expectEQ,$(call get,out,Cls[b_c]),b.c)
-
-$(call _expectEQ,\
-  $(call _infer,a b.c c.cpp,Compile.c C++.cpp),\
-  a Compile[b.c] C++[c.cpp])
-
-$(call _expectEQ,\
-  $(call _infer,a Cls[a] Cls[b_c] Cls[c_cpp],Compile.c C++.cpp),\
-  a Cls[a] Compile[Cls[b_c]] C++[Cls[c_cpp]])
-
-$(call _expectEQ,$(call _infer,a b c,),a b c)
-
-
 # _once
 
 A = 1
@@ -148,6 +130,13 @@ $(call _expectEQ,$(o1),1)
 
 # _argValues
 
+$(call _expectEQ,1,$(call true,_argError)) # minion.mk should supply one
+_argError = $(subst :[,<[>,$(subst :],<]>,$1))
+
+$(call _expectEQ,$(call _argHash,a$;x=1),=a x=1)
+$(call _expectEQ,$(call _argHash,a]),=a<]>)
+
+
 Foo.inherit = Builder
 Foo.argValues = $(call _argValues)
 Foo.argX = $(call _argValues,X)
@@ -156,6 +145,50 @@ $(call _expectEQ,$(call get,argHash,Foo[C[A]$;B$;X=Y]),=C[A] =B X=Y)
 $(call _expectEQ,$(call get,argValues,Foo[C[A]$;B$;X=Y]),C[A] B)
 $(call _expectEQ,$(call get,argX,Foo[C[A]$;B$;X=Y]),Y)
 
+# _outDir
+
+# file
+$(call _expectEQ,$(call _outDir,a.c,a.c,C,=a.c),C.c/)
+# indirection
+$(call _expectEQ,$(call _outDir,C*D*v,a.c,P,=C*D*v),P_C@_D@/)
+# complex
+$(call _expectEQ,\
+  $(call _outDir,C[d/a.c]$;o=3,.out/C.c/d/a.o,P,=C[d/a.c] o=3),\
+  P_@1$;o@E3.o_C.c/d/)
+
+# .out
+
+$(call _expectEQ,$(call get,outBasis,Program[a.o]),a.o)
+$(call _expectEQ,$(call get,inFiles,Program[a.o]),a.o)
+$(call _expectEQ,$(call get,outName,Program[a.o]),a)
+$(call _expectEQ,$(call get,outDir,Program[a.o]),.out/Program.o/)
+$(call _expectEQ,$(call get,out,Program[a.o]),.out/Program.o/a)
+
+p1 = a.c
+$(call _expectEQ,$(call get,out,Program[*p1]),.out/Program_@/p1)
+
+$(call _expectEQ,$(call get,out,Tar[*p1]),.out/Tar_@/p1.tar)
+$(call _expectEQ,$(call get,out,Zip[*p1]),.out/Zip_@/p1.zip)
+
+# Inference
+
+Dup.inherit = Builder
+Dup.out = dup/$A
+
+C.inherit = Builder
+C.outSuffix = .o
+
+Inf.inherit = Builder
+Inf.inferClasses = C.c C.cpp
+Inf[x].in = a.c b.cpp Dup[c.c] d.o
+
+$(call _expectEQ,$(call get,in,Inf[x]),a.c b.cpp Dup[c.c] d.o)
+$(call _expectEQ,\
+  $(call get,_inPairs,Inf[x]),\
+  a.c b.cpp Dup[c.c]$$dup/c.c d.o)
+$(call _expectEQ,\
+  $(call get,inPairs,Inf[x]),\
+  C[a.c]$$.out/C.c/a.o C[b.cpp]$$.out/C.cpp/b.o C[Dup[c.c]]$$.out/C.c_/dup/c.o d.o)
 
 default: ; @true
 

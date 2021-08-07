@@ -79,17 +79,24 @@ _goalID = $(if $(or $(_isInstance),$(_isIndirect),$(_aliasInputs)),Alias[$1])
 # $1 = list of IDs  $2 = seen IDs
 _rollup = $(if $1,$(call _rollup,$(filter-out $1 $2,$(sort $(call get,needs,$(_isInstance)))),$2 $1),$(filter %],$2))
 
-# Protect syntax between balanced brackets
-_argGroup = $(if $(findstring :[,$(subst ],[,$1)),$(if $(findstring $1,$3),$(call $2,$1),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) :],]: ,$(patsubst :[%,:[% ,$(subst :], :],$(subst :[, :[,$1)))),$(if $(filter %:,$w),$(subst :,,$w),$w))),$2,$1)),$1)
+# See prototype.scm for documentation on the following:
 
-# Construct a hash from an ARGUMENT that may contain brackets
-_argHash2 = $(subst :,,$(foreach ;,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$(subst $;,:$;,$(subst ],:],$(subst [,:[,$1)))),$2)),$(if $(findstring :=,$;),,=)$;))
+_pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
+_pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
+_inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%[$(call _pairIDs,$w)],$2))),$x$$$(call get,out,$x)),$w)),$1)
 
-# Construct a hash from an instance ARGUMENT
-_argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$(call _argHash2,$1,$2),=$(subst $;, =,$1))
+_argGroup = $(if $(findstring :[,$(subst ],[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) :],]: ,$(patsubst :[%,:[% ,$(subst :], :],$(subst :[, :[,$1)))),$(if $(filter %:,$w),$(subst :,,$w),$w))),$1)),$1)
+_argHash2 = $(subst :,,$(foreach w,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$(subst $;,:$;,$(subst ],:],$(subst [,:[,$1)))))),$(if $(findstring :=,$w),,=)$w))
+_argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$(_argHash2),=$(subst $;, =,$1))
+_hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
-# _hashGet HASH KEY : return all values indexed by KEY
-_hashGet = $(strip $(patsubst $2=%,%,$(filter $2=%,$1)))
+_fsenc = $(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst *,@_,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1)))))))))
+_outBasis = $(if $(_isIndirect),$(lastword $(subst @D,/,$(subst @_, ,$(_fsenc)))),$(or $(word 1,$2),default))
+_outDirI = $(dir _$(subst $(\s),,$(filter %@,$(subst @_,@ _,$(_fsenc))))/$2)
+_outDirS = $(call _fsenc,$3)$(if $(_isIndirect),$(_outDirI),$(suffix $2)$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,$(dir /$2)))))))))
+_outDirC = $(call _outDirS,$4,$2,$3$(subst $(if ,,_$4,),$(if ,,_|,),_$1))
+_outDir = $(if $(if $(word 2,$4),,$(filter =%,$4)),$(_outDirS),$(call _outDirC,$1,$2,$3,$(word 1,$(call _hashGet,$4))))
+
 
 #--------------------------------
 # Property evaluation
@@ -280,7 +287,7 @@ Builder.argHash = $(call _argHash,$A,_argError)
 # included in `ooIDs`).
 Builder.needs = $(call .,inIDs) $(call .,upIDs) $(call .,ooIDs)
 
-Builder.^ = $(call get,out,$(call .,inIDs))
+Builder.^ = $(call .,inFiles)
 Builder.< = $(firstword $(call .,^))
 
 Builder.U^ = $(call get,out,$(call .,upIDs))
@@ -291,7 +298,14 @@ Builder.U< = $(firstword $(call .,U^))
 # class, other secondary input files may be inferred (this is controlled by
 # the `inferClasses` property).
 Builder.in = $(call _argValues)
-Builder.inIDs = $(call _infer,$(call _expand,$(call .,in)),$(call .,inferClasses))
+
+# _inPairs = named input pairs (*before* inference)
+Builder._inPairs = $(foreach i,$(call _expand,$(call .,in)),$(if $(filter %],$i),$i$$$(call get,out,$i),$i))
+
+# inPairs = input (ID,FILE) pairs (direct; after inference)
+Builder.inPairs = $(call _inferPairs,$(call .,_inPairs),$(call .,inferClasses))
+Builder.inIDs = $(call _pairIDs,$(call .,inPairs))
+Builder.inFiles = $(call _pairFiles,$(call .,inPairs))
 
 # `up` provides dependencies built into the class itself.
 Builder.up = #
@@ -307,20 +321,14 @@ Builder.ooIDs = $(call _expand,$(call .,orderOnly))
 # ".o" when they are provided as inputs to a Program instance.
 Builder.inferClasses = #
 
-# One implementation wrinkle to note is that while the inputs and outputs to
-# this function are IDs, the decision whether to apply an inferClass is
-# based on the output file of the ID.
-# $1 = list of IDs;  $2 = inferClasses;; out = list of IDs
-_infer = $(if $2,$(foreach o,$1,$(or $(filter %],$(patsubst %$(or $(suffix $(call get,out,$o)),.),%[$o],$2)),$o)),$1)
-
-# Note: `outDir`, `outName`, and `outSuffix` as *inputs* to `out`, which
-# can independently be overridden.  Do not query them directly when you want
-# to know something about the output file; instead use `$(call .,out)` in
-# combination with $(dir ...), $(notdir ...), etc.
-Builder.out = $(call .,outDir)$(call .,outName)$(call .,outSuffix)
-Builder.outDir = $(subst /$(OUTDIR),_,$(subst /./,/,$(OUTDIR)$C/$(subst ../,__/,$(dir $(call .,<)))))
-Builder.outName = $(basename $(notdir $(call .,<)))
-Builder.outSuffix = $(suffix $(call .,<))
+# Note: `outDir`, `outName`, and `outSuffix` are inputs to `out`, and any of
+# them can be overridden.  Do not assume that, for example, `outDir` is
+# always the same as `$(dir $(call .,out))`.
+Builder.out = $(call .,outDir)$(call .,outName)
+Builder.outDir = $(OUTDIR)$(call _outDir,$A,$(call .,outBasis),$C,$(call .,argHash))
+Builder.outName = $(basename $(notdir $(call .,outBasis)))$(call .,outSuffix)
+Builder.outSuffix = $(suffix $(call .,outBasis))
+Builder.outBasis = $(call _outBasis,$(_arg1),$(call _pairFiles,$(call .,_inPairs)))
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
 Builder.message = \#-> $C[$A]
@@ -486,7 +494,6 @@ Print.command = @cat $<
 #
 Tar.inherit = Builder
 Tar.outSuffix = .tar
-Tar.outName = $(subst *,@,$A)
 Tar.command = tar -cvf $@ $^
 
 
@@ -501,7 +508,6 @@ Gzip.outSuffix = $(suffix $<).gz
 #
 Zip.inherit = Builder
 Zip.outSuffix = .zip
-Zip.outName = $(subst *,@,$A)
 Zip.command = zip $@ $^
 
 # Unzip[OUT] : Extract from a zip file

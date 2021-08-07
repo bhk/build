@@ -43,16 +43,13 @@ the file extension.  For example, if we provide a ".c" file directly to
 
     $ make Program[hello.c]
 
-It appears that nothing happened.  That is because `Program[hello.c]` is
-equivalent to `Program[Compile[hello.c]]`, and we have already built that,
-so there is nothing to do.  Doing nothing, whenever possible, is what a
-build system is all about.
+This builds the program, but `hello.o` was not rebuilt.  This is because we
+have already built `Compile[hello.c]`.  Doing nothing, whenever possible, is
+what a build system is all about.
 
-To make things more clear, we can re-issue this command after invoking `make
-clean`, a target defined by Minion that removes all generated artifacts.
-(By the way, where *are* these generated artifacts?  By default, they go
-somewhere under a directory named ".out", but we ordinarily don't care where
-they reside, since we identify them by their instance names.)
+We can demonstrate that everything will get re-built, if necessary, by
+re-issuing this command after invoking `make clean`.  The `clean` target is
+defined by Minion, and it removes all generated artifacts.
 
     $ make clean
     $ make Program[hello.c]
@@ -87,6 +84,7 @@ generates a phony target that writes its input to `stdout`:
     $ make Print[hello.c]
     $ make Print[Exec[hello.c]]
 
+
 ## Help
 
 When the goal `help` appears on the command line, Minion will describe all
@@ -110,12 +108,6 @@ variable.
 
     $ make Tar[*sources] sources='hello.c binsort.c'
 
-Note that `make "Tar[$sources]"` would not work because it expands to `make
-"Tar[hello.c binsort.c]"` on the command line, and targets may not contain
-whitespace.  `Tar[*sources]` is a single word and a valid target. The
-`*sources` argument is *expanded* to `hello.c binsort.c` when the Tar class
-constructs its list of input targets.
-
 The other form is called a mapped indirection.  This constructs an instance
 for each target identified in the variable.
 
@@ -134,17 +126,18 @@ complex builds in a Makefile so they can invoked with a simple command, like
 list of targets to be built.  To define one, define a variable named
 `make_NAME`, setting its value to the list of targets to be built.
 
-This next Makefile defines alias goals for "default" and "deploy":a
+This next Makefile defines alias goals for "default" and "deploy":
 
     $ cp Makefile2 Makefile
     $ cat Makefile
     $ make deploy
 
-By the way, if no goals are provided on the command line, Minion attempts to
-build the target named `default`, so these commands do the same thing:
+If no goals are provided on the command line, Minion attempts to build the
+target named `default`, so these commands do the same thing:
 
     $ make
     $ make default
+
 
 ## Wrap-up
 

@@ -148,13 +148,13 @@ $(call _expectEQ,$(call get,argX,Foo[C[A]$;B$;X=Y]),Y)
 # _outBasis
 
 # file
-$(call _expectEQ,$(call _outBasis,a.c,a.c,C,=a.c),C.c/a.c)
+$(call _expectEQ,$(call _outBasis,a.c,a.c,C,,=a.c),C.c/a.c)
 # indirection
-$(call _expectEQ,$(call _outBasis,C*D*d/v,a.c,P,=C*D*v),P_C@_D@/d/v)
+$(call _expectEQ,$(call _outBasis,C*D*d/v,a.c,P,,=C*D*v),P_C@_D@/d/v)
 # complex
 $(call _expectEQ,\
-  $(call _outBasis,C[d/a.c]$;o=3,.out/C.c/d/a.o,P,=C[d/a.c] o=3),\
-  P_@1$;o@E3.o_C.c/d/a.o)
+  $(call _outBasis,C[d/a.c]$;o=3,.out/C.c/d/a.o,P,%,=C[d/a.c] o=3),\
+  P_@1$;o@E3_C.c/d/a.o)
 
 # .out
 
@@ -162,11 +162,11 @@ P.inherit = Builder
 P.outExt = %.p
 
 $(call _expectEQ,$(call get,_inPairs,P[a.o]),a.o)
-$(call _expectEQ,$(call get,outBasis,P[a.o]),P.o/a.o)
+$(call _expectEQ,$(call get,outBasis,P[a.o]),P/a.o)
 $(call _expectEQ,$(call get,outExt,P[a.o]),%.p)
 $(call _expectEQ,$(call get,outName,P[a.o]),a.o.p)
-$(call _expectEQ,$(call get,outDir,P[a.o]),.out/P.o/)
-$(call _expectEQ,$(call get,out,P[a.o]),.out/P.o/a.o.p)
+$(call _expectEQ,$(call get,outDir,P[a.o]),.out/P/)
+$(call _expectEQ,$(call get,out,P[a.o]),.out/P/a.o.p)
 
 p1 = a.c
 $(call _expectEQ,$(call get,out,Program[*p1]),.out/Program_@/p1)

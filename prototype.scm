@@ -27,6 +27,8 @@
                   (.. "$(" fname ")")
                   (.. "$(call " fname ",$1,$2,$3)")
                   (.. "$(" fname ")")
+                  (.. "$(call " fname ",$1,$2,$3,$4)")
+                  (.. "$(" fname ")")
                   text))
          body
          *var-functions*))
@@ -415,7 +417,7 @@
   (subst " _" "/" b))
 
 ;; _outBasis for simple arguments
-(define (_outBS arg file class)
+(define (_outBS arg file class outExt)
   &native
   (define `(collapse x)
     (patsubst (.. "_/" OUTDIR "%") "_%" x))
@@ -425,22 +427,29 @@
           ;; indirection
           (_outBI arg)
           ;; file or instance
-          (.. (suffix file)
+          (.. (if (findstring "%" outExt)
+                  ""
+                  (suffix file))
               (collapse
                (.. (if (isInstance arg) "_")
                    (safe-path file)))))))
 
 ;; _outBasis for complex arguments
-(define (_outBC arg file class arg1)
+(define (_outBC arg file class outExt arg1)
   &native
   (_outBS arg1 (or file "default")
-            (.. class (subst (.. "_" arg1 ",") "_|," (.. "_" arg)))))
+          (.. class (subst (.. "_" arg1 ",") "_|," (.. "_" arg)))
+          outExt))
 
-;;  arg = instance argument
+;;  arg = this instance's argument
 ;;  file = first input file (prior to any rule inference)
+;;  class = this instance's class
 ;;  argHash = (_argHash arg) [or "=x" if we know it's simple]
+;;  outExt = pattern for constructing output file's extension
+;;           If it does not contain "%", we include the input file's
+;;           extension in the class directory.
 ;;
-(define (_outBasis arg file class argHash)
+(define (_outBasis arg file class outExt argHash)
   &native
 
   (define `argIsSimple
@@ -448,31 +457,37 @@
 
   ;; "Simple" arguments have no commas and no named values
   (if argIsSimple
-      (_outBS arg file class)
-      (_outBC arg file class (word 1 (_hashGet argHash)))))
+      (_outBS arg file class outExt)
+      (_outBC arg file class outExt (word 1 (_hashGet argHash)))))
 
 
 (begin
   ;; test _outBasis
 
   (define `(test class arg out)
-    (define `ah (_argHash arg))
-    (define `a1 (word 1 (_hashGet ah)))
+    (define `aHash (_argHash arg))
+    (define `arg1 (word 1 (_hashGet aHash)))
 
     (define `file
       (cond
-       ((filter "%]" a1) (get "out" a1))
+       ((filter "%]" arg1) (get "out" arg1))
        ((findstring "*" arg) ".out/C/a.o")
-       (else a1)))
+       (else arg1)))
 
-    (expect (_outBasis arg file class ah) out))
+    (define `outExt
+      (cond ((eq? "C" class) ".o")
+            ((eq? "P" class) "")
+            (else "%")))
+
+    (expect (_outBasis arg file class outExt aHash) out))
 
 
   ;; C[FILE]
   (test "C" "a.c"          "C.c/a.c")
   (test "C" "d/a.c"        "C.c/d/a.c")
+  (test "D" "d/a.c"        "D/d/a.c")
   (test "C" "/.././a"      "C/_root_/_../_./a")
-  (test "C@!" "a.c"        "C@0@B.c/a.c")
+  (test "C@!" "a.c"        "C@0@B/a.c")
 
   ;; C[INSTANCE]
   (test "P" "C[a.c]"       "P.o_C.c/a.o")
@@ -490,6 +505,7 @@
   ;; Complex
   (test "P" "a,b"          "P_@1,b/a")
   (test "P" "d/a.c,o=3"    "P_@1,o@E3.c/d/a.c")
+  (test "Q" "d/a.c,o=3"    "Q_@1,o@E3/d/a.c")
   (test "P" "C[d/a.c],o=3" "P_@1,o@E3.o_C.c/d/a.o")
   (test "P" "x=1,y=2"      "P_x@E1,y@E2/default") ;; no unnamed arg
   (test "P" "*v,o=3"       "P_@1,o@E3_@/v")

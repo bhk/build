@@ -10,8 +10,8 @@ The file minion.mk is self-contained; it requires no other file from this
 project.  Minion is tested with GNU Make v3.81.
 
 If you invoke make without any arguments, Minion will attempt to build a
-target named `default`, which your makefile may using an *alias* (described
-below) or an ordinary Make rule.
+target named `default`, which your makefile may define using an *alias*
+(described below) or an ordinary Make rule.
 
 If you pass arguments on the command line, Minion will treat the arguments
 as a set of targets and build them.  Each argument may be one of the
@@ -51,8 +51,8 @@ reference.
 
 There are two forms of indirections:
 
-   `*VAR`      : a simple indirection
-   `CLASS*VAR` : a mapped indirection
+ - `*VAR`      : a simple indirection
+ - `CLASS*VAR` : a mapped indirection
 
 A simple indirection expands to the value of the variable `VAR`.  Other
 indirections may appear within the value of the variable, in which case they
@@ -70,7 +70,9 @@ Mapped indirections can also use a "chained" syntax.  Using the same example
 `CLASS` and `VAR` may not contain `[` or `]`, and the indirection must be an
 entire word that matches one of the above two forms.  For example,
 `Compile[*sources]` is a target ID, *not* an indirection, and will not be
-altered during the expansion step.
+altered during the expansion step.  Its argument, on the other hand, *is* an
+indirection, and it will be expanded when the `Compile[*sources]` instance
+requests its input files.
 
 ## Instances
 
@@ -92,7 +94,7 @@ hold the name of the class and argument, respectively.
 > property will evaluate to `<bar-Foo>`.
 
 A class can inherit property definitions from one or more other classes by
-listing the "parent" classes in a variable named `CLASS.inherit`.  An
+listing the parent classes in a variable named `CLASS.inherit`.  An
 inherited definition will be consulted only if there is no matching
 definition on the class itself.
 

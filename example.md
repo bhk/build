@@ -147,13 +147,13 @@ to underlying Make primitives.
 $ make help Run[hello.c]
 Target ID "Run[hello.c]" is an instance (a generated artifact).
 
-Output: .out/Run.c/hello.c
+Output: .out/Run/hello.c
 
 Rule: 
-  | .out/Run.c/hello.c : .out/Program.c/hello  
+  | .out/Run/hello.c : .out/Program.c/hello  
   | 	./.out/Program.c/hello 
   | 
-  | .PHONY: .out/Run.c/hello.c
+  | .PHONY: .out/Run/hello.c
   | 
 
 Direct dependencies: 

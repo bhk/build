@@ -91,10 +91,10 @@ _argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$
 _hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
 _fsenc = $(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst *,@_,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1)))))))))
-_outBasis = $(if $(if $(word 2,$4),,$(filter =%,$4)),$(_outBS),$(call _outBC,$1,$2,$3,$(word 1,$(call _hashGet,$4))))
+_outBasis = $(if $(if $(word 2,$5),,$(filter =%,$5)),$(_outBS),$(call _outBC,$1,$2,$3,$4,$(word 1,$(call _hashGet,$5))))
 _outBI = $(subst $(\s)_,/,$(subst $(\s)|,,_ $(patsubst %@,|%@,$(subst @D,/,$(subst @_,@ _,$(_fsenc))))))
-_outBS = $(call _fsenc,$3)$(if $(_isIndirect),$(_outBI),$(suffix $2)$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$2))))))))
-_outBC = $(call _outBS,$4,$(or $2,default),$3$(subst $(if ,,_$4,),$(if ,,_|,),_$1))
+_outBS = $(call _fsenc,$3)$(if $(_isIndirect),$(_outBI),$(if $(findstring %,$4),,$(suffix $2))$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$2))))))))
+_outBC = $(call _outBS,$5,$(or $2,default),$3$(subst $(if ,,_$5,),$(if ,,_|,),_$1),$4)
 
 #--------------------------------
 # Property evaluation
@@ -326,7 +326,7 @@ Builder.out = $(call .,outDir)$(call .,outName)
 Builder.outDir = $(OUTDIR)$(dir $(call .,outBasis))
 Builder.outName = $(call _applyExt,$(notdir $(call .,outBasis)),$(call .,outExt))
 Builder.outExt = %
-Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,$(call .,_inPairs))),$C,$(call .,argHash))
+Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,$(call .,_inPairs))),$C,$(call .,outExt),$(call .,argHash))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 

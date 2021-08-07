@@ -158,7 +158,7 @@ refer to build products.
 
 Output files are organized under $(OUTDIR) and segregated by class name to
 avoid potential conflicts.  Classes inheriting from `Builder` generally only
-need to specify `outSuffix`.
+need to specify `outExt`.
 
 Arguments may also contain multiple comma-delimited values, each with an
 optional `NAME=` prefix.  When an instance name with a named value is typed
@@ -187,8 +187,8 @@ Rule inference is performed on input files.  For example, inference allows a
 ".c" file to be supplied where a ".o" file is expected, as in
 `Program[hello.c]`.  Each class can define its own inference rules by
 overriding the `inferClasses` property.  It consists of a list of entries of
-the form `CLASS.SUFFIX`, each indicating that `CLASS` should be applied to a
-input file ending in `.SUFFIX`.
+the form `CLASS.EXT`, each indicating that `CLASS` should be applied to a
+input file ending in `.EXT`.
 
 ## The `Builder` Class
 
@@ -224,11 +224,12 @@ always generate different output file paths.  Its `out` property is composed
 of `outDir` and `outName` properties.
 
     Builder.out = $(call .,outDir)$(call .,outName)
-    Builder.outName = $(basename $(notdir $(call .,outBasis)))$(call .,outSuffix)
-    Builder.outSuffix = $(suffix $(call .,outBasis))
+    Builder.outName = $(call _applyExt,$(notdir $(call .,outBasis)),$(call .,outExt))
+    Builder.outExt = %
 
-Derived classes typically override just the `outSuffix` property, which is
-used in constructing the output file name.
+Derived classes typically override just the `outExt` property, which is used
+in constructing the output file name.  Within `outExt`, `%` represents the
+input file extension.
 
 The `nameBasis` property is based on the first unnamed argument value.  It
 is the name of the file it denotes, except in the case of an indirection,

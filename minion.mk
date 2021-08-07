@@ -321,14 +321,16 @@ Builder.ooIDs = $(call _expand,$(call .,orderOnly))
 # ".o" when they are provided as inputs to a Program instance.
 Builder.inferClasses = #
 
-# Note: `outDir`, `outName`, and `outSuffix` are inputs to `out`, and any of
-# them can be overridden.  Do not assume that, for example, `outDir` is
-# always the same as `$(dir $(call .,out))`.
+# Note: By default, `outDir`, `outName`, and `outExt` are used to
+# construct `out`, but any of them can be overridden.  Do not assume that,
+# for example, `outDir` is always the same as `$(dir $(call .,out))`.
 Builder.out = $(call .,outDir)$(call .,outName)
 Builder.outDir = $(OUTDIR)$(call _outDir,$A,$(call .,outBasis),$C,$(call .,argHash))
-Builder.outName = $(basename $(notdir $(call .,outBasis)))$(call .,outSuffix)
-Builder.outSuffix = $(suffix $(call .,outBasis))
+Builder.outName = $(call _applyExt,$(notdir $(call .,outBasis)),$(call .,outExt))
+Builder.outExt = %
 Builder.outBasis = $(call _outBasis,$(_arg1),$(call _pairFiles,$(call .,_inPairs)))
+
+_applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
 Builder.message = \#-> $C[$A]
@@ -386,7 +388,7 @@ NullAlias.in = #
 # Compile[SOURCE] : Compile a C file to an object file.
 #
 Compile.inherit = Builder
-Compile.outSuffix = .o
+Compile.outExt = .o
 Compile.command = $(call .,compiler) -c -o $@ $< $(call .,flags) -MMD -MP -MF $(call .,depsFile)
 Compile.compiler = gcc
 Compile.depsFile = $@.d
@@ -407,7 +409,7 @@ Compile++.warnFlags = -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-q
 # Program[INPUTS] : Link a command-line C program.
 #
 Program.inherit = Builder
-Program.outSuffix = #
+Program.outExt = #
 Program.command = $(call .,compiler) -o $@ $^ $(call .,flags) 
 Program.compiler = gcc
 Program.inferClasses = Compile.c
@@ -437,7 +439,7 @@ _exportPrefix = $(foreach v,$(call .,exports),$v=$(call _shellQuote,$(call .,$v)
 #
 Exec.inherit = Shell Builder
 Exec.command = ( $(call .,exec) ) > $@ || rm $@
-Exec.outSuffix = .out
+Exec.outExt = .out
 
 
 # Run[PROGRAM] : run program (as a Phony rule)
@@ -457,7 +459,8 @@ _arg_out =
 #   directory named $(OUTDIR)$C.
 #
 Copy.inherit = Builder
-Copy.out = $(or $(call _arg1,out),$(OUTDIR)$C/$(notdir $<))
+Copy.out = $(or $(call _arg1,out),$(Builder.out))
+Copy.outDir = $(OUTDIR)$C/
 Copy.command = cp $< $@
 
 
@@ -493,7 +496,7 @@ Print.command = @cat $<
 # Tar[INPUTS] : Construct a TAR file
 #
 Tar.inherit = Builder
-Tar.outSuffix = .tar
+Tar.outExt = .tar
 Tar.command = tar -cvf $@ $^
 
 
@@ -501,13 +504,13 @@ Tar.command = tar -cvf $@ $^
 #
 Gzip.inherit = Builder
 Gzip.command = cat $< | gzip - > $@ || rm $@
-Gzip.outSuffix = $(suffix $<).gz
+Gzip.outExt = %.gz
 
 
 # Zip[INPUTS] : Construct a ZIP file
 #
 Zip.inherit = Builder
-Zip.outSuffix = .zip
+Zip.outExt = .zip
 Zip.command = zip $@ $^
 
 # Unzip[OUT] : Extract from a zip file

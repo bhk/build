@@ -297,8 +297,8 @@
 ;; `C[f]` and `C[./f]` need different output files.]
 ;;
 ;;     Instance Name          outDir                     outName
-;;     --------------------   ----------------------     ----------------
-;;     CLASS[DIRS/NAME.EXT]   OUTDIR/CLASS.EXT/DIRS/     NAME{outSuffix}
+;;     --------------------   ----------------------     -------------
+;;     CLASS[DIRS/NAME.EXT]   OUTDIR/CLASS.EXT/DIRS/     NAME{outExt}
 ;;     Compile[f.c]           .out/Compile.c/            f.o
 ;;     Compile[d/f.cpp]       .out/Compile.cpp/d/        f.o
 ;;     Compile[.././f.c]      .out/Compile.c/_../_./     f.o
@@ -311,7 +311,7 @@
 ;; collapse "CLASS.EXT_/OUTDIR/..." to "CLASS.EXT_...":
 ;;
 ;;     Instance Name           outDir                      outName
-;;     ---------------------   -------------------------   -----------
+;;     ---------------------   -------------------------   -------
 ;;     Program[Compile[f.c]]   .out/Program.o_Compile.c/   f
 ;;     Program[f.c]            .out/Program.c/             f        [*]
 ;;
@@ -323,9 +323,9 @@
 ;; for the file name, and we decorate `outDir`.
 ;;
 ;;     Instance Name          outDir                     outName
-;;     --------------------   ----------------------     ----------------
-;;     CLASS[*VAR]            OUTDIR/CLASS_@/            VAR{outSuffix}
-;;     CLASS[C2*VAR]          OUTDIR/CLASS_C2@/          VAR{outSuffix}
+;;     --------------------   ----------------------     -----------
+;;     CLASS[*VAR]            OUTDIR/CLASS_@/            VAR{outExt}
+;;     CLASS[C2*VAR]          OUTDIR/CLASS_C2@/          VAR{outExt}
 ;;
 ;; When the argument is complex (with named values or comma-delimited values)
 ;; we include the entirety of the argument in the directory, after these
@@ -337,8 +337,8 @@
 ;;      the number of directories needed for a large project.
 ;;
 ;;     Instance Name           outDir                          outName
-;;     ---------------------   -----------------------------   -------
-;;     CLASS[D/NAME.EXT,...]   OUTDIR/CLASS.EXT__{encArg}/D/   NAME{outSuffix}
+;;     ---------------------   -----------------------------   ------------
+;;     CLASS[D/NAME.EXT,...]   OUTDIR/CLASS.EXT__{encArg}/D/   NAME{outExt}
 ;;     P[d/a.c,x.c,opt=3]      .out/P.c__@1,x.c,opt@E3/d/      a
 ;;
 ;; Output file names should avoid Make and shell special characters, so that

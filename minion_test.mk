@@ -176,7 +176,7 @@ Dup.inherit = Builder
 Dup.out = dup/$A
 
 C.inherit = Builder
-C.outSuffix = .o
+C.outExt = .o
 
 Inf.inherit = Builder
 Inf.inferClasses = C.c C.cpp

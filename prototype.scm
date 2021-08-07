@@ -386,62 +386,36 @@
          str))
 
 
-;; outBasis is the target file of the first argument value file (*not
-;; inferred*), or, in the case of an indirection, its variable name.
-;;
-;; ARG1 = first unnamed argument value
-;;
-(define (_outBasis arg1 inFiles)
-  &native
-
-  (if (_isIndirect arg1)
-      (lastword (subst "@_" " " "@D" "/" (_fsenc arg1)))
-      (or (word 1 inFiles) "default")))
-
-
-(begin
-  (define `(test arg1 inFiles name)
-    (expect (_outBasis arg1 inFiles) name))
-
-  (test "a.c" "a.c" "a.c")
-  (test "a.c,b.c" "a.c b.c" "a.c")
-  (test "C[a.c]" ".out/C.c/a.o" ".out/C.c/a.o")
-  (test "*var" "a.c b.c"  "var")
-  (test "*@~a/var" "a.c b.c"  "@0@Ta/var")
-  (test "C*D*var" ".out/C_D/a.o" "var")
-  (test nil nil "default")   ;; ARG = "x=1,y=2"
-  )
-
-
 ;; Encode the directory portion of path with fsenc characters
 ;; Result begins and ends with "/".
 ;;
-(define `(safe-dir path)
+(define `(safe-path path)
   (subst "/" "//"
          "/_" "/__"
          "/./" "/_./"
          "/../" "/_../"
          "//" "/"
          "//" "/_root_/"
-         (dir (.. "/" path))))
+         (.. "/" path)))
 
-(expect (safe-dir "a.c") "/")
-(expect (safe-dir "d/c/b/a") "/d/c/b/")
-(expect (safe-dir "./../.d/_c/.a") "/_./_../.d/__c/")
+(expect (safe-path "a.c") "/a.c")
+(expect (safe-path "d/c/b/a") "/d/c/b/a")
+(expect (safe-path "./../.d/_c/.a") "/_./_../.d/__c/.a")
 
 
-;; _outDir for indirection arguments
+;; _outBasis for indirection arguments
 ;;   C*var    -->   _C@/var
 ;;   C*D*var  -->   _C@_D@/var
-(define (_outDirI arg basis)
+(define (_outBI arg)
   &native
   ;; E.g.: "C@ _D@ _dir@Dvar"
-  (define `a (subst "@_" "@ _" (_fsenc arg)))
-  (dir (.. "_" (subst " " "" (filter "%@" a)) "/" basis)))
+  (define `a (subst "@_" "@ _" "@D" "/" (_fsenc arg)))
+  ;; E.g.: "_C@_D@ _dir@Dvar"
+  (define `b (subst " |" "" (.. "_ " (patsubst "%@" "|%@" a))))
+  (subst " _" "/" b))
 
-
-;; _outDir for simple arguments
-(define (_outDirS arg basis class)
+;; _outBasis for simple arguments
+(define (_outBS arg file class)
   &native
   (define `(collapse x)
     (patsubst (.. "_/" OUTDIR "%") "_%" x))
@@ -449,24 +423,24 @@
   (.. (_fsenc class)
       (if (_isIndirect arg)
           ;; indirection
-          (_outDirI arg basis)
+          (_outBI arg)
           ;; file or instance
-          (.. (suffix basis)
+          (.. (suffix file)
               (collapse
                (.. (if (isInstance arg) "_")
-                   (safe-dir basis)))))))
+                   (safe-path file)))))))
 
-;; _outDir for complex arguments
-(define (_outDirC arg basis class arg1)
+;; _outBasis for complex arguments
+(define (_outBC arg file class arg1)
   &native
-  (_outDirS arg1 basis
+  (_outBS arg1 (or file "default")
             (.. class (subst (.. "_" arg1 ",") "_|," (.. "_" arg)))))
 
-
 ;;  arg = instance argument
+;;  file = first input file (prior to any rule inference)
 ;;  argHash = (_argHash arg) [or "=x" if we know it's simple]
 ;;
-(define (_outDir arg basis class argHash)
+(define (_outBasis arg file class argHash)
   &native
 
   (define `argIsSimple
@@ -474,71 +448,66 @@
 
   ;; "Simple" arguments have no commas and no named values
   (if argIsSimple
-      (_outDirS arg basis class)
-      (_outDirC arg basis class (word 1 (_hashGet argHash)))))
+      (_outBS arg file class)
+      (_outBC arg file class (word 1 (_hashGet argHash)))))
 
 
 (begin
-  ;; test _outDir
+  ;; test _outBasis
 
   (define `(test class arg out)
     (define `ah (_argHash arg))
     (define `a1 (word 1 (_hashGet ah)))
 
-    (define `inFiles
+    (define `file
       (cond
        ((filter "%]" a1) (get "out" a1))
-       ((findstring "*" arg) ".out/C/a.o .out/C/b.o")
+       ((findstring "*" arg) ".out/C/a.o")
        (else a1)))
 
-    (define `basis
-      (_outBasis a1 inFiles))
-
-    (expect (_outDir arg basis class ah) out))
+    (expect (_outBasis arg file class ah) out))
 
 
   ;; C[FILE]
-  (test "C" "a.c"          "C.c/")
-  (test "C" "d/a.c"        "C.c/d/")
-  (test "C" "/.././a"      "C/_root_/_../_./")
-  (test "C@!" "a.c"        "C@0@B.c/")
+  (test "C" "a.c"          "C.c/a.c")
+  (test "C" "d/a.c"        "C.c/d/a.c")
+  (test "C" "/.././a"      "C/_root_/_../_./a")
+  (test "C@!" "a.c"        "C@0@B.c/a.c")
 
   ;; C[INSTANCE]
-  (test "P" "C[a.c]"       "P.o_C.c/")
-  (test "P" "C[d/a.c]"     "P.o_C.c/d/")
-  (test "P" "File[d/a.c]"  "P.c_/d/") ;; .out = d/a.c
+  (test "P" "C[a.c]"       "P.o_C.c/a.o")
+  (test "P" "C[d/a.c]"     "P.o_C.c/d/a.o")
+  (test "P" "File[d/a.c]"  "P.c_/d/a.c") ;; .out = d/a.c
 
   ;; C[*VAR]
-  (test "C" "*var"         "C_@/")
+  (test "C" "*var"         "C_@/var")
 
   ;; C[CLS*VAR]
-  (test "C" "D*var"        "C_D@/")
-  (test "C" "D*E*var"      "C_D@_E@/")
-  (test "C" "D@E*d/var"    "C_D@0E@/d/")
+  (test "C" "D*var"        "C_D@/var")
+  (test "C" "D*E*var"      "C_D@_E@/var")
+  (test "C" "D@E*d/var"    "C_D@0E@/d/var")
 
   ;; Complex
-  (test "P" "a,b"          "P_@1,b/")
-  (test "P" "d/a.c,o=3"    "P_@1,o@E3.c/d/")
-  (test "P" "C[d/a.c],o=3" "P_@1,o@E3.o_C.c/d/")
-  (test "P" "x=1,y=2"      "P_x@E1,y@E2/") ;; no unnamed arg
-  (test "P" "*v,o=3"       "P_@1,o@E3_@/")
-  (test "P" "C*v,o=3"      "P_@1,o@E3_C@/"))
+  (test "P" "a,b"          "P_@1,b/a")
+  (test "P" "d/a.c,o=3"    "P_@1,o@E3.c/d/a.c")
+  (test "P" "C[d/a.c],o=3" "P_@1,o@E3.o_C.c/d/a.o")
+  (test "P" "x=1,y=2"      "P_x@E1,y@E2/default") ;; no unnamed arg
+  (test "P" "*v,o=3"       "P_@1,o@E3_@/v")
+  (test "P" "C*v,o=3"      "P_@1,o@E3_C@/v"))
 
 
 (VF! (native-name _fsenc))
 (VF! (native-name _outBasis))
-(VF! (native-name _outDir))
-(VF! (native-name _outDirI))
-(VF! (native-name _outDirS))
-(VF! (native-name _outDirC))
+(VF! (native-name _outBI))
+(VF! (native-name _outBS))
+(VF! (native-name _outBC))
 
 (print "#---- output file generation\n")
 (show (native-name _fsenc))
 (show (native-name _outBasis))
-(show (native-name _outDirI))
-(show (native-name _outDirS))
-(show (native-name _outDirC))
-(show (native-name _outDir))
+(show (native-name _outBI))
+(show (native-name _outBS))
+(show (native-name _outBC))
 
 ;;----------------------------------------------------------------
 ;; Functions defined by Minion

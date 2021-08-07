@@ -145,24 +145,28 @@ $(call _expectEQ,$(call get,argHash,Foo[C[A]$;B$;X=Y]),=C[A] =B X=Y)
 $(call _expectEQ,$(call get,argValues,Foo[C[A]$;B$;X=Y]),C[A] B)
 $(call _expectEQ,$(call get,argX,Foo[C[A]$;B$;X=Y]),Y)
 
-# _outDir
+# _outBasis
 
 # file
-$(call _expectEQ,$(call _outDir,a.c,a.c,C,=a.c),C.c/)
+$(call _expectEQ,$(call _outBasis,a.c,a.c,C,=a.c),C.c/a.c)
 # indirection
-$(call _expectEQ,$(call _outDir,C*D*v,a.c,P,=C*D*v),P_C@_D@/)
+$(call _expectEQ,$(call _outBasis,C*D*d/v,a.c,P,=C*D*v),P_C@_D@/d/v)
 # complex
 $(call _expectEQ,\
-  $(call _outDir,C[d/a.c]$;o=3,.out/C.c/d/a.o,P,=C[d/a.c] o=3),\
-  P_@1$;o@E3.o_C.c/d/)
+  $(call _outBasis,C[d/a.c]$;o=3,.out/C.c/d/a.o,P,=C[d/a.c] o=3),\
+  P_@1$;o@E3.o_C.c/d/a.o)
 
 # .out
 
-$(call _expectEQ,$(call get,outBasis,Program[a.o]),a.o)
-$(call _expectEQ,$(call get,inFiles,Program[a.o]),a.o)
-$(call _expectEQ,$(call get,outName,Program[a.o]),a)
-$(call _expectEQ,$(call get,outDir,Program[a.o]),.out/Program.o/)
-$(call _expectEQ,$(call get,out,Program[a.o]),.out/Program.o/a)
+P.inherit = Builder
+P.outExt = %.p
+
+$(call _expectEQ,$(call get,_inPairs,P[a.o]),a.o)
+$(call _expectEQ,$(call get,outBasis,P[a.o]),P.o/a.o)
+$(call _expectEQ,$(call get,outExt,P[a.o]),%.p)
+$(call _expectEQ,$(call get,outName,P[a.o]),a.o.p)
+$(call _expectEQ,$(call get,outDir,P[a.o]),.out/P.o/)
+$(call _expectEQ,$(call get,out,P[a.o]),.out/P.o/a.o.p)
 
 p1 = a.c
 $(call _expectEQ,$(call get,out,Program[*p1]),.out/Program_@/p1)

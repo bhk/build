@@ -91,12 +91,10 @@ _argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$
 _hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
 _fsenc = $(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst *,@_,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1)))))))))
-_outBasis = $(if $(_isIndirect),$(lastword $(subst @D,/,$(subst @_, ,$(_fsenc)))),$(or $(word 1,$2),default))
-_outDirI = $(dir _$(subst $(\s),,$(filter %@,$(subst @_,@ _,$(_fsenc))))/$2)
-_outDirS = $(call _fsenc,$3)$(if $(_isIndirect),$(_outDirI),$(suffix $2)$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,$(dir /$2)))))))))
-_outDirC = $(call _outDirS,$4,$2,$3$(subst $(if ,,_$4,),$(if ,,_|,),_$1))
-_outDir = $(if $(if $(word 2,$4),,$(filter =%,$4)),$(_outDirS),$(call _outDirC,$1,$2,$3,$(word 1,$(call _hashGet,$4))))
-
+_outBasis = $(if $(if $(word 2,$4),,$(filter =%,$4)),$(_outBS),$(call _outBC,$1,$2,$3,$(word 1,$(call _hashGet,$4))))
+_outBI = $(subst $(\s)_,/,$(subst $(\s)|,,_ $(patsubst %@,|%@,$(subst @D,/,$(subst @_,@ _,$(_fsenc))))))
+_outBS = $(call _fsenc,$3)$(if $(_isIndirect),$(_outBI),$(suffix $2)$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$2))))))))
+_outBC = $(call _outBS,$4,$(or $2,default),$3$(subst $(if ,,_$4,),$(if ,,_|,),_$1))
 
 #--------------------------------
 # Property evaluation
@@ -325,10 +323,10 @@ Builder.inferClasses = #
 # construct `out`, but any of them can be overridden.  Do not assume that,
 # for example, `outDir` is always the same as `$(dir $(call .,out))`.
 Builder.out = $(call .,outDir)$(call .,outName)
-Builder.outDir = $(OUTDIR)$(call _outDir,$A,$(call .,outBasis),$C,$(call .,argHash))
+Builder.outDir = $(OUTDIR)$(dir $(call .,outBasis))
 Builder.outName = $(call _applyExt,$(notdir $(call .,outBasis)),$(call .,outExt))
 Builder.outExt = %
-Builder.outBasis = $(call _outBasis,$(_arg1),$(call _pairFiles,$(call .,_inPairs)))
+Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,$(call .,_inPairs))),$C,$(call .,argHash))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 

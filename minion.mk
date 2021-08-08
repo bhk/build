@@ -212,13 +212,20 @@ _error_default: ; $(error Makefile included minion-start.mk but did not call `$$
 # string prior to the rule processing phase.
 $$%: ; @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) help help_expr=$(call _shellQuote,$$$*)
 
-# Define an alias for `clean`.  User makefiles can override these.
+_safeOUTDIR = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
+
+# Define an alias for `clean` if user makefile has not.
 make_clean ?= # no dependencies
-Alias[clean].command ?= rm -rf $(filter-out /% . ./,$(OUTDIR))
+Alias[clean].command ?= $(if $(_safeOUTDIR),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
 
 end = $(eval $(value _epilogue))
 
 define _epilogue
+  # Check OUTDIR
+  ifneq "/" "$(patsubst %/,/,$(OUTDIR))"
+    $(error OUTDIR must end in "/")
+  endif
+
   ifndef MAKECMDGOALS
     # .DEFAULT_GOAL only matters when there are no command line goals
     .DEFAULT_GOAL = default

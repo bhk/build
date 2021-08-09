@@ -5,21 +5,20 @@
 
 * Quiet mode
 
-* Incorporate all of $A into .out
-   - use $A, *not* $<
-   - fs-safe encoding for = : /. /.. * ! # \ $ % ~ ? |
-
-* Exec[a=X,FILE,a=Y]
-   - incorporate $A
+* Allow `{prop}` notation in property definitions
 
 * Do not inherit Ancestor[A].P definitions
+
+* Support `{super}`
+
+* Refresh walk-through command output in-place
 
 
 ## Special characters in filenames
 
 We could implement support for filenames that contain spaces and special
-characters by using SCAM-like !-encoding to represent these names (!1 = "!",
-!0 = " ", ...)  without whitespace.  Unlike SCAM, it would also encode all
+characters by using SCAM-like !-encoding to represent these names without
+whitespace (!1 = "!", !0 = " ", ...).  Unlike SCAM, it would also encode all
 special Shell characters, so we can easily detect when quoting is needed.
 
      Filename:              "A test!"
@@ -83,12 +82,12 @@ Can we define, for example, "Print[A]" as "Exec[w=cat,A]" ?
 
 ## {property} notation
 
-    {x} --> ${call .,x}     \{x}  ->  {x}  \\{x} => ??
+    "\\"  --> "$(\)"
+    "\{"  --> "$(\[)"
+    "{"   --> "${call .,"
 
     C.P = {x}
-    C.P! = ${call .,x}
-
-    Chain = C[A].P! C[A].P C.P! C.P Parent.P! Parent.P ...
+    {C.P} = ${call .,x}
 
 
 ## make C[A].P

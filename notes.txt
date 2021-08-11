@@ -1,15 +1,10 @@
 # Notes
 
-
 ## Todo
 
+* Simplify '$...' target handling (expand in rule processing phase)
+
 * Quiet mode
-
-* Allow `{prop}` notation in property definitions
-
-* Do not inherit Ancestor[A].P definitions
-
-* Support `{super}`
 
 * Refresh walk-through command output in-place
 

@@ -23,6 +23,38 @@ $(call _expectEQ,$(call _shellQuote,'a'),''\''a'\''')
 $(call _expectEQ,$(call _printfEsc,a\b$(\t)c$(\n)d%e%%f),a\\b\tc\nd%%e%%%%f)
 
 
+# Catch & re-enable fatal errors
+
+error0 := $(value _error)
+restoreError = $(eval _error = $(error0))
+logError = $(eval *errors* := $$(*errors*)$$(if $$(*errors*),:)$$1)
+trapError = $(eval *errors* :=)$(eval _error = $$(logError))
+
+$(trapError)
+$(call _error,FAIL$$$])
+$(call _error,FAIL2)
+$(restoreError)
+$(call _expectEQ,$(error0),$(value _error))
+$(call _expectEQ,$(*errors*),FAIL$$$]:FAIL2)
+
+# $(call expectError,STR) : assert STR appears in *errors*
+expectError = $(if $(findstring $1,$(*errors*)),,$(error Did not find: $(_q1)$(\n)in *errors*: $(call _q1,$(*errors*))))
+
+
+# $(call $(trapEQ),A,B)
+#
+#  Like _expectEQ, except that A & B are evaluated while _error is trapped,
+#  so errors are accumulated in *errors*.
+#
+trapEQ = $(trapError)finishTrapEQ
+finishTrapEQ = $(restoreError)$(call _expectEQ,$1,$2)
+
+$(call _expectEQ,a,a)
+$(call $(trapEQ),$(call _error,FOO),$(call _error,BAR))
+$(call _expectEQ,$(*errors*),FOO:BAR)
+$(call _expectEQ,$(error0),$(value _error))
+
+
 # Reference Expansion
 
 $(call _expectEQ,$(call _expv,c,c*a),*a)
@@ -38,68 +70,38 @@ $(call _expectEQ,$(call _expand,a C*ev1 D*ev3 b),a C[o1] C[o2] C[o3] C[o4]  b)
 $(call _expectEQ,$(call _expand,C*D*ev2),C[D[o2]] C[D[o3]])
 
 
-# Object ID parsing
+# get
+#
+# Test only for coverage; more granular tests are in prototype.scm.
 
-_getErr = ERROR
-getC = $(foreach o,$1,$(call _getC,Prop))
-$(call _expectEQ,$(call getC,c[c]),c)
-$(call _expectEQ,$(call getC,ca]),ERROR)
-$(call _expectEQ,$(call getC,[a]),ERROR)
-$(call _expectEQ,$(call getC,]),ERROR)
+TA.p  = <A.p>
+TA.r  = <A.r:$A;{s}>
+TB.inherit = TA
+TB[a].s := <B[a].s:$$A;{}>
+TB[a].r  = <B[a].r:$C;{inherit};{p}>
 
-getA = $(foreach o,$1,$(foreach C,$2,$(_getA)))
-$(call _expectEQ,$(call getA,C[a],C),a)
-$(call _expectEQ,$(call getA,C[],C),ERROR)
-
-
-# Memoization
-
-f_memoIsSet = $(call true,$(foreach K,$1,$(_memoIsSet)))
-f_memoSet = $(foreach K,$1,$(call _memoSet,$2))
-
-H := \#
-testValue := $(or ) :$H$$2\$Hc($(\t)$(\n) #
-testKey := <a-+[a).p(_,;@%=?].p>
-
-$(call _expectEQ,$(call f_memoIsSet,$(testKey)),)
-$(call _expectEQ,$(call f_memoSet,$(testKey),$(testValue)),$(testValue))
-$(call _expectEQ,$($(testKey)),$(testValue))
-$(call _expectEQ,$(call f_memoIsSet,$(testKey)),1)
-
-
-# get, get*
-
-Cls[I1].out = item1
-Cls[I2].out = item2
-Group[G1].out = G1.phony
-C2.inherit = Cls
-C2.x = X2-$A
-C2.y = Y2-$A
-C3.inherit = C2
-C3.y = Y3
-
-File.x = FiLeX
-File[foo].x = FoOx
-
+# instance-defined, simple variable
 $(call _expectEQ,\
-  $(call get,out,Cls[I1] Cls[I2]),\
-  item1 item2)
+  $(call get,s,TB[a]),\
+  <B[a].s:$$A;{}>)
 
+# cached access
 $(call _expectEQ,\
-  $(call get,x,C3[arg]),\
-  X2-arg)
+  $(call get,s,TB[a]),\
+  <B[a].s:$$A;{}>)
 
+# instance-defined, recursive variable
+# + {inherit}, {prop}
+# + class-defined simple & recursive variables
 $(call _expectEQ,\
-  $(call get,y,C3[arg]),\
-  Y3)
+  $(call get,r,TB[a]),\
+  <B[a].r:TB;<A.r:a;<B[a].s:$$A;{}>>;<A.p>>)
 
-$(call _expectEQ,\
-  $(call get,x,foo bar),\
-  FoOx FiLeX)
 
 
 # Help
 
+C.inherit = Builder
 C.x = <$A>
 C.x.y = :$A:
 
@@ -128,7 +130,7 @@ A = 2
 $(call _expectEQ,$(o1),1)
 
 
-# _argValues
+# _args
 
 $(call _expectEQ,1,$(call true,_argError)) # minion.mk should supply one
 _argError = $(subst :[,<[>,$(subst :],<]>,$1))
@@ -136,14 +138,20 @@ _argError = $(subst :[,<[>,$(subst :],<]>,$1))
 $(call _expectEQ,$(call _argHash,a$;x=1),=a x=1)
 $(call _expectEQ,$(call _argHash,a]),=a<]>)
 
-
 Foo.inherit = Builder
-Foo.argValues = $(call _argValues)
-Foo.argX = $(call _argValues,X)
+Foo.args = $(_args)
+Foo.argX = $(foreach K,X,$(_args))
 
 $(call _expectEQ,$(call get,argHash,Foo[C[A]$;B$;X=Y]),=C[A] =B X=Y)
-$(call _expectEQ,$(call get,argValues,Foo[C[A]$;B$;X=Y]),C[A] B)
+$(call _expectEQ,$(call get,args,Foo[C[A]$;B$;X=Y]),C[A] B)
 $(call _expectEQ,$(call get,argX,Foo[C[A]$;B$;X=Y]),Y)
+
+EC.inherit = #
+EC.args = $(_args)
+
+$(call $(trapEQ),$(call get,args,EC[a]),)
+$(call expectError,during evaluation of:$(\n)EC.args =)
+
 
 # _outBasis
 
@@ -179,7 +187,6 @@ $(call _expectEQ,$(call get,out,Zip[*p1]),.out/Zip_@/p1.zip)
 Dup.inherit = Builder
 Dup.out = dup/$A
 
-C.inherit = Builder
 C.outExt = .o
 
 Inf.inherit = Builder
@@ -193,6 +200,26 @@ $(call _expectEQ,\
 $(call _expectEQ,\
   $(call get,inPairs,Inf[x]),\
   C[a.c]$$.out/C.c/a.o C[b.cpp]$$.out/C.cpp/b.o C[Dup[c.c]]$$.out/C.c_/dup/c.o d.o)
+
+# Built-in classes
+
+WVAR = test
+
+define WWrule
+.out/Write/WVAR : minion_test.mk start-minion.mk minion.mk  
+	@echo '#-> Write[WVAR]'
+	@mkdir -p .out/Write/
+	@printf 'test' > .out/Write/WVAR
+
+
+
+endef
+
+$(call _expectEQ,\
+  $(call get,rule,Write[WVAR]),\
+  $(value WWrule))
+
+
 
 default: ; @true
 

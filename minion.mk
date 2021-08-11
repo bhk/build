@@ -14,7 +14,11 @@ MAKEFLAGS := Rr $(MAKEFLAGS)
 # Character constants
 \s := $(if ,, )
 \t := $(if ,,	)
-\h := \#
+\H := \#
+\L := {
+\R := }
+[ := (
+] := )
 ; := ,
 define \n
 
@@ -58,15 +62,6 @@ _expv = $(subst :$1$(if $(findstring *,$(subst :$1*,,:$2)),*),,:$2)
 _expandMap = $(foreach o,$(call _expand,$(_expv)),$1[$o])
 _expand = $(foreach w,$1,$(or $(filter %],$w),$(if $(findstring *,$w),$(if $(filter *%,$w),$(call _expand,$($(w:*%=%))),$(call _expandMap,$(word 1,$(subst *, ,$w)),$w)),$w)))
 
-# $K=key, $1=value -> value
-_memoSet = $(eval $$K := $$(or )$(subst $(\n),$$(\n),$(subst \#,$$(\h),$(subst $$,$$$$,$1))))$1
-
-# $K=key -> bool
-_memoIsSet = $(filter-out undef%,$(flavor $K))
-
-# _once VAR : Evaluate a variable at most once
-_once = $(foreach K,~$1,$(if $(_memoIsSet),$($K),$(call _memoSet,$($1))))
-
 # Inspect targets/goals
 _isInstance = $(filter %],$1)
 _isIndirect = $(findstring *,$(word 1,$(subst [,[ ,$1)))
@@ -79,41 +74,46 @@ _goalID = $(if $(or $(_isInstance),$(_isIndirect),$(_aliasInputs)),Alias[$1])
 # $1 = list of IDs  $2 = seen IDs
 _rollup = $(if $1,$(call _rollup,$(filter-out $1 $2,$(sort $(call get,needs,$(_isInstance)))),$2 $1),$(filter %],$2))
 
+# Report an error (called by object system)
+_error = $(error $1)
+
 # See prototype.scm for documentation on the following:
 
+# object system
+
+_set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
+_once = $(if $(filter-out u%,$(flavor _|$1)),$(_|$1),$(call _set,_|$1,$($1)))
+_getE1 = $(call _error,Reference to undefined property '$(lastword $(subst ., ,$1))' for $C[$A]$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$Cis not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(patsubst &%,%,$(patsubst ^%,%,$4)),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(lastword $(subst ., ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
+_chain = $1 $(foreach w,$($1.inherit),$(call _chain,$w))
+_& = $(filter %,$(foreach w,$(or $(&|$C),$(call _set,&|$C,$(call _chain,$C))),$(if $(filter u%,$(flavor $w.$1)),,$w.$1)))
+_cp = $(or $(foreach w,$(word 1,$2),$(eval $1 = $$(or )$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(if $(filter r%,$(flavor $w)),$(subst },$],$(subst {,$(if ,,$$$[call _.,^$w,),$(if $(findstring {inherit},$(value $w)),$(subst {inherit},$$(call $(if $(value $3),$3,$(call _cp,$3,$(wordlist 2,99999999,$2),_$3,^$1))),$(value $w)),$(value $w)))),$(subst $$,$$$$,$(value $w))))))$1),$(_getE1),$1)
+_! = $(call $(if $(filter u%,$(flavor $C[$A].$1)),$(if $(value &$C.$1),&$C.$1,$(call _cp,&$C.$1,$(_&),_&$C.$1,$2)),$(call _cp,&$C[$A].$1,$C[$A].$1 $(_&),&$C.$1,$2)))
+_. = $(if $(filter s%,$(flavor ~$C[$A].$2)),$(~$C[$A].$2),$(call _set,~$C[$A].$2,$(call _!,$2,$1)))
+. = $(call _.,$2,$1)
+_getE0 = $(call _error,Mal-formed instance name '$A'; $(if $(subst [,,$(filter %[,$(word 1,$(subst [,[ ,$A)))),empty ARG,$(if $(filter [%,$A),empty CLASS,missing '[')) in CLASS[ARG])
+get = $(foreach A,$2,$(if $(filter %],$A),$(foreach C,$(or $(subst [,,$(filter %[,$(word 1,$(subst [,[ ,$A)))),$(_getE0)),$(foreach A,$(or $(subst &$C[,,&$(patsubst %],%,$A)),$(_getE0)),$(call .,$1))),$(foreach C,File,$(or $(File.$1),$(call .,$1)))))
+
+# misc
+
+_ivar = $(lastword $(subst *, ,$1))
 _pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
 _pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
 _inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%[$(call _pairIDs,$w)],$2))),$x$$$(call get,out,$x)),$w)),$1)
+
+# argument parsing
 
 _argGroup = $(if $(findstring :[,$(subst ],[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) :],]: ,$(patsubst :[%,:[% ,$(subst :], :],$(subst :[, :[,$1)))),$(if $(filter %:,$w),$(subst :,,$w),$w))),$1)),$1)
 _argHash2 = $(subst :,,$(foreach w,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$(subst $;,:$;,$(subst ],:],$(subst [,:[,$1)))))),$(if $(findstring :=,$w),,=)$w))
 _argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$(_argHash2),=$(subst $;, =,$1))
 _hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
+# output file generation
+
 _fsenc = $(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst *,@_,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1)))))))))
-_outBasis = $(if $(if $(word 2,$5),,$(filter =%,$5)),$(_outBS),$(call _outBC,$1,$2,$3,$4,$(word 1,$(call _hashGet,$5))))
 _outBI = $(subst $(\s)_,/,$(subst $(\s)|,,_ $(patsubst %@,|%@,$(subst @D,/,$(subst @_,@ _,$(_fsenc))))))
-_outBS = $(call _fsenc,$3)$(if $(_isIndirect),$(_outBI),$(if $(findstring %,$4),,$(suffix $2))$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$2))))))))
+_outBS = $(call _fsenc,$3)$(if $(call _isIndirect,$1),$(_outBI),$(if $(findstring %,$4),,$(suffix $2))$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$2))))))))
 _outBC = $(call _outBS,$5,$(or $2,default),$3$(subst $(if ,,_$5,),$(if ,,_|,),_$1),$4)
-
-#--------------------------------
-# Property evaluation
-#--------------------------------
-
-# & PROPERTY : Search inheritance chain for first matching property definition
-& = $(or $(call _isDefined,$C[$A].$1),$(call _isDefined,$C.$1),$(firstword $(foreach C,$($C.inherit),$(call &,$1))))
-
-# . PROPERTY : Evaluate property on self (during some other property evaulation)
-. = $(foreach K,<$C[$A].$1>,$(if $(_memoIsSet),$($K),$(call _memoSet,$(call $(or $&,$(_dotErr))))))
-
-_dotErr = $(error property '$1' not defined for $C[$A])
-
-# get PROPERTY IDs : Evaluate property on multiple target IDs
-get = $(foreach o,$2,$(if $(filter %],$o),$(foreach C,$(_getC),$(foreach A,$(_getA),$(call .,$1))),$(foreach C,File,$(foreach A,$o,$(call .,$1)))))
-
-_getC = $(or $(subst [,,$(filter %[,$(word 1,$(subst [,[ ,$o)))),$(_getErr))
-_getA = $(or $(subst :$C[,,:$(o:%]=%)),$(_getErr))
-_getErr = $(error Mal-formed target ID '$o' in $$(call get,$1,$o)$(\n)  Expected 'Class[Arg]'))
+_outBasis = $(if $(if $(word 2,$5),,$(filter =%,$5)),$(_outBS),$(call _outBC,$1,$2,$3,$4,$(word 1,$(call _hashGet,$5))))
 
 
 #--------------------------------
@@ -144,8 +144,6 @@ _isProp = $(filter ].%,$(lastword $(subst ], ],$1)))
 
 # instance, indirection, alias, other
 _goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_aliasInputs),Alias,$(if $(_isProp),Property,Other))))
-
-_ivar = $(lastword $(subst *, ,$1))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
 
@@ -251,22 +249,27 @@ endef
 # Built-in Classes
 #--------------------------------
 
-# Shorthand variables: $@, $<, $^
-
-@ = $(call .,out)
-^ = $(call .,^)
-< = $(firstword $^)
-
-# Obtain argument values for the current argument.  The argument is treated
-# as a comma-delimited list of values, each with an optional "NAME=" prefix
-# (a missing prefix is equivalent to an empty NAME).
-
-# Return argument values associated with the name $1.
-_argValues = $(call _hashGet,$(call .,argHash),$1)
-_arg1 = $(word 1,$(_argValues))
-_argIDs = $(call _expand,$(_argValues))
+# Argument values
+#
+# An instance argument is treated as a comma-delimited list of values, each
+# with an optional "NAME=" prefix (a missing prefix is equivalent to an
+# empty NAME).
+#
+# For each of the following variables, K defaults to the empty string, which
+# identifies unnamed values. It can be bound to other values using
+# `foreach`, as in `$(foreach K,out,$(arg1))`.
+#
+#   $(_args) = all argument values matching $K
+#   $(_arg1) = first argument value matching $K
+#   $(_argIDs) = target IDs identified by values matching $K
+#   $(_argFiles) = target files identified by values matching $K
+#
+K :=
+_who = $0
+_args = $(call _hashGet,$(call _.,$(_who),argHash),$K)
+_arg1 = $(word 1,$(_args))
+_argIDs = $(call _expand,$(_args))
 _argFiles = $(call get,out,$(_argIDs))
-_argError = $(info $C[$A] contains unbalanced brackets in its argument)$1
 
 
 # The `File` class is a built-in class that is used to construct instances
@@ -283,42 +286,45 @@ File.needs = #
 
 # Builder:  See minion.md
 # 
-Builder.rule = $(subst $(\t)$(\n),,$(Builder_rule))
+
+# Shorthand properties
+Builder.@ = {out}
+Builder.< = $(firstword {^})
 
 Builder.argHash = $(call _argHash,$A,_argError)
 
 # `needs` should include all explicit dependencies and any instances
 # required to build auto-generated implicit dependencies (which should be
 # included in `ooIDs`).
-Builder.needs = $(call .,inIDs) $(call .,upIDs) $(call .,ooIDs)
+Builder.needs = {inIDs} {upIDs} {ooIDs}
 
-Builder.^ = $(call .,inFiles)
-Builder.< = $(firstword $(call .,^))
+Builder.^ = {inFiles}
+Builder.< = $(firstword {^})
 
-Builder.U^ = $(call get,out,$(call .,upIDs))
-Builder.U< = $(firstword $(call .,U^))
+Builder.U^ = $(call get,out,{upIDs})
+Builder.U< = $(firstword {U^})
 
 # `in` is the target list giving user-supplied inputs, and is intended to be
 # easily overridden on a per-class or per-instance basis.  Depending on the
 # class, other secondary input files may be inferred (this is controlled by
 # the `inferClasses` property).
-Builder.in = $(call _argValues)
+Builder.in = $(_args)
 
 # _inPairs = named input pairs (*before* inference)
-Builder._inPairs = $(foreach i,$(call _expand,$(call .,in)),$(if $(filter %],$i),$i$$$(call get,out,$i),$i))
+Builder._inPairs = $(foreach i,$(call _expand,{in}),$(if $(filter %],$i),$i$$$(call get,out,$i),$i))
 
 # inPairs = input (ID,FILE) pairs (direct; after inference)
-Builder.inPairs = $(call _inferPairs,$(call .,_inPairs),$(call .,inferClasses))
-Builder.inIDs = $(call _pairIDs,$(call .,inPairs))
-Builder.inFiles = $(call _pairFiles,$(call .,inPairs))
+Builder.inPairs = $(call _inferPairs,{_inPairs},{inferClasses})
+Builder.inIDs = $(call _pairIDs,{inPairs})
+Builder.inFiles = $(call _pairFiles,{inPairs})
 
 # `up` provides dependencies built into the class itself.
 Builder.up = #
-Builder.upIDs = $(call _expand,$(call .,up))
+Builder.upIDs = $(call _expand,{up})
 
 # `orderOnly` is a target list (just like `in`)
 Builder.orderOnly = #
-Builder.ooIDs = $(call _expand,$(call .,orderOnly))
+Builder.ooIDs = $(call _expand,{orderOnly})
 
 # `inferClasses` a list of words in the format "CLASS.EXT", implying that
 # each input filename ending in ".EXT" should be replaced wth
@@ -328,20 +334,20 @@ Builder.inferClasses = #
 
 # Note: By default, `outDir`, `outName`, and `outExt` are used to
 # construct `out`, but any of them can be overridden.  Do not assume that,
-# for example, `outDir` is always the same as `$(dir $(call .,out))`.
-Builder.out = $(call .,outDir)$(call .,outName)
-Builder.outDir = $(OUTDIR)$(dir $(call .,outBasis))
-Builder.outName = $(call _applyExt,$(notdir $(call .,outBasis)),$(call .,outExt))
+# for example, `outDir` is always the same as `$(dir {out})`.
+Builder.out = {outDir}{outName}
+Builder.outDir = $(OUTDIR)$(dir {outBasis})
+Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,$(call .,_inPairs))),$C,$(call .,outExt),$(call .,argHash))
+Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,{_inPairs})),$C,{outExt},{argHash})
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
 Builder.message = \#-> $C[$A]
-Builder.echoCommand = $(if $(call .,message),@echo $(call _shellQuote,$(call .,message)))
+Builder.echoCommand = $(if {message},@echo $(call _shellQuote,{message}))
 
-Builder.mkdirCommand = @mkdir -p $(dir $@)
+Builder.mkdirCommand = @mkdir -p $(dir {@})
 
 Builder.phonyRule = #
 
@@ -349,15 +355,17 @@ Builder.depsFile = #
 
 _prefixIf = $(if $2,$1$2)
 
-# Note: blank command lines are deleted in Builder.rule
-define Builder_rule
-$@ : $(call .,^) $(call .,U^) $(call _prefixIf, | ,$(call get,out,$(call .,ooIDs)))
-	$(subst $$,$$$$,$(call .,echoCommand)
-	$(call .,mkdirCommand)
-	$(subst $(\n),$(\n)$(\t),$(call .,command)))
+# Remove blank command lines from a recipe
+_recipe = $(subst $$,$$$$,$(subst $(\t)$(\n),,$1))
 
-$(call .,phonyRule)
-$(addprefix -include ,$(call .,depsFile))
+define Builder.rule
+{@} : {^} {U^} $(call _prefixIf, | ,$(call get,out,{ooIDs}))$(call _recipe,
+	{echoCommand}
+	{mkdirCommand}
+	$(subst $(\n),$(\n)$(\t),{command})
+)
+{phonyRule}
+$(addprefix -include ,{depsFile})
 endef
 
 
@@ -369,7 +377,7 @@ endef
 #   as a target.
 #
 Phony.inherit = Builder
-Phony.phonyRule = .PHONY: $@
+Phony.phonyRule = .PHONY: {@}
 Phony.mkdirCommand = #
 Phony.message = #
 Phony.command = @true # avoid "nothing to be done for..." message
@@ -394,10 +402,10 @@ NullAlias.in = #
 #
 Compile.inherit = Builder
 Compile.outExt = .o
-Compile.command = $(call .,compiler) -c -o $@ $< $(call .,flags) -MMD -MP -MF $(call .,depsFile)
+Compile.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsFile}
 Compile.compiler = gcc
-Compile.depsFile = $@.d
-Compile.flags = $(call .,optFlags) $(call .,warnFlags) $(call .,libFlags) $(addprefix -I,$(call .,includes))
+Compile.depsFile = {@}.d
+Compile.flags = {optFlags} {warnFlags} {libFlags} $(addprefix -I,{includes})
 Compile.optFlags = -Os
 Compile.warnFlags = -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror
 Compile.libFlags = #
@@ -415,10 +423,10 @@ Compile++.warnFlags = -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-q
 #
 Program.inherit = Builder
 Program.outExt = #
-Program.command = $(call .,compiler) -o $@ $^ $(call .,flags) 
+Program.command = {compiler} -o {@} {^} {flags} 
 Program.compiler = gcc
 Program.inferClasses = Compile.c
-Program.flags = $(call .,libFlags)
+Program.flags = {libFlags}
 Program.libFlags = #
 
 
@@ -432,29 +440,24 @@ Program++.inferClasses = Compile.c Compile++.cpp
 # Shell[PROGRAM] : This is a mixin that supports running command-line
 # programs.
 #
-Shell.exec = $(_exportPrefix)./$< $(call .,args)
+Shell.exec = {exportPrefix}./{<} {args}
 Shell.inferClasses = Program.c Program.o Program++.cpp
 Shell.args = #
 Shell.exports = #
-
-_exportPrefix = $(foreach v,$(call .,exports),$v=$(call _shellQuote,$(call .,$v)) )
+Shell.exportPrefix = $(foreach v,{exports},$v=$(call _shellQuote,{$v}) )
 
 
 # Exec[PROGRAM] : Run PROGRAM, capturing its output (stdout).
 #
 Exec.inherit = Shell Builder
-Exec.command = ( $(call .,exec) ) > $@ || rm $@
+Exec.command = ( {exec} ) > {@} || rm {@}
 Exec.outExt = .out
 
 
 # Run[PROGRAM] : run program (as a Phony rule)
 #
 Run.inherit = Shell Phony
-Run.command = $(call .,exec)
-
-
-# Compute `out` from `out=...` arg value, or default to $(OUTDIR)$C/$(notdir ...)
-_arg_out = 
+Run.command = {exec}
 
 
 # Copy[INPUT]
@@ -464,9 +467,9 @@ _arg_out =
 #   directory named $(OUTDIR)$C.
 #
 Copy.inherit = Builder
-Copy.out = $(or $(call _arg1,out),$(Builder.out))
+Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
 Copy.outDir = $(OUTDIR)$C/
-Copy.command = cp $< $@
+Copy.command = cp {<} {@}
 
 
 # Mkdir[DIR] : Create directory
@@ -474,7 +477,7 @@ Copy.command = cp $< $@
 Mkdir.inherit = Builder
 Mkdir.in =
 Mkdir.out = $A
-Mkdir.command = mkdir -p $@
+Mkdir.command = mkdir -p {@}
 
 
 # Touch[FILE] : Create empty file
@@ -482,7 +485,7 @@ Mkdir.command = mkdir -p $@
 Touch.inherit = Builder
 Touch.in =
 Touch.out = $A
-Touch.command = touch $@
+Touch.command = touch {@}
 
 
 # Remove[FILE] : Remove FILE from the file system
@@ -495,20 +498,20 @@ Remove.command = rm -f $A
 # Print[INPUT] : Write artifact to stdout.
 #
 Print.inherit = Phony
-Print.command = @cat $<
+Print.command = @cat {<}
 
 
 # Tar[INPUTS] : Construct a TAR file
 #
 Tar.inherit = Builder
 Tar.outExt = .tar
-Tar.command = tar -cvf $@ $^
+Tar.command = tar -cvf {@} {^}
 
 
 # Gzip[INPUT] :  Compress an artifact.
 #
 Gzip.inherit = Builder
-Gzip.command = cat $< | gzip - > $@ || rm $@
+Gzip.command = cat {<} | gzip - > {@} || rm {@}
 Gzip.outExt = %.gz
 
 
@@ -516,7 +519,7 @@ Gzip.outExt = %.gz
 #
 Zip.inherit = Builder
 Zip.outExt = .zip
-Zip.command = zip $@ $^
+Zip.command = zip {@} {^}
 
 # Unzip[OUT] : Extract from a zip file
 #
@@ -525,7 +528,7 @@ Zip.command = zip $@ $^
 #   its `in` property to specify the zip file.
 #
 Unzip.inherit = Builder
-Unzip.command = unzip -p $< $A > $@ || rm $@
+Unzip.command = unzip -p {<} $A > {@} || rm {@}
 Unzip.in = $C.zip
 
 
@@ -535,9 +538,9 @@ Unzip.in = $C.zip
 #   Write the value of a variable to a file.
 #
 Write.inherit = Builder
-Write.out = $(or $(call _arg1,out),$(OUTDIR)$C/$(notdir $(call _arg1)))
-Write.command = @printf $(call _shellQuote,$(call _printfEsc,$(call .,data))) > $@
-Write.data = $($(call _arg1))
+Write.out = $(or $(foreach K,out,$(_arg1)),$(OUTDIR)$C/$(notdir $(_arg1)))
+Write.command = @printf $(call _shellQuote,$(call _printfEsc,{data})) > {@}
+Write.data = $($(_arg1))
 Write.in = $(MAKEFILE_LIST)
 
 

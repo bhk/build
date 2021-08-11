@@ -19,9 +19,43 @@
        (append *var-functions* fn-name)))
 
 
+(define single-chars
+  (.. "a b c d e f g h i j k l m n o p q r s t u v w x y z "
+      "A B C D E F G H I J K L M N O P Q R S T U V W X Y Z "
+      ";"))
+
+;; Rename variable references and "foreach" bindings
+;;
+(define (rename-vars fn-body froms tos)
+  (define `(var-ref name)
+    (if (filter single-chars name)
+        (.. "$" name)
+        (.. "$(" name ")")))
+
+  (define `from (word 1 froms))
+  (define `to (word 1 tos))
+  (define `renamed
+    (subst (.. "foreach " from ",") (.. "foreach " to ",")
+           (var-ref from) (var-ref to)
+           fn-body))
+
+  (if froms
+      (rename-vars renamed (rest froms) (rest tos))
+      fn-body))
+
+
+(expect (rename-vars "$(foreach a,bcd,$(foreach bcd,a $a,$(bcd)))"
+                     "a bcd" "A BCD")
+        "$(foreach A,bcd,$(foreach BCD,a $A,$(BCD)))")
+
+
+;; Collapse function calls into variable references.
+;;
 (define (omit-calls body)
   (foldl (lambda (text fname)
-           (subst (.. "$(call " fname ",$1)")
+           (subst (.. "$(call " fname ")")
+                  (.. "$(" fname ")")
+                  (.. "$(call " fname ",$1)")
                   (.. "$(" fname ")")
                   (.. "$(call " fname ",$1,$2)")
                   (.. "$(" fname ")")
@@ -34,42 +68,609 @@
          *var-functions*))
 
 
-(define (swap fn names froms)
-  (define `name (word 1 names))
-  (define `from (word 1 froms))
-  (define `reduced-fn
-    (subst (.. "foreach " from ",") (.. "foreach " name ",")
-           ;; if from is a single char, name must be also
-           (.. "$" from) (.. "$" name)
-           (.. "$(" from ")") (.. "$" name)
-           fn))
-  (if (not name)
-      fn
-      (swap reduced-fn (rest names) (rest froms))))
+(define *exports* nil)
 
+
+;; Mark FN-NAME as a function to be exported to Minion, and perform
+;; relevant translations.
+;;
+(define (export fn-name is-vf ?vars-to-in ?vars-from-in)
+  ;; Avoid ";" because Minion uses `$;` for ","
+  (define `vars-to (or vars-to-in "w x"))
+  (define `vars-from (or vars-from-in "; ;; ;;; ;;;; ;;;;;"))
+
+  (if is-vf
+      (VF! fn-name))
+  (set-native-fn fn-name
+       (omit-calls
+        (rename-vars (native-value fn-name) vars-from vars-to)))
+  (set *exports* (conj *exports* fn-name)))
+
+
+(define (export-comment text)
+  (set *exports* (conj *exports* (.. "#" text))))
 
 ;; Output a SCAM function as Make code, renaming automatic vars.
 ;;
-(define (show fn-name ?vars-to-in ?vars-from-in)
-  ;; Avoid ";" since Minion uses $; for ","
-  (define `vars-to (or vars-to-in "w x"))
-  (define `vars-from (or vars-to-in "; ;;"))
+(define (show-export fn-name)
+  (define `minionized
+    (subst "$`" "$$"          ;; SCAM runtime -> Minion make
+           "$  " "$(\\s)"     ;; SCAM runtime -> Minion make
+           "$ \t" "$(\\t)"    ;; SCAM runtime -> Minion make
+           "$ " ""            ;; not needed to avoid keywords in "=" defns
+           "$(if ,,,)" "$;"   ;; SCAM runtime -> Minion make
+           "$(if ,,:,)" ":$;" ;; SCAM runtime -> Minion make
+           "$(&)" "$&"        ;; smaller, isn't it?
+           (native-value fn-name)))
 
-  (define `fn-val (native-value fn-name))
+  (define `escaped
+    (subst "\n" "$(\\n)" "#" "\\#" minionized))
 
-  (print fn-name " = "
-         (subst "$`" "$$"          ;; SCAM runtime -> Minion make
-                "$  " "$(\\s)"     ;; SCAM runtime -> Minion make
-                "$(if ,,,)" "$;"   ;; SCAM runtime -> Minion make
-                "$(if ,,:,)" ":$;" ;; SCAM runtime -> Minion make
-                "$(&)" "$&"        ;; smaller, isn't it?
-                (omit-calls (swap fn-val vars-to vars-from)))
-         "\n"))
+  (print fn-name " = " escaped))
+
+
+(define (show-exports)
+  (for (e *exports*)
+    (if (filter "#%" e)
+        (print "\n" e "\n")
+        (show-export e))))
+
 
 
 ;;----------------------------------------------------------------
-;; Misc.
+;; Object system
 ;;----------------------------------------------------------------
+
+(export-comment " object system")
+
+(print "Imports: \\H \\n \\L \\R [ ]")
+(define \H &native "#")
+(define \n &native "\n")
+(set-native "\\L" "{")
+(set-native "\\R" "}")
+
+
+;; Return non-nil if VAR has been assigned a value.
+;;
+(define `(bound? var)
+  (filter-out "u%" (native-flavor var)))
+
+(define `(undefined? var)
+  (filter "u%" (native-flavor var)))
+
+(define `(recursive? var)
+  (filter "r%" (native-flavor var)))
+
+(define `(simple? var)
+  (filter "s%" (native-flavor var)))
+
+;; Return VAR if VAR has been assigned a value.
+;;
+(define `(boundName? var)
+  (if (filter "u%" (native-flavor var)) "" var))
+
+
+;; Set variable named KEY to VALUE; return VALUE.
+;;
+;; We assume KEY does not contain ":", "=", "$", or whitespace.
+(define (_set key value)
+  &native
+  (define `(escape str)
+    "$(or )" (subst "$" "$$" "\n" "$(\\n)" "#" "$(\\H)" str))
+  (.. (native-eval (.. key " := " (escape value)))
+      value))
+
+(export (native-name _set) 1)
+
+
+(begin
+  (define `(test value)
+    (_set "tmp_set_test" value)
+    (expect (native-var "tmp_set_test") value))
+  (test "a\\b#c\\#\\\\$v\nz"))
+
+
+;; Assign a recursive variable, given the code to be evaluated.  The
+;; resulting value will differ, but the result of its evaluation should be
+;; the same as that of VALUE.
+;;
+(define `(_setfn name value)
+  &native
+  (native-eval (.. name " = $(or )" (subst "\n" "$(\\n)" "#" "$(\\H)" value))))
+
+
+(begin
+  (define `(test var-name)
+    (define `out (.. "~" var-name))
+    (_setfn out (native-value var-name))
+    (expect (native-var var-name) (native-var out)))
+
+  (native-eval "define TX\n   abc   \n\n\nendef\n")
+  (test "TX")
+  (native-eval "TX = a\\\\\\\\c\\#c")
+  (test "TX")
+  (native-eval "TX = echo '#-> x'")
+  (test "TX"))
+
+
+;; Return value of VAR, evaluating it only the first time.
+;;
+(define (_once var)
+  &native
+  (define `cacheVar (.. "_|" var))
+
+  (if (bound? cacheVar)
+      (native-var cacheVar)
+      (_set cacheVar (native-var var))))
+
+(export (native-name _once) nil)
+
+(begin
+  ;; test _once
+  (native-eval "fv = 1")
+  (native-eval "ff = $(fv)")
+  (expect 1 (_once "ff"))
+  (native-eval "fv = 2")
+  (expect 2 (native-var "ff"))
+  (expect 1 (_once "ff")))
+
+
+;; Dynamic state during property evaulation enables `.`, `C`, `A`, and
+;; `super`:
+;;    C = C
+;;    A = A
+;;
+(declare C &native)
+(declare A &native)
+
+
+
+;; This "mock" _error records the last error for testing
+;;
+(define *last-error* nil)
+(define (_error msg)
+  &native
+  (set *last-error* msg))
+
+
+
+;; Construct an E1 (undefined property) error message
+;;
+(define `(e1-msg who outVar class arg)
+  (define `prop
+    (lastword (subst "." " " outVar)))
+
+  (define `who-desc
+    (cond
+     ;; {inherit}
+     ((filter "^&%" who) " from {inherit} in")
+     ;; {prop}
+     ((filter "^%" who) (.. " from {" prop "} in"))
+     ;; $(call _.,P,$0)
+     (else "during evaluation of")))
+
+  (define `cause
+    (cond
+     ((undefined? (.. class ".inherit"))
+      (.. ";\n" class "is not a valid class name "
+          "(" class ".inherit is not defined)"))
+     (who
+      (foreach (src-var (patsubst "&%" "%" (patsubst "^%" "%" who)))
+        (.. who-desc ":\n" src-var " = " (native-value src-var))))))
+
+  (.. "Reference to undefined property '" prop "' for "
+      class "[" arg "]" cause "\n"))
+
+
+;; Report error: undefined property
+;;    Property 'P' is not defined for C[A]
+;;    + C[A] was used as a target, but 'C.inherit' is not defined.
+;;    + Property 'P' is not defined for C[A]; Used by {P} in DEFVAR.
+;;    + '{inherit}' from DEFVAR failed for C[A].  Ancestor classes = ....
+;;
+(define (_getE1 outVar _ _ who)
+  &native
+  (_error (e1-msg who outVar C A)))
+
+(export (native-name _getE1) 1)
+
+
+;; Get the inheritance chain for a class (the class and its inherited
+;; classes, transitively).
+;;
+(define (_chain c)
+  &native
+  (._. c
+       (foreach (sup (native-var (.. c ".inherit")))
+         (_chain sup))))
+
+(export (native-name _chain) nil)
+
+
+(define `(scopes class)
+  (define `cache-var (.. "&|" class))
+
+  (or (native-var cache-var)
+      (_set cache-var (_chain class))))
+
+
+;; Return all inherited definitions of P for CLASS
+;;
+(define (_& p)
+  &native
+  (strip
+   (foreach (c (scopes C))
+     (if (undefined? (.. c "." p))
+         nil
+         (.. c "." p)))))
+
+(export (native-name _&) 1)
+
+
+;; User-defined C[A].PROP var
+(define `(cap-var prop) (.. C "[" A "]." prop))
+
+;; Compiled property PROP for class C
+(define `(cp-var prop)  (.. "&" C "." prop))
+
+
+
+;; (declare (_cc outVar chain) &native)
+;;
+;; (define `(cc-cache outVar chain)
+;;   (if (undefined? outVar)
+;;       (_cc outVar chain)
+;;       outVar))
+;;
+;;
+;; ;; Compile chain, returning code for first definition.  `chain` will
+;; ;; be evaluated only if `{inherit}` is used.
+;; ;;
+;; (define `(compile-src srcVar chainVar chain)
+;;   (define `src
+;;     (native-value srcVar))
+;;
+;;   (if (recursive? srcVar)
+;;       (subst "{" "${call .,"
+;;              (if (findstring "{inherit}" src)
+;;                  (subst "{inherit}" (.. "$(" (cc-cache chainVar chain) ")")
+;;                         src)
+;;                  src))
+;;       (subst "$" "$$" src)))
+;;
+;;
+;; ;; Compile "chain", saving result in outVar, returning outVar.
+;; ;;
+;; ;; To compile the chain, we "expand" the first definition in chain, and
+;; ;; replace references to "{inherit}" with (compile ... rest-of-chain).
+;; ;;
+;; (define (_cc outVar chain)
+;;   &native
+;;
+;;   ;; srcVar holds next-in-chain definition of P
+;;   (define `srcVar
+;;     (word 1 chain))
+;;
+;;   (.. (if chain
+;;           (_setfn outVar (compile-src srcVar (.. "_" outVar) (rest chain)))
+;;           (_getE1))
+;;       outVar))
+;;
+;; (export (native-name _cc) nil)
+;;
+;;
+;; ;; Cause "str" to be re-expanded by Make
+;; (define `(re-eval str)
+;;   (native-call "or" str))
+;;
+;; (expect (re-eval "$$") "$")
+;;
+;;
+;; ;; Evaluate PROP for instance C[A]
+;; ;;
+;; ;; If C[A].PROP is defined, use it.   Otherwise, use or compile &C.P,
+;; ;; which contains the compilation of the first definition.
+;; ;;
+;; ;; Performance cases:
+;; ;;  * &C[A].P cache exists:  1 call (.)      Once per C[A].p
+;; ;;  * C[A].P defined         2 calls (. _! _cap)
+;; ;;  * &C.P already compiled: 2 calls (. _!)  Once per Props*Classes
+;; ;;
+;; (define (_cap prop)
+;;   &native
+;;   (re-eval
+;;    (compile-src (cap-var prop) (cp-var prop) (_& prop))))
+;;
+;; (export (native-name _cap) 1)
+;;
+;;
+;; (define (_! prop)
+;;   &native
+;;   (if (undefined? (cap-var prop))
+;;       (native-var (cc-cache (cp-var prop) (_& prop)))
+;;       (_cap prop)))
+;;
+;; (export (native-name _!) nil)
+
+
+;; old: 1792
+;;================================================================
+;; new: 1512
+
+
+(declare (_cp outVar chain nextOutVar who) &native)
+
+(define `(_cp-cache outVar chain nextOutVar who)
+  (if (native-value outVar)
+      outVar
+      (_cp outVar chain nextOutVar who)))
+
+;; Compile first definition in CHAIN, writing result to OUTVAR, returning
+;; OUTVAR.  NEXTOUTVAR = outVar for next definition in chain (used only when
+;; the first definition contains {inherit}.
+;;
+;; A)  &C[A].P  "C[A].P B.P A.P"  &C.P
+;;     &C.P     "B.P A.P"         _&C.P
+;;     _&C.P    "A.P"             __&C.P
+;;
+;; B)  &C.P     "B.P A.P"        _&C.P
+;;     _&C.P    "A.P"            __&C.P
+;;
+(define (_cp outVar defVars nextOutVar who)
+  &native
+
+  (define `success
+    (foreach (srcVar (word 1 defVars))
+      (define `src
+        (native-value srcVar))
+
+      (define `inherit-var
+        (_cp-cache nextOutVar
+                   (rest defVars)
+                   (.. "_" nextOutVar)
+                   (.. "^" outVar)))
+
+      (define `out
+        (if (recursive? srcVar)
+            (subst "{" (.. "$(call _.,^" srcVar ",")
+                   "}" ")"
+                   (if (findstring "{inherit}" src)
+                       (subst "{inherit}" (.. "$(call " inherit-var ")")
+                              src)
+                       src))
+            (subst "$" "$$" src)))
+
+      (.. (_setfn outVar out)
+          ;;(print outVar " = " (native-value outVar))
+          outVar)))
+
+  (or success
+      (_getE1 outVar defVars nextOutVar who)
+      outVar))
+
+(export (native-name _cp) nil)
+
+
+;; Evaluate property P for instance C[A]  (don't cache result)
+;;
+(define (_! p who)
+  &native
+  (native-call
+   (if (undefined? (cap-var p))
+       (_cp-cache (cp-var p) (_& p) (.. "_" (cp-var p)) who)
+       ;; don't bother checking
+       (_cp (.. "&" (cap-var p))
+           (._. (cap-var p) (_& p))
+           (cp-var p)
+           who))))
+
+(export (native-name _!) nil)
+
+
+;; Evaluate property P for current instance (given by dynamic C and A)
+;; and cache the result.
+;;
+;;  WHO = requesting target ID
+;;
+;; Performance notes:
+;;  * _. results are cached (same C, A, P => fast access)
+;;  * &C.P is cached (same C => just a variable reference)
+;;
+(define (_. who p)
+  &native
+  (define `cache-var
+    (.. "~" C "[" A "]." p))
+
+  (if (simple? cache-var)
+      (native-var cache-var)
+      (_set cache-var (_! p who))))
+
+(export (native-name _.) nil)
+
+
+(define (. p ?who)
+  &native
+  (_. who p))
+
+(export (native-name .) nil)
+
+
+;; Extract class name from ID stored in variable `A`.  Return (_getE) if
+;; class does not contain "[" or begins with "[".
+;;
+(define `(extractClass)
+  (subst "[" "" (filter "%[" (word 1 (subst "[" "[ " A)))))
+
+;; Extract argument from ID stored in variable `A`, given class name `C`.
+;; Call _getE0 and return nil if argument is empty.
+;;
+(define `(extractArg)
+  (subst (.. "&" C "[") nil (.. "&" (patsubst "%]" "%" A))))
+
+
+;; Report error: mal-formed instance name
+;;
+(define (_getE0)
+  &native
+  ;; When called from `get`, A holds the instance name
+  (define `id A)
+
+  (define `reason
+    (if (extractClass)
+        "empty ARG"
+        (if (filter "[%" id)
+            "empty CLASS"
+            "missing '['")))
+
+  (_error (.. "Mal-formed instance name '" id "'; " reason " in CLASS[ARG]")))
+
+(export (native-name _getE0) 1)
+
+
+(define (get p ids)
+  &native
+  (foreach (A ids)
+    (if (filter "%]" A)
+        ;; instance
+        (foreach (C (or (extractClass) (_getE0)))
+          (foreach (A (or (extractArg) (_getE0)))
+            (. p)))
+        ;; file
+        (foreach (C "File")
+          (or (native-var (.. "File." p))
+              ;; error case...
+              (. p))))))
+
+;; Override automatic variable names so they will be visible to otheeginr
+;; functions as $C and $A.
+(export (native-name get) nil "A C A")
+
+
+(begin
+  (set-native-fn "A.inherit" "")
+  (set-native-fn "B1.inherit" "A")
+  (set-native-fn "B2.inherit" "A")
+  (set-native-fn "C.inherit" "B1 B2")
+
+  (expect 1 (see "not a valid class" (e1-msg nil nil "CX" "a")))
+  (expect 1 (see "from {x} in:\nC.foo =" (e1-msg "^C.foo" "_&C.x" "C" "a")))
+  (expect 1 (see "from {inherit} in:\nB.x =" (e1-msg "^&B.x" "_&C.x" "C" "a")))
+  (expect 1 (see "during evaluation of:\nB.x =" (e1-msg "&B.x" "_&C.x" "C" "a")))
+
+  (expect (strip (scopes "C")) "C B1 A B2 A")
+  (expect (strip (scopes "C")) "C B1 A B2 A")
+
+  (set-native-fn "A.x" "(A.x:$C)")
+  (set-native-fn "A.y" "(A.y)")
+  (set-native    "A.i" " (A.i) ")
+
+  (set-native-fn "B1.y" "(B1.y)")
+  (set-native-fn "B2.y" "(B2.y)")
+
+  (set-native-fn "C.z" "(C.z)")
+  (set-native-fn "C.i" "<C.i:{inherit}>")        ;; recursive w/ {inherit}
+
+  (set-native    "C[a].s" "(C[a].s:$C[$A]{x})")  ;; simple
+  (set-native-fn "C[a].r" "(C[a].r:$C[$A])")     ;; recursive
+  (set-native-fn "C[a].p" "(C[a].p:{x})")        ;; recursive w/ prop
+  (set-native-fn "C[a].i" "<C[a].i:{inherit}>")  ;; recursive w/ {inherit}
+
+  (let-global ((C "C")
+               (A "a"))
+    ;; chain
+    (expect (_& "z") "C.z")
+    (expect (_& "x") "A.x A.x")
+    (expect (_& "y") "B1.y A.y B2.y A.y")
+
+    ;; compile-src & _cc
+    ;;(expect (compile-src "C[a].s" "-" "") "(C[a].s:$$C[$$A]{x})")
+    ;;(expect (compile-src "C[a].p" "-" "") "(C[a].p:${call .,x})")
+
+    ;;(expect (compile-src "C[a].i" "xCP" "C.i A.i") "<C[a].i:$(xCP)>")
+    ;;(expect (native-value "xCP") "$(or )<C.i:$(_xCP)>")
+    ;;(expect (native-value "_xCP") "$(or ) (A.i) ")
+
+    ;; _cp
+    (expect (_cp "cpo1" "C[a].s" "_cpo1" nil) "cpo1")
+    (expect (native-value "cpo1") "$(or )(C[a].s:$$C[$$A]{x})")
+    (expect (_cp "cpo2" "C[a].p" "_cpo2" nil) "cpo2")
+    (expect (native-value "cpo2") "$(or )(C[a].p:$(call _.,^C[a].p,x))")
+    (expect (_cp "cpo3" "C[a].i C.i A.i" "_cpo3" nil) "cpo3")
+    (expect (native-value "cpo3") "$(or )<C[a].i:$(call _cpo3)>")
+    (expect (native-value "_cpo3") "$(or )<C.i:$(call __cpo3)>")
+    (expect (native-value "__cpo3") "$(or ) (A.i) ")
+
+    ;; _!
+
+    (expect (_! "s" nil) "(C[a].s:$C[$A]{x})")      ;; non-recursive CAP
+    (expect (_! "r" nil) "(C[a].r:C[a])")           ;; recursive CAP
+
+    (expect (_! "x" nil) "(A.x:C)")                 ;; undefined CAP
+    (expect (native-value "&C.x") "$(or )(A.x:$C)")
+    (expect (_! "x" nil) "(A.x:C)")
+
+    (expect (_! "p" nil) "(C[a].p:(A.x:C))")        ;; recursive CAP w/ prop
+    (expect (_! "i" nil) "<C[a].i:<C.i: (A.i) >>")  ;; recursive CAP w/ inherit
+
+    ;; .
+
+    (expect (. "x") "(A.x:C)")
+    (expect (. "x") "(A.x:C)")  ;; again (after caching)
+
+    nil)
+
+  (set-native-fn "File.id" "$C[$A]")
+  (expect (get "x" "C[a]") "(A.x:C)")
+  (expect (get "id" "f") "File[f]")
+
+  ;; caching of &C.P
+
+  (expect "$(or )(A.x:$C)" (native-value "&C.x"))
+  (set-native-fn "&C.x" "NEW")
+  (expect (get "x" "C[b]") "NEW")
+  (set-native-fn "C[i].x" "<{inherit}>")
+  (expect (get "x" "C[i]") "<NEW>")
+
+  ;; error reporting
+
+  (define `(error-contains str)
+    (expect 1 (see str *last-error*)))
+
+  (expect (get "p" "[a]") nil)
+  (error-contains "'[a]'; empty CLASS in CLASS[ARG]")
+
+  (expect (get "p" "Ca]") nil)
+  (error-contains "'Ca]'; missing '[' in CLASS[ARG]")
+
+  (expect (get "p" "C[]") nil)
+  (error-contains "'C[]'; empty ARG in CLASS[ARG]")
+
+  (expect (get "asdf" "C[a]") nil)
+  (error-contains "undefined")
+
+  (set-native-fn "C.e1" "{inherit}")
+  (expect (get "e1" "C[a]") nil)
+  (error-contains "undefined")
+  (error-contains "from {inherit} in:\nC.e1 = {inherit}")
+
+  (set-native-fn "C[a].e2" "{inherit}")
+  (expect (get "e2" "C[a]") nil)
+  (error-contains (.. "undefined property 'e2' for C[a] from "
+                      "{inherit} in:\nC[a].e2 = {inherit}"))
+
+  (set-native-fn "C.eu" "{undef}")
+  (expect (get "eu" "C[a]") nil)
+  (error-contains (.. "undefined property 'undef' for C[a] "
+                      "from {undef} in:\nC.eu = {undef}"))
+
+  nil)
+
+
+;;----------------------------------------------------------------
+;; Misc
+;;----------------------------------------------------------------
+
+(export-comment " misc")
 
 (define `(isInstance target)
   (filter "%]" target))
@@ -77,23 +678,23 @@
 
 ;; Mock implementation of `get`
 
-(define *props* nil)  ;; "canned" answers
-
-(define (get prop id)
-  &native
-
-  (define `key (.. id "." prop))
-
-  (cond
-   ((not (isInstance id))
-    (dict-get prop {out: id}))
-
-   ((not (dict-find key *props*))
-    (expect key "NOTFOUND"))
-
-   (else
-    (dict-get key *props*))))
-
+;; (define *props* nil)  ;; "canned" answers
+;;
+;; (define (get prop id)
+;;   &native
+;;
+;;   (define `key (.. id "." prop))
+;;
+;;   (cond
+;;    ((not (isInstance id))
+;;     (dict-get prop {out: id}))
+;;
+;;    ((not (dict-find key *props*))
+;;     (expect key "NOTFOUND"))
+;;
+;;    (else
+;;     (dict-get key *props*))))
+;;
 
 (define OUTDIR
   &native
@@ -104,10 +705,15 @@
   &native
   (findstring "*" (word 1 (subst "[" "[ " target))))
 
+;; We expect this to be provided by minion.mk
+;;(export (native-name _isIndirect) 1)
+
 
 (define (_ivar id)
   &native
   (lastword (subst "*" " " id)))
+
+(export (native-name _ivar) 1)
 
 
 (define `(pair id file)
@@ -117,16 +723,21 @@
   &native
   (filter-out "$%" (subst "$" " $" pairs)))
 
+(export (native-name _pairIDs) 1)
+
+
 (define (_pairFiles pairs)
   &native
   (filter-out "%$" (subst "$" "$ " pairs)))
 
+(export (native-name _pairFiles) 1)
 
 (expect "a.c" (_pairIDs "a.c"))
 (expect "C[a.c]" (_pairIDs "C[a.c]$a.o"))
 
 (expect "a.c" (_pairFiles "a.c"))
 (expect "a.o" (_pairFiles "C[a.c]$a.o"))
+
 
 
 ;; Infer intermediate instances given a set of input IDs and their
@@ -153,29 +764,22 @@
             p))
       pairs))
 
+(export (native-name _inferPairs) nil)
 
-(set *props*
-     { "C[a.c].out": "out/a",
-       "P[a.o].out": "out/P/a",
-       "P[C[a.c]].out": "out/P_C/a" })
 
-(expect (_inferPairs "a.x a.o C[a.c]$out/a.o" "P.o")
-        "a.x P[a.o]$out/P/a P[C[a.c]]$out/P_C/a")
+(set-native "IC[a.c].out" "out/a.o")
+(set-native "IP[a.o].out" "out/P/a")
+(set-native "IP[IC[a.c]].out" "out/IP_IC/a")
 
-(VF! (native-name _ivar))
-(VF! (native-name _isIndirect))
-
-(show (native-name _isIndirect))
-(show (native-name _ivar))
-(show (native-name _pairIDs))
-(show (native-name _pairFiles))
-(show (native-name _inferPairs))
+(expect (_inferPairs "a.x a.o IC[a.c]$out/a.o" "IP.o")
+        "a.x IP[a.o]$out/P/a IP[IC[a.c]]$out/IP_IC/a")
 
 
 ;;----------------------------------------------------------------
 ;; Argument string parsing
 ;;----------------------------------------------------------------
 
+(export-comment " argument parsing")
 
 (define (_argError arg)
   &native
@@ -214,6 +818,8 @@
           (_argGroup e arg))
       arg))
 
+(export (native-name _argGroup) nil)
+
 
 ;; Construct a hash from an argument.  Check for balanced-ness in
 ;; brackets.  Protect "=" and "," when nested within brackets.
@@ -232,8 +838,7 @@
     (foreach (w (subst ":," " " (_argGroup (escape arg))))
       (.. (if (findstring ":=" w) "" "=") w))))
 
-
-(VF! (native-name _argHash2))
+(export (native-name _argHash2) 1)
 
 
 ;; Construct a hash from an instance argument.
@@ -245,21 +850,20 @@
       ;; common, fast cast
       (.. "=" (subst "," " =" arg))))
 
+(export (native-name _argHash) 1)
 
-(define (argHash a) (_argHash a))
+(expect (_argHash "a=b=c,d=e,f,g") "a=b=c d=e =f =g")
+(expect (_argHash "a") "=a")
+(expect (_argHash "a,b,c") "=a =b =c")
+(expect (_argHash "C[a]") "=C[a]")
+(expect (_argHash "C[a=b]") "=C[a=b]")
+(expect (_argHash "x=C[a]") "x=C[a]")
+(expect (_argHash "c[a,b=1!R[]],d,x=y") "=c[a,b=1!R[]] =d x=y")
+(expect (_argHash "c[a,b=1[]],d,x=y")   "=c[a,b=1[]] =d x=y")
+(expect (_argHash "c[a,b=1[]],d,x=y][") "=c[a,b=1[]] =d x=y<]><[>")
 
-(expect (argHash "a=b=c,d=e,f,g") "a=b=c d=e =f =g")
-(expect (argHash "a") "=a")
-(expect (argHash "a,b,c") "=a =b =c")
-(expect (argHash "C[a]") "=C[a]")
-(expect (argHash "C[a=b]") "=C[a=b]")
-(expect (argHash "x=C[a]") "x=C[a]")
-(expect (argHash "c[a,b=1!R[]],d,x=y") "=c[a,b=1!R[]] =d x=y")
-(expect (argHash "c[a,b=1[]],d,x=y")   "=c[a,b=1[]] =d x=y")
-(expect (argHash "c[a,b=1[]],d,x=y][") "=c[a,b=1[]] =d x=y<]><[>")
-
-(expect (argHash ",") "= =")
-(expect (argHash ",a,b,") "= =a =b =")
+(expect (_argHash ",") "= =")
+(expect (_argHash ",a,b,") "= =a =b =")
 
 
 ;; Get matching values from a hash
@@ -269,19 +873,18 @@
   (define `pat (.. key "=%"))
   (patsubst pat "%" (filter pat hash)))
 
+(export (native-name _hashGet) nil)
+
+
 (expect (_hashGet "=a =b x=y" "") "a b")
 (expect (_hashGet "=a =b x=y" "x") "y")
 
 
-(print "#---- argument parsing\n")
-(show (native-name _argGroup))
-(show (native-name _argHash2))
-(show (native-name _argHash))
-(show (native-name _hashGet))
-
 ;;----------------------------------------------------------------
 ;; Output file name generation
 ;;----------------------------------------------------------------
+
+(export-comment " output file generation")
 
 ;; The chief requirement for output file names is that conflicts must be
 ;; avoided.  Avoiding conflicts is complicated by the inference feature, which
@@ -364,10 +967,6 @@
 ;;   ARG1  -->  @1
 ;;
 
-(set *props*
-     { "File[d/a.c].out": "d/a.c",
-       "C[a.c].out": ".out/C.c/a.o",
-       "C[d/a.c].out": ".out/C.c/d/a.o"})
 
 
 ;; Encode all characters that may appear in class names or arguments with
@@ -386,6 +985,8 @@
          "~" "@T"
          "/" "@D"
          str))
+
+(export (native-name _fsenc) 1)
 
 
 ;; Encode the directory portion of path with fsenc characters
@@ -460,6 +1061,11 @@
       (_outBS arg file class outExt)
       (_outBC arg file class outExt (word 1 (_hashGet argHash)))))
 
+(export (native-name _outBI) 1)
+(export (native-name _outBS) 1)
+(export (native-name _outBC) 1)
+(export (native-name _outBasis) 1)
+
 
 (begin
   ;; test _outBasis
@@ -480,6 +1086,11 @@
             (else "%")))
 
     (expect (_outBasis arg file class outExt aHash) out))
+
+
+  (set-native "File[d/a.c].out" "d/a.c")
+  (set-native "C[a.c].out" ".out/C.c/a.o")
+  (set-native "C[d/a.c].out" ".out/C.c/d/a.o")
 
 
   ;; C[FILE]
@@ -512,205 +1123,6 @@
   (test "P" "C*v,o=3"      "P_@1,o@E3_C@/v"))
 
 
-(VF! (native-name _fsenc))
-(VF! (native-name _outBasis))
-(VF! (native-name _outBI))
-(VF! (native-name _outBS))
-(VF! (native-name _outBC))
-
-(print "#---- output file generation\n")
-(show (native-name _fsenc))
-(show (native-name _outBasis))
-(show (native-name _outBI))
-(show (native-name _outBS))
-(show (native-name _outBC))
-
-;;----------------------------------------------------------------
-;; Functions defined by Minion
-;;----------------------------------------------------------------
-
-(define `(bound? var)
-  (if (filter "undef%" (native-flavor var)) "" var))
-
-(define `(defined? var)
-  (filter-out "undef%" (native-flavor var)))
-
-(define `(memoIsSet key)
-  (defined? key))
-
-(define `(memoGet key)
-  (native-var key))
-
-;;----------------------------------------------------------------
-;; Imports
-;;----------------------------------------------------------------
-
-;; Dynamic state during property evaulation enables `.`, `C`, `A`, and
-;; `super`:
-;;    & = word-encoded inheritance chain
-;;    C = C
-;;    A = A
-
-(declare C &native)
-(declare A &native)
-(declare & &native)
-
-(define _getErr &native "ERROR")
-
-(define _dotErr &native "ERROR")
-
-(define (_set key value)
-  &native
-  (set-native key value value))
-
-
-;;----------------------------------------------------------------
-;; Object system
-;;----------------------------------------------------------------
-
-(define `WD ";")
-
-;; pack a list into one word
-(define `(tw lst) (subst " " WD lst))
-
-;; unpack a list from a word
-(define `(fw w) (subst WD " " w))
-
-(define `(key p c a)
-  (.. "<" c "[" a "]." p ">"))
-
-(define `(prop-chain p)
-  (foreach (c (fw &))
-    (.. c "." p " " c "[" A "]." p)))
-;;  (patsubst "%" (.. "%." p " %[" A "]." p) (fw &)))
-
-(define `(first-bound defs)
-  (word 1 (foreach (v defs) (bound? v))))
-
-
-;;--------------------------------
-;; .
 ;;--------------------------------
 
-(define `(rawDot p)
-  (native-call (or (first-bound (prop-chain p))
-                   "_dotErr")))
-
-(define (. p)
-  &native
-  (if (memoIsSet (key p C A))
-      (memoGet (key p C A))
-      (rawDot p)))
-
-
-;;--------------------------------
-;; get
-;;--------------------------------
-
-;; Construct inheritance chain
-(define (_& c)
-  &native
-  (if (filter "undef%" c)
-      ""
-      (._. c (foreach (sup (native-var (.. c ".inherit")))
-               (_& sup)))))
-
-;; Extract argument from OID: everything between first "[" and last "]"
-;; Error if there is no "[".
-;;
-(define `(oidA oid)
-  ;; w1 = "C[" or the entire oid if there is no "["
-  (define `w1 (word 1 (subst "[" "[ " oid)))
-  (or (patsubst "%]" "%" (subst (.. ":" w1) "" (.. ":" oid)))
-      _getErr))
-
-(expect (oidA "C[AC[A]]") "AC[A]")
-(expect (oidA "[AC[A]]") "AC[A]")
-(expect (oidA "C[AC]A]]") "AC]A]")
-(expect (oidA "C[]") "ERROR")
-(expect (oidA "CA]") "ERROR")
-
-;; Extract class from OID, given the argument.  Error if class is empty.
-;;
-(define `(oidC oid a)
-  (or (subst (.. "[" a "]:") "" (.. oid ":"))
-      _getErr))
-
-(expect (oidC "C[AC[A]]" "AC[A]") "C")
-(expect (oidC "[AC[A]]" "AC[A]") "ERROR")
-
-
-(define (_getCA p oid)
-  &native
-  (foreach (a (oidA oid))
-    (foreach (c (oidC oid a))
-      ;; check memo before building inheritance chain
-      (define `k (key p c a))
-      (define `wchain (tw (native-strip (_& c))))
-
-      (if (memoIsSet k)
-          (memoGet k)
-          (_set k (foreach (& wchain)
-                    (rawDot p)))))))
-
-;; Get property for a single OID.  OID must be a construction or plain file
-;; name; groups alias must have already been converted to constructions.
-;;
-(define `(getoid p oid)
-  (if (filter "%]" oid)
-      ;; construction syntax
-      (_getCA p oid)
-      ;; File: we don't handle inheritance or instance-specific definitions
-      ;; in this case (not supported now because it would require
-      ;; modification of built-in classes)
-      (foreach (a oid)
-        (foreach (c "File")
-          (if (bound? (.. "File." p))
-              (native-var (.. "File." p))
-              _getErr)))))
-
-
-(define (get p oids)
-  &native
-  (foreach (o (patsubst "@%" "Group[*%]" oids))
-    (getoid p o)))
-
-
-;;--------------------------------
-;; Super
-;;--------------------------------
-
-(define `(current-prop current-fn)
-  (lastword (subst "." " " current-fn)))
-
-(define (_supErr fn ?found)
-  &native
-  (error (.. "$(super) called from function " fn
-             (if found
-                 " but there are no inherited definitions."
-                 " which was not a property definition."))))
-
-;; Return the name of the next function in the property chain.
-;; To be used in "$(call $(super))"
-;;
-(define (super current-fn)
-  &native
-  (define `p
-    (current-prop current-fn))
-
-  (define `chain-after
-    (fw (word 2 (subst (.. WD current-fn WD) "X "
-                       (.. WD (tw (prop-chain p)) WD)))))
-
-  (if (findstring (.. WD current-fn WD) (.. WD & WD))
-      (or (first-bound chain-after)
-          (_supErr current-fn 1))
-      (_supErr current-fn)))
-
-(print "#---- object system\n")
-(show (native-name _&))
-(show (native-name get) "o A C & v" "; ;; ;;; ;;;; ;;;;;")
-(show (native-name _getCA) "A C & v" "; ;; ;;; ;;;; ;;;;;")
-(show (native-name .))
-(show (native-name super) 0 1)
-(show (native-name _supErr))
+(show-exports)

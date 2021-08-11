@@ -4,7 +4,6 @@ test: .out/test
 
 .out/test: Makefile *.mk
 	make -f minion_test.mk
-	make -f minion.mk '$$(flavor @)' | grep recursive > /dev/null
 	mkdir -p .out
 	touch .out/test
 

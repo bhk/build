@@ -84,34 +84,47 @@ other artifacts, structured as:
 `CLASS` must match [-+_.A-Za-z0-9]+.  `ARG` must not be an empty string.
 
 Property definitions are associated with the class name.  A property
-definition is a Make variable with a name of the form "CLASS.PROPERTY".  The
-value of a property for a given instance is determined by invoking this
-variable as a Make function.  During that call, the variables `C` and `A`
-hold the name of the class and argument, respectively.
+definition is a Make variable with a name of the form "CLASS.PROPERTY".
+Property definitions may use "simple" variables (assigned with `:=`) or
+"recursive" variables.
 
-> For example, the variable definition `Foo.x = <$A-$C>` defines the `x`
-> property for the class `Foo`.  For the instance `Foo[bar]`, the `x`
-> property will evaluate to `<bar-Foo>`.
+Recursive property definitions can make use of ordinary Make syntax, but
+must use `$(...)`, not `${...}`, for Make variables and functions.
+Expressions of the form `{...}` evaluate to the value of the property named
+by `...` (for the current instance).  The string `{inherit}` expands to the
+inherited value of the current property of the current instance.  Finally,
+`$C` and `$A` expand to the class name and argument string of the current
+instance.
 
-A class can inherit property definitions from one or more other classes by
-listing the parent classes in a variable named `CLASS.inherit`.  An
-inherited definition will be consulted only if there is no matching
-definition on the class itself.
+For example, the following user-defined class extends the `Compile` class to
+pass and additional flag to the compiler:
+
+    MyCompile.inherit = Compile
+    MyCompile.flags = {inherit} {myFlags}
+    MyCompile.myFlags = --my-custom-flag
+
+A recursive property definition can obtain the value of properties of other
+instances using the `get` function: `$(call get,PROPERTY,INSTANCES)`.
+INSTANCES can contain zero or more space-delimited instances.  When more
+than one instance is specified, the result is a space-delimited list of the
+results.
+
+Property definitions that use `:=` may contain arbitrary Make syntax, but
+may not reference other property values via `{NAME}`, `{inherit}`, or
+`$(call get,PROP,ID)`.  These are evaluated exactly once, whereas Minion
+property values are evaluated *at most* once per instance (due to
+memoization).  If never referenced, recursive (`=`) definitions are never
+evaluated.
 
 Instance-specific properties can be defined, using variables named
 `CLASS[ARG].PROPERTY`.  When present, these take precedence over a
 corresponding `CLASS.PROPERTY` definition.  These can occur with any class
 in the inheritance chain of an instance.
 
-To evaluate a property of an arbitrary instance, use the `get` function:
-`$(call get,PROPERTY,INSTANCES)`.  INSTANCES can contain zero or more
-space-delimited instances.  When more than one instance is specified, the
-result is a space-delimited list of the results.
-
-The `.` function can be used to evaluate a property of the "current"
-instance: `$(call .,PROPERTY).  A current instance is defined only during
-the evaluation of a property, so calls to `.` should appear only in property
-definitions.
+A class can inherit property definitions from one or more other classes by
+listing the parent classes in a variable named `CLASS.inherit`.  An
+inherited definition will be consulted only if there is no matching
+definition on the class itself.
 
 Note that instances have no associated "state".  All property definitions
 are (or should be) purely functional in nature.  As such, there is no notion
@@ -121,21 +134,14 @@ Think of a class as a function -- somewhat elaborate and multi-facted, but
 ultimately a function that yields a set of property definitions.  An
 instance identifies the function (class) and its input (argument).
 
-## Property Shorthands
+## Shorthand Properties
 
-For convenience and consistency with Make, `$@`, `$<`, and `$^` are defined
-to mimic the behavior of Make's "automatic variables".  These may be used in
-`command` property definitions, but should be avoided elsewhere because Make
-forbids recursive variables.  Instead use the `out`, `^`, and `<`
-properties.  For example, `$(call .,^)` instead of `$^`.
-
-Make's automatic variables (`$@`, etc.) are defined only during the build
-phase when recipes are expanded, and during that phase the automatic
-variables will *override* these definitions, producing incorrect
-results. This is a tenable situation only because property evaluation in
-Minion is done before the build phase.  We just need to be careful
-whenever we define a custom Make rule to avoid recipes that contain any
-function or variable expansions.
+The properties `@`, `^`, and `<` are defined to mimic the behavior of Make's
+"automatic variables" `$@`, `$^`, and `$<`.  The definition `$^` is not
+exactly identical to Make's `$^`, but it is more often what you want: it is
+a list of the inputs to the class, whereas `$^` includes all prerequisites
+(which may include tools and other files that one would not normally list as
+command line arguments).
 
 ## Builders
 
@@ -225,8 +231,8 @@ conflicts between instances, by ensuring that different instance names
 always generate different output file paths.  Its `out` property is composed
 of `outDir` and `outName` properties.
 
-    Builder.out = $(call .,outDir)$(call .,outName)
-    Builder.outName = $(call _applyExt,$(notdir $(call .,outBasis)),$(call .,outExt))
+    Builder.out = {outDir}{outName}
+    Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
     Builder.outExt = %
 
 Derived classes typically override just the `outExt` property, which is used

@@ -164,9 +164,10 @@ Generally, when defining build steps one does not specify output file
 locations.  In Minion, we use instance names, not output file locations, to
 refer to build products.
 
-Output files are organized under $(OUTDIR) and segregated by class name to
-avoid potential conflicts.  Classes inheriting from `Builder` generally only
-need to specify `outExt`.
+Output files are organized under `$(OUTDIR)` and segregated by class name to
+avoid potential conflicts.  `OUTDIR` defaults to `.out/`; user Makefiles may
+assign it a different value.  Classes inheriting from `Builder` generally
+only need to specify `outExt`.
 
 Arguments may also contain multiple comma-delimited values, each with an
 optional `NAME=` prefix.  When an instance name with a named value is typed
@@ -316,3 +317,70 @@ outputs:
 
     Program[*objects].prereqs
        --> "baz.o .out/Compile/foo.o .out/Compile/bar.o"
+
+
+## Exported Definitions
+
+Minion defines a number of variables and functions for use by user
+Makefiles.
+
+* `$(call get,PROP,IDS)`
+
+  Evaluate property PROP for each target ID in IDS.
+
+* `$(call .,PROP)`
+
+  Evaluate property PROP for the current instance
+
+* `$(call _once,VAR)`
+
+  Return the value of VAR, evaluating it at most once.
+
+* `$(call _qv,VALUE)`
+
+  Format VALUE as quoted string, or as prefixed lines if mult-line.
+
+* `$(call _eq,A,B)`
+
+  Return "1" if A and B are equal, "" otherwise.
+
+* `$(call _expectEQ,A,B)`
+
+  Assert that A and B are equal
+
+* `$(call _?,FN,ARGS...)`
+
+  This provides tracing functionality for debugging Make functions.  It
+  returns the same thing as `$(call FN,ARGS...)` (for up to 5 arguments) and
+  logs the function name, arguments, and result to stdout.
+
+* `$(call _isDefined,VAR)`
+
+  Return VAR if VAR is the name of a defined variable
+
+* `$(call _shellQuote,STR)`
+
+  Quote STR as an argument for /bin/sh or /bin/bash
+
+* `$(call _printfESC,STR)`
+
+  Escape STR for inclusion in a `printf` format string
+
+* Argument value queries
+
+  The following variables can be used to access the comma-delimited argument
+  values of the current instance.  The variable `K` holds the name that
+  selects the values to be returned.  It defaults to the empty string, which
+  identifies unnamed values, and it can be bound to other values using
+  `foreach`.
+
+  For example, during evaluation of a property of `Class[a,b,x=1,x=2]`:
+
+      $(_args) => "a b"
+      $(foreach K,x,$(_args)) => "1 2"
+
+  - `$(_args)` = all argument values matching $K
+  - `$(_arg1)` = the first argument value matching $K
+  - `$(_argIDs)` = target IDs identified by `$(_args)` (after
+     indirections have been expanded)
+  - `$(_argFiles)` = the target files of each ID in `$(_argIDs)`

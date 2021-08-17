@@ -215,7 +215,7 @@
   (expect 1 (_once "ff")))
 
 
-;; Dynamic state during property evaulation enables `.`, `C`, `A`, and
+;; Dynamic state during property evaluation enables `.`, `C`, `A`, and
 ;; `super`:
 ;;    C = C
 ;;    A = A
@@ -246,7 +246,7 @@
      ((filter "^&%" who) " from {inherit} in")
      ;; {prop}
      ((filter "^%" who) (.. " from {" prop "} in"))
-     ;; $(call _.,P,$0)
+     ;; $(call .,P,$0)
      (else "during evaluation of")))
 
   (define `cause
@@ -313,91 +313,6 @@
 ;; Compiled property PROP for class C
 (define `(cp-var prop)  (.. "&" C "." prop))
 
-
-
-;; (declare (_cc outVar chain) &native)
-;;
-;; (define `(cc-cache outVar chain)
-;;   (if (undefined? outVar)
-;;       (_cc outVar chain)
-;;       outVar))
-;;
-;;
-;; ;; Compile chain, returning code for first definition.  `chain` will
-;; ;; be evaluated only if `{inherit}` is used.
-;; ;;
-;; (define `(compile-src srcVar chainVar chain)
-;;   (define `src
-;;     (native-value srcVar))
-;;
-;;   (if (recursive? srcVar)
-;;       (subst "{" "${call .,"
-;;              (if (findstring "{inherit}" src)
-;;                  (subst "{inherit}" (.. "$(" (cc-cache chainVar chain) ")")
-;;                         src)
-;;                  src))
-;;       (subst "$" "$$" src)))
-;;
-;;
-;; ;; Compile "chain", saving result in outVar, returning outVar.
-;; ;;
-;; ;; To compile the chain, we "expand" the first definition in chain, and
-;; ;; replace references to "{inherit}" with (compile ... rest-of-chain).
-;; ;;
-;; (define (_cc outVar chain)
-;;   &native
-;;
-;;   ;; srcVar holds next-in-chain definition of P
-;;   (define `srcVar
-;;     (word 1 chain))
-;;
-;;   (.. (if chain
-;;           (_setfn outVar (compile-src srcVar (.. "_" outVar) (rest chain)))
-;;           (_getE1))
-;;       outVar))
-;;
-;; (export (native-name _cc) nil)
-;;
-;;
-;; ;; Cause "str" to be re-expanded by Make
-;; (define `(re-eval str)
-;;   (native-call "or" str))
-;;
-;; (expect (re-eval "$$") "$")
-;;
-;;
-;; ;; Evaluate PROP for instance C[A]
-;; ;;
-;; ;; If C[A].PROP is defined, use it.   Otherwise, use or compile &C.P,
-;; ;; which contains the compilation of the first definition.
-;; ;;
-;; ;; Performance cases:
-;; ;;  * &C[A].P cache exists:  1 call (.)      Once per C[A].p
-;; ;;  * C[A].P defined         2 calls (. _! _cap)
-;; ;;  * &C.P already compiled: 2 calls (. _!)  Once per Props*Classes
-;; ;;
-;; (define (_cap prop)
-;;   &native
-;;   (re-eval
-;;    (compile-src (cap-var prop) (cp-var prop) (_& prop))))
-;;
-;; (export (native-name _cap) 1)
-;;
-;;
-;; (define (_! prop)
-;;   &native
-;;   (if (undefined? (cap-var prop))
-;;       (native-var (cc-cache (cp-var prop) (_& prop)))
-;;       (_cap prop)))
-;;
-;; (export (native-name _!) nil)
-
-
-;; old: 1792
-;;================================================================
-;; new: 1512
-
-
 (declare (_cp outVar chain nextOutVar who) &native)
 
 (define `(_cp-cache outVar chain nextOutVar who)
@@ -432,8 +347,8 @@
 
       (define `out
         (if (recursive? srcVar)
-            (subst "{" (.. "$(call _.,^" srcVar ",")
-                   "}" ")"
+            (subst "{" "$(call .,"
+                   "}" (.. ",^" srcVar ")")
                    (if (findstring "{inherit}" src)
                        (subst "{inherit}" (.. "$(call " inherit-var ")")
                               src)
@@ -473,10 +388,10 @@
 ;;  WHO = requesting target ID
 ;;
 ;; Performance notes:
-;;  * _. results are cached (same C, A, P => fast access)
+;;  * . results are cached (same C, A, P => fast access)
 ;;  * &C.P is cached (same C => just a variable reference)
 ;;
-(define (_. who p)
+(define (. p ?who)
   &native
   (define `cache-var
     (.. "~" C "[" A "]." p))
@@ -484,13 +399,6 @@
   (if (simple? cache-var)
       (native-var cache-var)
       (_set cache-var (_! p who))))
-
-(export (native-name _.) nil)
-
-
-(define (. p ?who)
-  &native
-  (_. who p))
 
 (export (native-name .) nil)
 
@@ -594,7 +502,7 @@
     (expect (_cp "cpo1" "C[a].s" "_cpo1" nil) "cpo1")
     (expect (native-value "cpo1") "$(or )(C[a].s:$$C[$$A]{x})")
     (expect (_cp "cpo2" "C[a].p" "_cpo2" nil) "cpo2")
-    (expect (native-value "cpo2") "$(or )(C[a].p:$(call _.,^C[a].p,x))")
+    (expect (native-value "cpo2") "$(or )(C[a].p:$(call .,x,^C[a].p))")
     (expect (_cp "cpo3" "C[a].i C.i A.i" "_cpo3" nil) "cpo3")
     (expect (native-value "cpo3") "$(or )<C[a].i:$(call _cpo3)>")
     (expect (native-value "_cpo3") "$(or )<C.i:$(call __cpo3)>")

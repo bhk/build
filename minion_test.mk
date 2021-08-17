@@ -1,4 +1,5 @@
-include start-minion.mk
+make_default = # nothing
+include minion.mk
 
 true = $(if $1,1)
 not = $(if $1,,1)
@@ -38,7 +39,7 @@ $(call _expectEQ,$(error0),$(value _error))
 $(call _expectEQ,$(*errors*),FAIL$$$]:FAIL2)
 
 # $(call expectError,STR) : assert STR appears in *errors*
-expectError = $(if $(findstring $1,$(*errors*)),,$(error Did not find: $(_q1)$(\n)in *errors*: $(call _q1,$(*errors*))))
+expectError = $(if $(findstring $1,$(*errors*)),,$(error Did not find: $(_qv)$(\n)in *errors*: $(call _qv,$(*errors*))))
 
 
 # $(call $(trapEQ),A,B)
@@ -206,7 +207,7 @@ $(call _expectEQ,\
 WVAR = test
 
 define WWrule
-.out/Write/WVAR : minion_test.mk start-minion.mk minion.mk  
+.out/Write/WVAR : minion_test.mk minion.mk  
 	@echo '#-> Write[WVAR]'
 	@mkdir -p .out/Write/
 	@printf 'test' > .out/Write/WVAR
@@ -219,8 +220,3 @@ $(call _expectEQ,\
   $(call get,rule,Write[WVAR]),\
   $(value WWrule))
 
-
-
-default: ; @true
-
-$(end)

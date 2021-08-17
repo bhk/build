@@ -11,7 +11,6 @@ We begin with a minimal Makefile:
 
     $ cp Makefile1 Makefile
     $ cat Makefile
-    ! make clean
 
 This Makefile doesn't describe anything to be built, but it does invoke
 Minion, so when we type `make` in this directory, Minion will process the
@@ -147,4 +146,3 @@ would look like, if one were to write it by hand, instead of leveraging
 Minion:
 
     $ make default deploy minion_debug=%
-    ! cp Makefile1 Makefile

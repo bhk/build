@@ -467,11 +467,9 @@ endef
 
 # $1 = command line goals other than "help"
 _help! = \
-  $(if $(filter com%,$(origin help_expr)),\
-    $(info $(value help_expr) = $(call _qv,$(help_expr))),\
-    $(if $1,,$(info $(_helpMessage)))\
-    $(foreach g,$1,\
-      $(info $(call _help$(call _goalType,$g),$g))))
+  $(if $1,,$(info $(_helpMessage)))\
+  $(foreach g,$1,\
+    $(info $(call _help$(call _goalType,$g),$g)))
 
 
 #--------------------------------
@@ -479,13 +477,12 @@ _help! = \
 #--------------------------------
 
 # This will be the default target when `$(end)` is omitted (and
-# nothing is listed on the command line)
+# no goal is named on the command line)
 _error_default: ; $(error Makefile included minion-start.mk but did not call `$$(end)`)
 
 # Using "$*" in the following pattern rule we can capture the entirety of
-# the goal, including embedded spaces.  We re-invoke Make to evaluate the
-# string prior to the rule processing phase.
-$$%: ; @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) help help_expr=$(call _shellQuote,$$$*)
+# the goal, including embedded spaces.
+$$%: ; @$(info $$$* = $(call _qv,$(call or,$$$*)))
 
 _OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 
@@ -506,11 +503,12 @@ define _epilogue
     # .DEFAULT_GOAL only matters when there are no command line goals
     .DEFAULT_GOAL = default
     _goalIDs := $(call _goalID,default)
+  else ifneq "" "$(filter $$%,$(MAKECMDGOALS))"
+    # ignore when a '$(...)' target is given
   else ifneq "" "$(filter help,$(MAKECMDGOALS))"
     # When `help` is given on the command line, we treat all other goals as
-    # things to describe, not build.  We display help messages right now,
-    # before the rule processing phase, and emit "null" rules for goals so
-    # that rule processing will silently do nothing.
+    # things to describe, not build.  We display help messages right now and
+    # emit "null" rules for the goals.
     $(call _help!,$(subst :,=,$(filter-out help,$(MAKECMDGOALS))))
     _goalIDs := $(MAKECMDGOALS:%=NullAlias[%])
   else

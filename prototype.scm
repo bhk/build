@@ -884,7 +884,7 @@
 ;; Output file name generation
 ;;----------------------------------------------------------------
 
-(export-comment " output file generation")
+(export-comment " output file name generation")
 
 ;; The chief requirement for output file names is that conflicts must be
 ;; avoided.  Avoiding conflicts is complicated by the inference feature, which

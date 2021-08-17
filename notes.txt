@@ -18,38 +18,20 @@ special Shell characters, so we can easily detect when quoting is needed.
 
      Filename:              "A test!"
      $(call !,A test!)  ->  "A!0test!1"   [Used internally everywhere]
-     $@, $<, $^, etc..  ->  "'A test!'"   [For command lines]
-     $(call _mf,...)    ->  "A\ test!"    [For Make target & prereqs]
+     {@}, ${<}, etc..   ->  "'A test!'"   [For command lines]
+     $(call _m!,...)    ->  "A\ test!"    [For Make target & prereqs]
 
-Also, expansion of variable indirections could recognize double quotes:
+Also, the `_expand` step, which handles variable indirections, could also
+recognize double quotes:
 
-     sources = "a 1.c" "a 2.c" "a 3.c"
-
-## Invoking `include` at end, not at start
-
-  Reasons for include-at-start + $(end):
-   - modify a builtin class (discouraged)
-   - call exported functions *immediately* (discouraged)
-   - override make_clean
-
-  Benefits of include-at-end:
-   + simplicity
-   + enables 'alias mm make -f ...' as a use-anywhere command
-   + discourages modifying builtin classes (use inheritance)
-
-  Features to support include-at-end:
-   - Enable "end" by setting a variable
-   - Specify "modules" to be loaded after defns
-   - Export empty classes so Makefile can assign any property (ugh)
-   - Guard the default `make_clean` assignment
-
+     sources = "a 1.c" foo!1 "!.c"  -->  a!01.c foo!1 !1.c
 
 ## Rewrites
 
 Can we define, for example, "Print[A]" as "Exec[w=cat,A]" ?
 
   Rewrite.out = $(call get,out,$(call .,rewrite))
-  Rewrite.needs = $(call .,rewrite)
+  Rewrite.needs = {rewrite}
   Rewrite.rule = #
   Print.inherit = Rewrite
   Print.rewrite = Exec[w=cat,$A]
@@ -70,19 +52,7 @@ Can we define, for example, "Print[A]" as "Exec[w=cat,A]" ?
        - .out is based on the *actual* Print[A]
 
 
-## Help[...] vs "make help ..."
-
-  "make help ..." must be processed prior to rule processing.
-
-
-## {property} notation
-
-    "\\"  --> "$(\)"
-    "\{"  --> "$(\[)"
-    "{"   --> "${call .,"
-
-    C.P = {x}
-    {C.P} = ${call .,x}
+## "make Help[...]" vs "make help ..." ?
 
 
 ## make C[A].P

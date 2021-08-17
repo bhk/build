@@ -85,16 +85,16 @@ other artifacts, structured as:
 
 Property definitions are associated with the class name.  A property
 definition is a Make variable with a name of the form "CLASS.PROPERTY".
-Property definitions may use "simple" variables (assigned with `:=`) or
-"recursive" variables.
+Property definitions may use "simple" variables (assigned using `:=`) or
+"recursive" variables (using `=` or `define`).
 
 Recursive property definitions can make use of ordinary Make syntax, but
 must use `$(...)`, not `${...}`, for Make variables and functions.
-Expressions of the form `{...}` evaluate to the value of the property named
-by `...` (for the current instance).  The string `{inherit}` expands to the
-inherited value of the current property of the current instance.  Finally,
-`$C` and `$A` expand to the class name and argument string of the current
-instance.
+Expressions of the form `{...}` expand to the value of the property named by
+`...` (for the current instance).  The string `{inherit}` expands to the
+inherited value of the current property of the current instance.  To include
+an actual `{` or `}` character, use `$(\L)` or `$(\R)`.  Finally,`$C` and
+`$A` expand to the class name and argument string of the current instance.
 
 For example, the following user-defined class extends the `Compile` class to
 pass and additional flag to the compiler:
@@ -113,8 +113,7 @@ Property definitions that use `:=` may contain arbitrary Make syntax, but
 may not reference other property values via `{NAME}`, `{inherit}`, or
 `$(call get,PROP,ID)`.  These are evaluated exactly once, whereas Minion
 property values are evaluated *at most* once per instance (due to
-memoization).  If never referenced, recursive (`=`) definitions are never
-evaluated.
+memoization).
 
 Instance-specific properties can be defined, using variables named
 `CLASS[ARG].PROPERTY`.  When present, these take precedence over a

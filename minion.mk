@@ -361,7 +361,7 @@ _error = $(error $1)
 
 _set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
 _once = $(if $(filter-out u%,$(flavor _|$1)),$(_|$1),$(call _set,_|$1,$($1)))
-_getE1 = $(call _error,Reference to undefined property '$(lastword $(subst ., ,$1))' for $C[$A]$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$Cis not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(patsubst &%,%,$(patsubst ^%,%,$4)),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(lastword $(subst ., ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
+_getE1 = $(call _error,Reference to undefined property '$(word 2,$(subst .,. ,$1))' for $C[$A]$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$Cis not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(patsubst &%,%,$(patsubst ^%,%,$4)),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(word 2,$(subst .,. ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
 _chain = $1 $(foreach w,$($1.inherit),$(call _chain,$w))
 _& = $(filter %,$(foreach w,$(or $(&|$C),$(call _set,&|$C,$(call _chain,$C))),$(if $(filter u%,$(flavor $w.$1)),,$w.$1)))
 _cp = $(or $(foreach w,$(word 1,$2),$(eval $1 = $$(or )$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(if $(filter r%,$(flavor $w)),$(subst },$(if ,,,^$w$]),$(subst {,$(if ,,$$$[call .,),$(if $(findstring {inherit},$(value $w)),$(subst {inherit},$$(call $(if $(value $3),$3,$(call _cp,$3,$(wordlist 2,99999999,$2),_$3,^$1))),$(value $w)),$(value $w)))),$(subst $$,$$$$,$(value $w))))))$1),$(_getE1),$1)

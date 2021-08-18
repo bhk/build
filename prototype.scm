@@ -238,7 +238,7 @@
 ;;
 (define `(e1-msg who outVar class arg)
   (define `prop
-    (lastword (subst "." " " outVar)))
+    (word 2 (subst "." ". " outVar)))
 
   (define `who-desc
     (cond

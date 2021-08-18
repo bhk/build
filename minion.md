@@ -193,8 +193,8 @@ name only the files that will be processed by the tool.  This is akin to the
 notion of captured values in lexically scoped programming languages.  These
 built-in dependencies are stored in the `up` property, which is treated as a
 target set.  The specific file names obtained from the `up` targets are
-available as properties `U^` and `U<`, analogous to `^` and `<`.  Note that
-`^` & `<` do not include files in `U^` & `U<`.
+available as properties `up^` and `up<`, analogous to `^` and `<`.  Note
+that `^` & `<` do not contain the files in `up^` & `up<`.
 
 Rule inference is performed on input files.  For example, inference allows a
 ".c" file to be supplied where a ".o" file is expected, as in

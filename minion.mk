@@ -34,8 +34,8 @@ Builder.argHash = $(call _argHash,$A,_argError)
 # included in `ooIDs`).
 Builder.needs = {inIDs} {upIDs} {ooIDs}
 
-Builder.U^ = $(call get,out,{upIDs})
-Builder.U< = $(firstword {U^})
+Builder.up^ = $(call get,out,{upIDs})
+Builder.up< = $(firstword {up^})
 
 # `in` is the user-supplied set of "inputs", in the form of a target list
 # (target IDs or indirections).  It is intended to be easily overridden
@@ -106,7 +106,7 @@ _defer = $$$(\t)
 _recipe = $(subst $$$$$(\t)$[,$$$[,$(subst $$,$$$$,$(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))))
 
 define Builder.rule
-{@} : {^} {U^} $(call _prefixIf,| ,$(call get,out,{ooIDs}))
+{@} : {^} {up^} $(call _prefixIf,| ,$(call get,out,{ooIDs}))
 $(call _recipe,{echoCommand}
 {mkdirCommand}
 {command}

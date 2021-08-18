@@ -182,7 +182,7 @@ $(call _expectEQ,\
 P.inherit = Builder
 P.outExt = %.p
 
-$(call _expectEQ,$(call get,_inPairs,P[a.o]),a.o)
+$(call _expectEQ,$(call get,argPairs,P[a.o]),a.o)
 $(call _expectEQ,$(call get,outBasis,P[a.o]),P/a.o)
 $(call _expectEQ,$(call get,outExt,P[a.o]),%.p)
 $(call _expectEQ,$(call get,outName,P[a.o]),a.o.p)
@@ -208,8 +208,8 @@ Inf[x].in = a.c b.cpp Dup[c.c] d.o
 
 $(call _expectEQ,$(call get,in,Inf[x]),a.c b.cpp Dup[c.c] d.o)
 $(call _expectEQ,\
-  $(call get,_inPairs,Inf[x]),\
-  a.c b.cpp Dup[c.c]$$dup/c.c d.o)
+  $(call get,argPairs,Inf[x]),\
+  x)
 $(call _expectEQ,\
   $(call get,inPairs,Inf[x]),\
   C[a.c]$$.out/C.c/a.o C[b.cpp]$$.out/C.cpp/b.o C[Dup[c.c]]$$.out/C.c_/dup/c.o d.o)

@@ -49,11 +49,13 @@ Builder.up< = $(firstword {up^})
 #
 Builder.in = $(_args)
 
-# _inPairs = named input pairs (*before* inference)
-Builder._inPairs = $(foreach i,$(call _expand,{in}),$(if $(filter %],$i),$i$$$(call get,out,$i),$i))
+_pairs = $(foreach i,$(call _expand,$1),$(if $(filter %],$i),$i$$$(call get,out,$i),$i))
 
-# inPairs = input (ID,FILE) pairs (direct; after inference)
-Builder.inPairs = $(call _inferPairs,{_inPairs},{inferClasses})
+# list of ([ID,]FILE]) pairs for unnamed arg values
+Builder.argPairs = $(call _pairs,$(_args))
+
+# list of ([ID,]FILE) pairs for inputs (reuse argPairs if relevant)
+Builder.inPairs = $(call _inferPairs,$(if $(call _eq?,{in},$(_args)),{argPairs},$(call _pairs,{in})),{inferClasses})
 Builder.inIDs = $(call _pairIDs,{inPairs})
 Builder.inFiles = $(call _pairFiles,{inPairs})
 
@@ -79,7 +81,7 @@ Builder.out = {outDir}{outName}
 Builder.outDir = $(OUTDIR)$(dir {outBasis})
 Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,{_inPairs})),$C,{outExt},{argHash})
+Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,{argPairs})),$C,{outExt},{argHash})
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
@@ -160,9 +162,7 @@ CAlias.command = @$(MAKE) -f {<}
 #   target makefile is fresh.
 #
 Makefile.inherit = Builder
-# Setting {inPairs} overrides pre-requisites & needs, and leaves {out}
-# unmodified since it is based on {in}.
-Makefile.inPairs = $(MAKEFILE_LIST)
+Makefile.in = $(MAKEFILE_LIST)
 Makefile.command = $(_defer)(call get,deferredCommand,$C[$A])
 define Makefile.deferredCommand
 $(call _recipe,

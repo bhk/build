@@ -21,7 +21,7 @@ $(call _expectEQ,$(call _shellQuote,'a'),''\''a'\''')
 
 # _printfEsc
 
-$(call _expectEQ,$(call _printfEsc,a\b$(\t)c$(\n)d%e%%f),a\\b\tc\nd%%e%%%%f)
+$(call _expectEQ,$(call _printfEsc,a\b$(\t)c$(\n)d%e%%f),a\\b\tc\nd%e%%f)
 
 
 # Catch & re-enable fatal errors
@@ -99,6 +99,16 @@ $(call _expectEQ,\
   <B[a].r:TB;<A.r:a;<B[a].s:$$A;{}>>;<A.p>>)
 
 
+# _goalID
+
+make_alias1 =
+MAKE_alias2 =
+
+$(call _expectEQ,$(call _goalID,alias1),Alias[alias1])
+$(call _expectEQ,$(call _goalID,alias2),CAlias[alias2])
+$(call _expectEQ,$(call _goalID,*asdf),Alias[*asdf])
+$(call _expectEQ,$(call _goalID,as[df]),Alias[as[df]])
+$(call _expectEQ,$(call _goalID,asdf),)
 
 # Help
 
@@ -117,6 +127,8 @@ $(call _expectEQ,$(call _goalType,*Var),Indirect)
 $(call _expectEQ,$(call _goalType,C*Var),Indirect)
 $(call _expectEQ,$(call _goalType,C[*Var]),Instance)
 $(call _expectEQ,$(call _goalType,C[c[*var]]),Instance)
+$(call _expectEQ,$(call _goalType,alias1),Alias)
+$(call _expectEQ,$(call _goalType,alias2),Alias)
 $(call _expectEQ,$(call _goalType,abc),Other)
 
 
@@ -231,7 +243,7 @@ define WWrule
 .out/Write/WVAR : minion_test.mk minion.mk  
 	@echo '#-> Write[WVAR]'
 	@mkdir -p .out/Write/
-	@printf 'test' > .out/Write/WVAR
+	@printf "%b" 'test' > .out/Write/WVAR
 
 
 

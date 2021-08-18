@@ -136,7 +136,7 @@ Phony.command = @true # avoid "nothing to be done for..." message
 #    them to be used on the Make command line.
 #
 Alias.inherit = Phony
-Alias.in = $(or $(call _aliasInputs,$A),$(subst :,=,$A))
+Alias.in = $(or $(addprefix *,$(call _aliasVar,$A)),$(subst :,=,$A))
 Alias.out = $(subst :,\:,$A)
 
 
@@ -144,6 +144,33 @@ Alias.out = $(subst :,\:,$A)
 #
 NullAlias.inherit = Alias
 NullAlias.in = #
+
+
+# CAlias[GOAL] : Build GOAL using a "compiled" Makefile.
+#
+CAlias.inherit = Alias
+CAlias.in = Makefile[Alias[$A]]
+CAlias.command = @$(MAKE) -f {<}
+
+
+# Makefile[ID] : Generate a makefile that builds ID.
+#
+#   The makefile includes rules for all dependencies, with ID apeparing
+#   first.  Command expansion is deferred to rule processing phase, so that
+#   we can avoid the time it takes to generate all the rules whenever the
+#   target makefile is fresh.
+#
+Makefile.inherit = Builder
+# Setting {inPairs} overrides pre-requisites & needs, and leaves {out}
+# unmodified since it is based on {in}.
+Makefile.inPairs = $(MAKEFILE_LIST)
+Makefile.command = $(_defer)(call get,deferredCommand,$C[$A])
+define Makefile.deferredCommand
+$(call _recipe,
+@rm -f {@}_tmp_ $(foreach I,$(call _rollup,$A),
+@$(call _printf,$(call get,rule,$I)$(\n)) >> {@}_tmp_)
+@mv {@}_tmp_ {@})
+endef
 
 
 # Compile[SOURCE] : Compile a C file to an object file.
@@ -288,7 +315,7 @@ Unzip.in = $C.zip
 #
 Write.inherit = Builder
 Write.out = $(or $(foreach K,out,$(_arg1)),$(OUTDIR)$C/$(notdir $(_arg1)))
-Write.command = @printf $(call _shellQuote,$(call _printfEsc,{data})) > {@}
+Write.command = @$(call _printf,{data}) > {@}
 Write.data = $($(_arg1))
 Write.in = $(MAKEFILE_LIST)
 
@@ -324,7 +351,8 @@ _? = $(call __?,$$(call $1,$2,$3,$4,$5),$(call $1,$2,$3,$4,$5))
 __? = $(info $1 -> $2)$2
 _isDefined = $(if $(filter u%,$(flavor $1)),,$1)
 _shellQuote = '$(subst ','\'',$1)'#'  (comment to fix font coloring)
-_printfEsc = $(subst %,%%,$(subst $(\n),\n,$(subst $(\t),\t,$(subst \,\\,$1))))
+_printfEsc = $(subst $(\n),\n,$(subst $(\t),\t,$(subst \,\\,$1)))
+_printf = printf "%b" $(call _shellQuote,$(_printfEsc))
 
 K :=
 _who = $0
@@ -350,10 +378,10 @@ _expand = $(foreach w,$1,$(or $(filter %],$w),$(if $(findstring *,$w),$(if $(fil
 # Inspect targets/goals
 _isInstance = $(filter %],$1)
 _isIndirect = $(findstring *,$(word 1,$(subst [,[ ,$1)))
-_aliasInputs = $(addprefix *,$(call _isDefined,make_$1))
+_aliasVar = $(or $(call _isDefined,make_$1),$(call _isDefined,MAKE_$1))
 
 # Translate goal $1 to a instance if a rule needs to be generated.
-_goalID = $(if $(or $(_isInstance),$(_isIndirect),$(_aliasInputs)),Alias[$1])
+_goalID = $(if $(or $(_isInstance),$(_isIndirect),$(_aliasVar)),$(if $(filter M%,$(_aliasVar)),C)Alias[$1])
 
 # Get all instances in $1 and in their `needs`, transitively.
 # $1 = list of IDs  $2 = seen IDs
@@ -427,7 +455,7 @@ _getID.P = $(foreach p,$(or $(lastword $(subst ].,] ,$1)),$(error Empty property
 _isProp = $(filter ].%,$(lastword $(subst ], ],$1)))
 
 # instance, indirection, alias, other
-_goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_aliasInputs),Alias,$(if $(_isProp),Property,Other))))
+_goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_aliasVar),Alias,$(if $(_isProp),Property,Other))))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
 
@@ -455,7 +483,7 @@ endef
 define _helpAlias
 Target "$1" is an alias defined by:
 
-   make_$1 = $(value make_$1)
+   $(_aliasVar) = $(value $(_aliasVar))
 
 $(call _helpDeps,Alias[$1])
 

@@ -202,6 +202,27 @@ $(call _expectEQ,\
   $(call get,inPairs,Inf[x]),\
   C[a.c]$$.out/C.c/a.o C[b.cpp]$$.out/C.cpp/b.o C[Dup[c.c]]$$.out/C.c_/dup/c.o d.o)
 
+# _recipe
+
+$(call _expectEQ,$(call _recipe,$(\n)a$(\n)),$(\t)a$(\n))
+
+# _defer
+
+Defer.inherit = Builder
+Defer.command = true $(_defer)($A)
+
+define DeferRule
+.out/Defer/a : a  
+	@echo '#-> Defer[a]'
+	@mkdir -p .out/Defer/
+	true $(a)
+
+
+
+endef
+
+$(call _expectEQ,$(call get,rule,Defer[a]),$(value DeferRule))
+
 # Built-in classes
 
 WVAR = test

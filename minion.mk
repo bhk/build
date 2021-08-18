@@ -96,14 +96,21 @@ Builder.depsFile = #
 
 _prefixIf = $(if $2,$1$2)
 
-# Remove blank command lines from a recipe
-_recipe = $(subst $$,$$$$,$(subst $(\t)$(\n),,$1))
+# _defer can be used to embed a function or variable reference that will
+# be expanded when-and-if the recipe is executed.  Generally, all "$"
+# characters within {command} will be escaped to avoid expansion by
+# Make, but "$(_defer)(...)" becomes "$(...)" in the resulting recipe.
+_defer = $$$(\t)
+
+# Remove empty lines, prefix remaining lines with \t, and escape `$`.
+# Un-escape $(_defer) to enable on-demand execution of functions.
+_recipe = $(subst $$$$$(\t)$[,$$$[,$(subst $$,$$$$,$(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))))
 
 define Builder.rule
-{@} : {^} {U^} $(call _prefixIf,| ,$(call get,out,{ooIDs}))$(call _recipe,
-	{echoCommand}
-	{mkdirCommand}
-	$(subst $(\n),$(\n)$(\t),{command})
+{@} : {^} {U^} $(call _prefixIf,| ,$(call get,out,{ooIDs}))
+$(call _recipe,{echoCommand}
+{mkdirCommand}
+{command}
 )
 {phonyRule}
 $(addprefix -include ,{depsFile})

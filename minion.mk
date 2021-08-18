@@ -20,8 +20,7 @@ File.rule = #
 File.needs = #
 
 
-# Builder:  See minion.md
-# 
+# Builder[ARG]:  Base class for builders.
 
 # Shorthand properties
 Builder.@ = {out}
@@ -521,14 +520,12 @@ $$%: ; @$(info $$$* = $(call _qv,$(call or,$$$*)))
 
 _OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 
+.PHONY: clean
+clean: ; $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
+
 end = $(eval $(value _epilogue))
 
 define _epilogue
-  ifndef make_clean
-    make_clean = # no dependencies
-    Alias[clean].command = $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
-  endif
-
   # Check OUTDIR
   ifneq "/" "$(patsubst %/,/,$(OUTDIR))"
     $(error OUTDIR must end in "/")

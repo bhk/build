@@ -45,9 +45,6 @@ faster incremental build times, but if the behavior of your makefile depends
 on some dynamic state of the system -- for example, if you call `$(shell
 ...)` -- then the results of re-builds may not reflect those state changes.
 
-Minion defines an alias named `clean`.  User makefiles may override the
-variables that define it: `make_clean` and `Alias[clean].command`.
-
 ## Indirections
 
 An "indirection" is a word that names a variable that contains target
@@ -273,9 +270,8 @@ find the default inconvenient.
 
 Be aware of the following implications:
 
- 1. The default `make clean` defined by Minion assumes that all output files
-    live underneath `$(OUTDIR)`.  It will not remove any output files that
-    whose `outDir` or `out` properties do not begin eith `$(OUTDIR)`.
+ 1. Minion's `make clean` simply executes `rm -rf $(OUTDIR)`.  It will not
+    remove any output files that are placed outside of `$(OUTDIR)`.
 
  2. If two instances have the same `out` property, a Make error will result.
     If a class overrides `outName` in a way that does not include `outBase`,

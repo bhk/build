@@ -1,8 +1,7 @@
 # minion.mk
 
-# Invoking with "make -Rr ..." saves time and avoids potential confusion.
-# We can set -r here; it's too late for -R but that can affect sub-makes.
-MAKEFLAGS := Rr $(MAKEFLAGS)
+# Disable implicit rules for better performance.
+MAKEFLAGS := r $(MAKEFLAGS)
 
 #--------------------------------
 # Built-in Classes
@@ -51,11 +50,8 @@ Builder.in = $(_args)
 
 _pairs = $(foreach i,$(call _expand,$1),$(if $(filter %],$i),$i$$$(call get,out,$i),$i))
 
-# list of ([ID,]FILE]) pairs for unnamed arg values
-Builder.argPairs = $(call _pairs,$(_args))
-
 # list of ([ID,]FILE) pairs for inputs (reuse argPairs if relevant)
-Builder.inPairs = $(call _inferPairs,$(if $(call _eq?,{in},$(_args)),{argPairs},$(call _pairs,{in})),{inferClasses})
+Builder.inPairs = $(call _inferPairs,$(if $(call _eq?,{in},$(_args)),$(call _pairs,$(_args)),$(call _pairs,{in})),{inferClasses})
 Builder.inIDs = $(call _pairIDs,{inPairs})
 Builder.inFiles = $(call _pairFiles,{inPairs})
 
@@ -81,7 +77,7 @@ Builder.out = {outDir}{outName}
 Builder.outDir = $(OUTDIR)$(dir {outBasis})
 Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(call _outBasis,$A,$(word 1 ,$(call _pairFiles,{argPairs})),$C,{outExt},{argHash})
+Builder.outBasis = $(call _outBasis,$C,$A,{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
@@ -418,13 +414,12 @@ _argHash2 = $(subst :,,$(foreach w,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$
 _argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$(_argHash2),=$(subst $;, =,$1))
 _hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
-# output file name generation
+# output file defaults
 
-_fsenc = $(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst *,@_,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1)))))))))
-_outBI = $(subst $(\s)_,/,$(subst $(\s)|,,_ $(patsubst %@,|%@,$(subst @D,/,$(subst @_,@ _,$(_fsenc))))))
-_outBS = $(call _fsenc,$3)$(if $(call _isIndirect,$1),$(_outBI),$(if $(findstring %,$4),,$(suffix $2))$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$1),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$2))))))))
-_outBC = $(call _outBS,$5,$(or $2,default),$3$(subst $(if ,,_$5,),$(if ,,_|,),_$1),$4)
-_outBasis = $(if $(if $(word 2,$5),,$(filter =%,$5)),$(_outBS),$(call _outBC,$1,$2,$3,$4,$(word 1,$(call _hashGet,$5))))
+_fsenc = $(subst *,@_,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1))))))))))
+_outBX = $(subst @D,/,$(subst $(\s),,$(patsubst /%@_,_%@,$(addprefix /,$(subst @_,@_ ,$(_fsenc))))))
+_outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
+_outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
 
 
 #--------------------------------

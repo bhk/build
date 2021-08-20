@@ -141,11 +141,12 @@ instance identifies the function (class) and its input (argument).
 ## Shorthand Properties
 
 The properties `@`, `^`, and `<` are defined to mimic the behavior of Make's
-"automatic variables" `$@`, `$^`, and `$<`.  The definition `$^` is not
-exactly identical to Make's `$^`, but it is more often what you want: it is
-a list of the inputs to the class, whereas `$^` includes all prerequisites
-(which may include tools and other files that one would not normally list as
-command line arguments).
+"automatic variables" `$@`, `$^`, and `$<` (which are unavailable in Minion,
+since command expansion happens prior to the rule processing phase).  The
+value of `{^}` is not identical to Make's `$^`, but it is more often what
+you want: it is a list of the inputs to the class, whereas `$^` includes all
+prerequisites (which may include tools and other files that one would not
+normally list as command line arguments).
 
 ## Builders
 
@@ -387,3 +388,42 @@ Makefiles.
   - `$(_argIDs)` = target IDs identified by `$(_args)` (after
      indirections have been expanded)
   - `$(_argFiles)` = the target files of each ID in `$(_argIDs)`
+
+
+## Syntax
+
+A target ID is either a `Name` (identifying a source file or target of a
+Make rule) or an `Instance`.
+
+Names avoids characters that are interpreted by POSIX shells or GNU Make as
+special, except for `~`, which is interpreted similarly by both.  As a
+result, there should be no need for special quoting or escaping of file
+names in commands.
+
+The following BNF summarizes:
+
+    Name     := NameChar+
+    Instance := Class '[' Argument ']'
+    Class    := ClassChar+
+    Argument := ArgEntry ( ',' ArgEntry )*
+    ArgEntry := ( Name `=` )? Value
+    Value    := ( Instance | NameChar | PropChar )+
+    Property := PropChar+
+
+These definitions rely on the following character classes:
+
+    NameChar:   A-Z a-z 0-9 @ _ - + / ^ ~ { } .
+    ClassChar:  A-Z a-z 0-9 @ _ - + / ^ ~ { }
+    PropChar:   A-Z a-z 0-9 @ _ - + / ^ ~       <
+
+Note that arguments must contain at least one value, and each argument value
+must contain at least one character.  Argument values may contain other
+instances embedded within them, which means they can contain `[` and `]`,
+characters, but only in balanced pairs, as well as `,` and `=`, but only
+within nested brackets.
+
+In general, instances will contain special shell characters, so they may
+have to be quoted when being passed on the command line.  Additionally, `=`
+cannot appear in a Make command-line goal (it will be interpreted as a
+variable assignment), so Minion understands `:` to represent `=` (in this
+context only).

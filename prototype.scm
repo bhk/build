@@ -94,13 +94,13 @@
 ;;
 (define (show-export fn-name)
   (define `minionized
-    (subst "$`" "$$"          ;; SCAM runtime -> Minion make
-           "$  " "$(\\s)"     ;; SCAM runtime -> Minion make
+    (subst "$  " "$(\\s)"     ;; SCAM runtime -> Minion make
            "$ \t" "$(\\t)"    ;; SCAM runtime -> Minion make
            "$ " ""            ;; not needed to avoid keywords in "=" defns
            "$(if ,,,)" "$;"   ;; SCAM runtime -> Minion make
            "$(if ,,:,)" ":$;" ;; SCAM runtime -> Minion make
            "$(&)" "$&"        ;; smaller, isn't it?
+           "$`" "$$"          ;; SCAM runtime -> Minion make
            (native-value fn-name)))
 
   (define `escaped
@@ -789,10 +789,10 @@
 
 
 ;;----------------------------------------------------------------
-;; Output file name generation
+;; Output file defaults
 ;;----------------------------------------------------------------
 
-(export-comment " output file name generation")
+(export-comment " output file defaults")
 
 ;; The chief requirement for output file names is that conflicts must be
 ;; avoided.  Avoiding conflicts is complicated by the inference feature, which
@@ -801,13 +801,18 @@
 ;; but they are different instance names, and as such must have different
 ;; output file names.
 ;;
-;; The strategy for avoiding conflicts begins with including all components of
-;; the instance name in the output directory.  For readability, however, we
-;; re-arrange them, and we avoid repeating the output file name in the
-;; directory name.  We do retain the input file extension, since that will
-;; often not appear in `outName`.  We also encode ".." and "." path elements
-;; and leading "/" for safety and to avoid aliasing.  [The instance names
-;; `C[f]` and `C[./f]` need different output files.]
+;; The strategy for avoiding conflicts begins with including all components
+;; of the instance name in the default output path, as computed by
+;; Builder.out.
+;;
+;; When there is a single argument value and it is also the first ID named
+;; by {in}, we presume it is a valid path, and we incorporate it (or its
+;; {out} property) into the output location as follows:
+;;
+;;     Encode ".."  and "."  path elements and leading "/" for safety and to
+;;     avoid aliasing -- e.g., the instance names `C[f]` and `C[./f]` need
+;;     different output files.  When {outExt} does not include `%`, we
+;;     incorporate the input file extension into the output directory.
 ;;
 ;;     Instance Name          outDir                     outName
 ;;     --------------------   ----------------------     -------------
@@ -817,32 +822,33 @@
 ;;     Compile[.././f.c]      .out/Compile.c/_../_./     f.o
 ;;     Compile[/d/f.c]        .out/Compile.c/_root_/d/   f.o
 ;;
-;; When the argument is an instance (not a file name), we obtain
-;; "DIRS/NAME.EXT" from `.<` (the output file of the first argument value)
-;; rather than the argument itself, and we suffix "CLASS.EXT" with "_" to
-;; distinguish it from the `CLASS[FILE]` form.  Finally, for readability, we
-;; collapse "CLASS.EXT_/OUTDIR/..." to "CLASS.EXT_...":
+;;     Differentiate CLASS[FILE] from CLASS[ID] (where ID.out = FILE) by
+;;     appending `_` to the class directory.  For readability, collapse
+;;     "CLASS.EXT_/OUTDIR/..." to "CLASS.EXT_...":
 ;;
 ;;     Instance Name           outDir                      outName
 ;;     ---------------------   -------------------------   -------
 ;;     Program[Compile[f.c]]   .out/Program.o_Compile.c/   f
 ;;     Program[f.c]            .out/Program.c/             f        [*]
 ;;
-;; [*] Note on handling inference: We compute .outDir based on the named
-;;     FILE (f.c) , not on the inferred `.out/Compile.c/f.o`.  Otherwise,
-;;     the result would collide with Program[Compile[f.c]].
+;;     [*] Note on handling inference: We compute .outDir based on the named
+;;         FILE (f.c) , not on the inferred `.out/Compile.c/f.o`.
+;;         Otherwise, the result would collide with Program[Compile[f.c]].
 ;;
-;; When the argument is an indirection, we use the variable name as the basis
-;; for the file name, and we decorate `outDir`.
+;; When the argument is an indirection, or is otherwise not a target ID used
+;; in {in}, we use it as the basis for the file name.  Any "*" or "C*"
+;; prefixes are merged into the class directory:
 ;;
 ;;     Instance Name          outDir                     outName
 ;;     --------------------   ----------------------     -----------
-;;     CLASS[*VAR]            OUTDIR/CLASS_@/            VAR{outExt}
-;;     CLASS[C2*VAR]          OUTDIR/CLASS_C2@/          VAR{outExt}
+;;     Program[*VAR]          .out/Program_@/            VAR{outExt}
+;;     Program[C2*VAR]        .out/Program_C2@/          VAR{outExt}
+;;     Write[x/y/z]           .out/Write/x/y/            z{outExt}
 ;;
-;; When the argument is complex (with named values or comma-delimited values)
-;; we include the entirety of the argument in the directory, after these
-;; transformations:
+;; When the argument is complex (with named values or comma-delimited
+;; values) we apply the above logic to the *first* value in the argument,
+;; after including the entirety of the argument in the class directory,
+;; with these transformations:
 ;;
 ;;   1. Enode unsafe characters
 ;;   2. Replace the first unnamed argument with a special character
@@ -854,27 +860,20 @@
 ;;     CLASS[D/NAME.EXT,...]   OUTDIR/CLASS.EXT__{encArg}/D/   NAME{outExt}
 ;;     P[d/a.c,x.c,opt=3]      .out/P.c__@1,x.c,opt@E3/d/      a
 ;;
+;;
 ;; Output file names should avoid Make and shell special characters, so that
 ;; we do not need to quote them.  We rely on the restrictions of instance
 ;; syntax.  Here are the ASCII punctuation characters legal in Minion class
 ;; names, arguments, ordinary (source file) target IDs, and comma-delimited
 ;; argument values, alongside those unsafe in Bash and Make:
 ;;
-;; File:   - + _ @ { } . / ^ ~
-;; Class:  - + _ @ { } .       !
-;; Value:  - + _ @ { } . / ^ ~ !   = * [ ]
-;; Arg:    - + _ @ { } . / ^ ~ ! , = * [ ]
-;; ~Make:                    ~     = * [ ] ? # $ % ; \ :
-;; ~Bash:                    ~ !     * [ ] ? # $ % ; \   | & ( ) < > ` ' "
+;; File:   @ _ - + { } / ^ . ~
+;; Class:  @ _ - + { } / ^   ~ !
+;; Value:  @ _ - + { } / ^ . ~ !   = * [ ]
+;; Arg:    @ _ - + { } / ^ . ~ ! , = * [ ] <
+;; ~Make:                    ~     = * [ ] < > ? # $ % ; \ :
+;; ~Bash:                    ~ !     * [ ] < > ? # $ % ; \   | & ( ) ` ' "
 ;;
-;;
-;; When encoding an argument for inclusion in a directory name, we use the
-;; following substitutions:
-;;
-;;   @ [ ] = * ! ~ /  -->  @A @+ @- @E @_ @B @T @D
-;;   ARG1  -->  @1
-;;
-
 
 
 ;; Encode all characters that may appear in class names or arguments with
@@ -888,10 +887,11 @@
          "[" "@+"
          "]" "@-"
          "=" "@E"
-         "*" "@_"
          "!" "@B"
          "~" "@T"
          "/" "@D"
+         "<" "@l"
+         "*" "@_"  ;;  ..._/.out/... -->  ..._...
          str))
 
 (export (native-name _fsenc) 1)
@@ -914,121 +914,151 @@
 (expect (safe-path "./../.d/_c/.a") "/_./_../.d/__c/.a")
 
 
-;; _outBasis for indirection arguments
-;;   C*var    -->   _C@/var
-;;   C*D*var  -->   _C@_D@/var
-(define (_outBI arg)
+;; Tail of _outBasis for an argument that is not being used as a target ID
+;;
+(define (_outBX arg)
   &native
-  ;; E.g.: "C@ _D@ _dir@Dvar"
-  (define `a (subst "@_" "@ _" "@D" "/" (_fsenc arg)))
-  ;; E.g.: "_C@_D@ _dir@Dvar"
-  (define `b (subst " |" "" (.. "_ " (patsubst "%@" "|%@" a))))
-  (subst " _" "/" b))
+  ;; E.g.: "/C@_ /D@_ /dir@Dvar"
+  (define `a (addprefix "/" (subst "@_" "@_ " (_fsenc arg))))
+  ;; E.g.: "_C@ _D@ /dir@Dvar"
+  (define `b (patsubst "/%@_" "_%@" a))
+  (subst " " "" "@D" "/" b))
+
+(expect (_outBX "*var") "_@/var")
+(expect (_outBX "*d/f") "_@/d/f")
+(expect (_outBX "C*var") "_C@/var")
+(expect (_outBX "abc") "/abc")
+
 
 ;; _outBasis for simple arguments
-(define (_outBS arg file class outExt)
+;;
+;; arg = argument (a single value)
+;; file = arg==in[1] ? (in[1].out || "-") : nil
+;;    file => arg==in[1]
+;;
+(define (_outBS class arg outExt file)
   &native
+  (define `.EXT
+    (if (findstring "%" outExt) "" (suffix file)))
+
   (define `(collapse x)
     (patsubst (.. "_/" OUTDIR "%") "_%" x))
 
   (.. (_fsenc class)
-      (if (_isIndirect arg)
-          ;; indirection
-          (_outBI arg)
-          ;; file or instance
-          (.. (if (findstring "%" outExt)
-                  ""
-                  (suffix file))
-              (collapse
-               (.. (if (isInstance arg) "_")
-                   (safe-path file)))))))
+      .EXT
+      (if file
+          (collapse (.. (if (isInstance arg) "_")
+                        (safe-path file)))
+          (_outBX arg))))
 
-;; _outBasis for complex arguments
-(define (_outBC arg file class outExt arg1)
-  &native
-  (_outBS arg1 (or file "default")
-          (.. class (subst (.. "_" arg1 ",") "_|," (.. "_" arg)))
-          outExt))
+;; arg = indirection (file must be nil because arg1 is not a target ID)
+(expect (_outBS "C" "*var" nil nil) "C_@/var")
+;; arg = file == in[1]
+(expect (_outBS "C" "d/f.c" ".o" "d/f.c")  "C.c/d/f.c")
+;; arg = ID == in[1]
+(expect (_outBS "P" "C[d/f.c]" nil ".out/C/f.o")  "P.o_C/f.o")
+;; arg != in[1]
+(expect (_outBS "P" "C[d/f.c]" nil nil)  "P/C@+d/f.c@-")
 
-;;  arg = this instance's argument
-;;  file = first input file (prior to any rule inference)
-;;  class = this instance's class
-;;  argHash = (_argHash arg) [or "=x" if we know it's simple]
-;;  outExt = pattern for constructing output file's extension
-;;           If it does not contain "%", we include the input file's
-;;           extension in the class directory.
+
+;; _outBasis for complex arguments, or non-input argument
 ;;
-(define (_outBasis arg file class outExt argHash)
+(define `(_outBC class arg outExt file arg1)
+  (_outBS (.. class
+              (subst (.. "_" (or arg1 "|")) "_|" (.. "_" arg)))
+          (or arg1 "out")
+          outExt
+          file))
+
+;; Generate path to serve as basis for output file defaults
+;;
+;;  class = this instance's class
+;;  arg = this instance's argument
+;;  outExt = {outExt} property; if it contains "%" we assume the input file
+;;           prefix will be preserved
+;;  file = output of first target ID mentioned in {in}  *if* the ID == arg1
+;;  arg1 = (word 1 (_getHash nil (_argHash arg)))
+;;
+;; We assume Builder.outBasis looks like this:
+;;    $(call _outBasis,$C,$A,{outExt},FILE,$(_arg1))
+;; where FILE = $(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in}))))
+;;
+(define (_outBasis class arg outExt file arg1)
   &native
+  (if (filter arg1 arg)
+      (_outBS class arg outExt file)
+      (_outBC class arg outExt file arg1)))
 
-  (define `argIsSimple
-    (if (word 2 argHash) nil (filter "=%" argHash)))
-
-  ;; "Simple" arguments have no commas and no named values
-  (if argIsSimple
-      (_outBS arg file class outExt)
-      (_outBC arg file class outExt (word 1 (_hashGet argHash)))))
-
-(export (native-name _outBI) 1)
+(export (native-name _outBX) 1)
 (export (native-name _outBS) 1)
-(export (native-name _outBC) 1)
 (export (native-name _outBasis) 1)
 
 
 (begin
   ;; test _outBasis
 
-  (define `(test class arg out)
-    (define `aHash (_argHash arg))
-    (define `arg1 (word 1 (_hashGet aHash)))
+  (define class-exts
+    { C: ".o", P: "", PX: "" })
 
-    (define `file
-      (cond
-       ((filter "%]" arg1) (get "out" arg1))
-       ((findstring "*" arg) ".out/C/a.o")
-       (else arg1)))
+  (define test-files
+    { "C[a.c]": ".out/C.c/a.o",
+      "File[d/a.c]": "d/a.c",
+      "C[d/a.c]": ".out/C.c/d/a.o",
+      })
 
-    (define `outExt
-      (cond ((eq? "C" class) ".o")
-            ((eq? "P" class) "")
-            (else "%")))
+  (define (get-test-file class arg1)
+    (cond ((filter "%X" class) nil)
+          ((findstring "*" arg1) nil)    ;; indirections are not IDs
+          ((filter "%]" arg1) (or (dict-get arg1 test-files)
+                                  (error (.. "Unknown ID: " arg1))))
+          (else arg1)))
 
-    (expect (_outBasis arg file class outExt aHash) out))
+  (define `(t1 id out)
+    (define class (word 1 (subst "[" " " id)))
+    (define arg (patsubst (.. class "[%]") "%" id))
+    (define arg1 (word 1 (_hashGet (_argHash arg))))
+    (define `outExt (dict-get class class-exts "%"))
+    (define `file (get-test-file class arg1))
 
+    (expect (_outBasis class arg outExt file arg1)
+            out))
 
-  (set-native "File[d/a.c].out" "d/a.c")
-  (set-native "C[a.c].out" ".out/C.c/a.o")
-  (set-native "C[d/a.c].out" ".out/C.c/d/a.o")
+  ;; C[FILE] (used as an input ID)
+  (t1 "C[a.c]"          "C.c/a.c")
+  (t1 "C[d/a.c]"        "C.c/d/a.c")
+  (t1 "D[d/a.c]"        "D/d/a.c")
+  (t1 "C[/.././a]"      "C/_root_/_../_./a")
+  (t1 "C@![a.c]"        "C@0@B/a.c")
 
+  ;; C[INSTANCE] (used as an input ID)
+  (t1 "P[C[a.c]]"       "P.o_C.c/a.o")
+  (t1 "P[C[d/a.c]]"     "P.o_C.c/d/a.o")
+  (t1 "P[File[d/a.c]]"  "P.c_/d/a.c") ;; .out = d/a.c
 
-  ;; C[FILE]
-  (test "C" "a.c"          "C.c/a.c")
-  (test "C" "d/a.c"        "C.c/d/a.c")
-  (test "D" "d/a.c"        "D/d/a.c")
-  (test "C" "/.././a"      "C/_root_/_../_./a")
-  (test "C@!" "a.c"        "C@0@B/a.c")
+  ;; C[SIMPLE] (NOT an input ID)
+  (t1 "X[C[A]]"       "X/C@+A@-")
 
-  ;; C[INSTANCE]
-  (test "P" "C[a.c]"       "P.o_C.c/a.o")
-  (test "P" "C[d/a.c]"     "P.o_C.c/d/a.o")
-  (test "P" "File[d/a.c]"  "P.c_/d/a.c") ;; .out = d/a.c
+  ;; C[*VAR] (NOT an input ID)
+  (t1 "C[*var]"         "C_@/var")
 
-  ;; C[*VAR]
-  (test "C" "*var"         "C_@/var")
+  ;; C[CLS*VAR] (NOT an input ID)
+  (t1 "C[D*var]"        "C_D@/var")
+  (t1 "C[D*E*var]"      "C_D@_E@/var")
+  (t1 "C[D@E*d/var]"    "C_D@0E@/d/var")
 
-  ;; C[CLS*VAR]
-  (test "C" "D*var"        "C_D@/var")
-  (test "C" "D*E*var"      "C_D@_E@/var")
-  (test "C" "D@E*d/var"    "C_D@0E@/d/var")
+  ;; Complex (arg1 is an input ID)
+  (t1 "P[a,b]"          "P_@1,b/a")
+  (t1 "P[d/a.c,o=3]"    "P_@1,o@E3.c/d/a.c")
+  (t1 "Q[d/a.c,o=3]"    "Q_@1,o@E3/d/a.c")
+  (t1 "P[C[d/a.c],o=3]" "P_@1,o@E3.o_C.c/d/a.o")
+  (t1 "P[*v,o=3]"       "P_@1,o@E3_@/v")
+  (t1 "P[C*v,o=3]"      "P_@1,o@E3_C@/v")
 
-  ;; Complex
-  (test "P" "a,b"          "P_@1,b/a")
-  (test "P" "d/a.c,o=3"    "P_@1,o@E3.c/d/a.c")
-  (test "Q" "d/a.c,o=3"    "Q_@1,o@E3/d/a.c")
-  (test "P" "C[d/a.c],o=3" "P_@1,o@E3.o_C.c/d/a.o")
-  (test "P" "x=1,y=2"      "P_x@E1,y@E2/default") ;; no unnamed arg
-  (test "P" "*v,o=3"       "P_@1,o@E3_@/v")
-  (test "P" "C*v,o=3"      "P_@1,o@E3_C@/v"))
+  ;; Complex (arg1 is NOT an input ID)
+  (t1 "PX[C[a.c],b]"    "PX_@1,b/C@+a.c@-")
+  (t1 "P[x=1,y=2]"      "P_x@E1,y@E2/out")  ;; no unnamed arg
+
+  nil)
 
 
 ;;--------------------------------

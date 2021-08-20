@@ -169,12 +169,12 @@ $(call expectError,during evaluation of:$(\n)EC.args =)
 # _outBasis
 
 # file
-$(call _expectEQ,$(call _outBasis,a.c,a.c,C,,=a.c),C.c/a.c)
+$(call _expectEQ,$(call _outBasis,C,a.c,,a.c,a.c),C.c/a.c)
 # indirection
-$(call _expectEQ,$(call _outBasis,C*D*d/v,a.c,P,,=C*D*v),P_C@_D@/d/v)
+$(call _expectEQ,$(call _outBasis,P,C*D*d/v,,,C*D*d/v),P_C@_D@/d/v)
 # complex
 $(call _expectEQ,\
-  $(call _outBasis,C[d/a.c]$;o=3,.out/C.c/d/a.o,P,%,=C[d/a.c] o=3),\
+  $(call _outBasis,P,C[d/a.c]$;o=3,%,.out/C.c/d/a.o,C[d/a.c]),\
   P_@1$;o@E3_C.c/d/a.o)
 
 # .out
@@ -182,7 +182,6 @@ $(call _expectEQ,\
 P.inherit = Builder
 P.outExt = %.p
 
-$(call _expectEQ,$(call get,argPairs,P[a.o]),a.o)
 $(call _expectEQ,$(call get,outBasis,P[a.o]),P/a.o)
 $(call _expectEQ,$(call get,outExt,P[a.o]),%.p)
 $(call _expectEQ,$(call get,outName,P[a.o]),a.o.p)
@@ -207,9 +206,6 @@ Inf.inferClasses = C.c C.cpp
 Inf[x].in = a.c b.cpp Dup[c.c] d.o
 
 $(call _expectEQ,$(call get,in,Inf[x]),a.c b.cpp Dup[c.c] d.o)
-$(call _expectEQ,\
-  $(call get,argPairs,Inf[x]),\
-  x)
 $(call _expectEQ,\
   $(call get,inPairs,Inf[x]),\
   C[a.c]$$.out/C.c/a.o C[b.cpp]$$.out/C.cpp/b.o C[Dup[c.c]]$$.out/C.c_/dup/c.o d.o)

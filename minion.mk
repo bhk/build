@@ -337,14 +337,7 @@ define \n
 
 endef
 
-# Exported functions
-
-_qv = $(if $(findstring $(\n),$1),$(subst $(\n),$(\n)  | ,$(\n)$1),'$1')
 _eq? = $(findstring $(subst x$1,1,x$2),1)
-_expectEQ = $(if $(call _eq?,$1,$2),,$(error Values differ:$(\n)A: $(_qv)$(\n)B: $(call _qv,$2)$(\n)))
-_? = $(call __?,$$(call $1,$2,$3,$4,$5),$(call $1,$2,$3,$4,$5))
-__? = $(info $1 -> $2)$2
-_isDefined = $(if $(filter u%,$(flavor $1)),,$1)
 _shellQuote = '$(subst ','\'',$1)'#'  (comment to fix font coloring)
 _printfEsc = $(subst $(\n),\n,$(subst $(\t),\t,$(subst \,\\,$1)))
 _printf = printf "%b" $(call _shellQuote,$(_printfEsc))
@@ -353,9 +346,19 @@ K :=
 _who = $0
 _args = $(call _hashGet,$(call .,argHash,$(_who)),$K)
 _arg1 = $(word 1,$(_args))
-_argIDs = $(call _expand,$(_args))
-_argFiles = $(call get,out,$(_argIDs))
 
+# Quote a (possibly multi-line) $1
+_qv = $(if $(findstring $(\n),$1),$(subst $(\n),$(\n)  | ,$(\n)$1),'$1')
+
+# $(call _?,FN,ARGS..): same as $(call FN,ARGS..), but logs args & result.
+_? = $(call __?,$$(call $1,$2,$3,$4,$5),$(call $1,$2,$3,$4,$5))
+__? = $(info $1 -> $2)$2
+
+# $(call _isDefined,VAR): return VAR if it is the name of an assigned variable
+_isDefined = $(if $(filter u%,$(flavor $1)),,$1)
+
+# $(call _expectEQ,A,B): error (with diagnostics) if A is not the same as B
+_expectEQ = $(if $(call _eq?,$1,$2),,$(error Values differ:$(\n)A: $(_qv)$(\n)B: $(call _qv,$2)$(\n)))
 
 # $(call _log,NAME,VALUE): Output "NAME: VALUE" when NAME matches the
 #   pattern in `$(minion_debug)`.

@@ -336,58 +336,40 @@ Makefiles.
 
   Evaluate property PROP for the current instance
 
-* `$(call _once,VAR)`
+* `$(call _shellQuote,STR)`
 
-  Return the value of VAR, evaluating it at most once.
+  Quote STR as an argument for /bin/sh or /bin/bash
 
-* `$(call _qv,VALUE)`
+* `$(call _printfEsc,STR)`
 
-  Format VALUE as quoted string, or as prefixed lines if mult-line.
+  Escape STR for inclusion in a `printf` format string on a command line.
+
+* `$(call _printf,STR)`
+
+  Return a shell command that write STR to stdout.
 
 * `$(call _eq,A,B)`
 
   Return "1" if A and B are equal, "" otherwise.
 
-* `$(call _expectEQ,A,B)`
+* `$(call _once,VAR)`
 
-  Assert that A and B are equal
+  Return the value of VAR, evaluating it at most once.
 
-* `$(call _?,FN,ARGS...)`
+* `$(_args)`
 
-  This provides tracing functionality for debugging Make functions.  It
-  returns the same thing as `$(call FN,ARGS...)` (for up to 5 arguments) and
-  logs the function name, arguments, and result to stdout.
-
-* `$(call _isDefined,VAR)`
-
-  Return VAR if VAR is the name of a defined variable
-
-* `$(call _shellQuote,STR)`
-
-  Quote STR as an argument for /bin/sh or /bin/bash
-
-* `$(call _printfESC,STR)`
-
-  Escape STR for inclusion in a `printf` format string
-
-* Argument value queries
-
-  The following variables can be used to access the comma-delimited argument
-  values of the current instance.  The variable `K` holds the name that
-  selects the values to be returned.  It defaults to the empty string, which
-  identifies unnamed values, and it can be bound to other values using
-  `foreach`.
-
-  For example, during evaluation of a property of `Class[a,b,x=1,x=2]`:
+  Return all comma-delimited argument values (for the current instance)
+  whose name matches `K`.  `K` is a variable that defaults to the empty
+  string, which identifies unnamed values, and can be bound to other values
+  using `foreach`.  For example, during evaluation of a property of
+  `Class[a,b,x=1,x=2]`:
 
       $(_args) => "a b"
       $(foreach K,x,$(_args)) => "1 2"
 
-  - `$(_args)` = all argument values matching $K
-  - `$(_arg1)` = the first argument value matching $K
-  - `$(_argIDs)` = target IDs identified by `$(_args)` (after
-     indirections have been expanded)
-  - `$(_argFiles)` = the target files of each ID in `$(_argIDs)`
+* `$(_arg1)`
+
+  Same as `$(word 1,$(_args))`.
 
 
 ## Syntax

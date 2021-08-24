@@ -797,7 +797,7 @@
 ;; The chief requirement for output file names is that conflicts must be
 ;; avoided.  Avoiding conflicts is complicated by the inference feature, which
 ;; creates multiple ways of expressing the same thing.  For example,
-;; `Program[foo.c]` vs. `Program[Compile[foo.c]]` produce equivalent results,
+;; `LinkC[foo.c]` vs. `LinkC[CC[foo.c]]` produce equivalent results,
 ;; but they are different instance names, and as such must have different
 ;; output file names.
 ;;
@@ -814,36 +814,36 @@
 ;;     different output files.  When {outExt} does not include `%`, we
 ;;     incorporate the input file extension into the output directory.
 ;;
-;;     Instance Name          outDir                     outName
-;;     --------------------   ----------------------     -------------
-;;     CLASS[DIRS/NAME.EXT]   OUTDIR/CLASS.EXT/DIRS/     NAME{outExt}
-;;     Compile[f.c]           .out/Compile.c/            f.o
-;;     Compile[d/f.cpp]       .out/Compile.cpp/d/        f.o
-;;     Compile[.././f.c]      .out/Compile.c/_../_./     f.o
-;;     Compile[/d/f.c]        .out/Compile.c/_root_/d/   f.o
+;;     Instance Name          outDir                   outName
+;;     --------------------   ----------------------   -------------
+;;     CLASS[DIRS/NAME.EXT]   OUTDIR/CLASS.EXT/DIRS/   NAME{outExt}
+;;     CC[f.c]                .out/CC.c/               f.o
+;;     CC[d/f.cpp]            .out/CC.cpp/d/           f.o
+;;     CC[.././f.c]           .out/CC.c/_../_./        f.o
+;;     CC[/d/f.c]             .out/CC.c/_root_/d/      f.o
 ;;
 ;;     Differentiate CLASS[FILE] from CLASS[ID] (where ID.out = FILE) by
 ;;     appending `_` to the class directory.  For readability, collapse
 ;;     "CLASS.EXT_/OUTDIR/..." to "CLASS.EXT_...":
 ;;
-;;     Instance Name           outDir                      outName
-;;     ---------------------   -------------------------   -------
-;;     Program[Compile[f.c]]   .out/Program.o_Compile.c/   f
-;;     Program[f.c]            .out/Program.c/             f        [*]
+;;     Instance Name          outDir                   outName
+;;     ---------------------  ----------------------   -------
+;;     LinkC[CC[f.c]]         .out/LinkC.o_CC.c/       f
+;;     LinkC[f.c]             .out/LinkC.c/            f       [*]
 ;;
 ;;     [*] Note on handling inference: We compute .outDir based on the named
-;;         FILE (f.c) , not on the inferred `.out/Compile.c/f.o`.
-;;         Otherwise, the result would collide with Program[Compile[f.c]].
+;;         FILE (f.c) , not on the inferred `.out/CC.c/f.o`.
+;;         Otherwise, the result would collide with LinkC[CC[f.c]].
 ;;
 ;; When the argument is an indirection, or is otherwise not a target ID used
 ;; in {in}, we use it as the basis for the file name.  Any "*" or "C*"
 ;; prefixes are merged into the class directory:
 ;;
-;;     Instance Name          outDir                     outName
-;;     --------------------   ----------------------     -----------
-;;     Program[*VAR]          .out/Program_@/            VAR{outExt}
-;;     Program[C2*VAR]        .out/Program_C2@/          VAR{outExt}
-;;     Write[x/y/z]           .out/Write/x/y/            z{outExt}
+;;     Instance Name          outDir                   outName
+;;     --------------------   ----------------------   -----------
+;;     LinkC[*VAR]            .out/LinkC_@/            VAR{outExt}
+;;     LinkC[C2*VAR]          .out/LinkC_C2@/          VAR{outExt}
+;;     Write[x/y/z]           .out/Write/x/y/          z{outExt}
 ;;
 ;; When the argument is complex (with named values or comma-delimited
 ;; values) we apply the above logic to the *first* value in the argument,

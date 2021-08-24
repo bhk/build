@@ -189,7 +189,7 @@ $(call _expectEQ,$(call get,outDir,P[a.o]),.out/P/)
 $(call _expectEQ,$(call get,out,P[a.o]),.out/P/a.o.p)
 
 p1 = a.c
-$(call _expectEQ,$(call get,out,Program[*p1]),.out/Program_@/p1)
+$(call _expectEQ,$(call get,out,LinkC[*p1]),.out/LinkC_@/p1)
 
 $(call _expectEQ,$(call get,out,Tar[*p1]),.out/Tar_@/p1.tar)
 $(call _expectEQ,$(call get,out,Zip[*p1]),.out/Zip_@/p1.zip)
@@ -220,7 +220,7 @@ Defer.inherit = Builder
 Defer.command = true $(_defer)($A)
 
 define DeferRule
-.out/Defer/a : a  
+.out/Defer/a : a  | 
 	@echo '#-> Defer[a]'
 	@mkdir -p .out/Defer/
 	true $(a)
@@ -236,7 +236,7 @@ $(call _expectEQ,$(call get,rule,Defer[a]),$(value DeferRule))
 WVAR = test
 
 define WWrule
-.out/Write/WVAR : minion_test.mk minion.mk  
+.out/Write/WVAR : minion_test.mk minion.mk  | 
 	@echo '#-> Write[WVAR]'
 	@mkdir -p .out/Write/
 	@printf "%b" 'test' > .out/Write/WVAR

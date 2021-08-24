@@ -3,10 +3,39 @@
 # Disable implicit rules for better performance.
 MAKEFLAGS := r $(MAKEFLAGS)
 
+# User Classes
+#
+# The following classes may be overridden by user makefiles.  Minion
+# attaches no property definitions to them; it just provides a default
+# inheritance.  For all other classes defined by Minion, user makefiles
+# cannot override `inherit` or property definitions, and instead should
+# customize by defining their own sub-classes.
+
+Phony.inherit ?= _Phony
+Compile.inherit ?= _Compile
+CC.inherit ?= _CC
+CC++.inherit ?= _CC++
+Link.inherit ?= _Link
+LinkC.inherit ?= _LinkC
+LinkC++.inherit ?= _LinkC++
+Shell.inherit ?= _Shell
+Exec.inherit ?= _Exec
+Run.inherit ?= _Run
+Copy.inherit ?= _Copy
+Mkdir.inherit ?= _Mkdir
+Touch.inherit ?= _Touch
+Remove.inherit ?= _Remove
+Print.inherit ?= _Print
+Tar.inherit ?= _Tar
+Gzip.inherit ?= _Gzip
+Zip.inherit ?= _Zip
+Unzip.inherit ?= _Unzip
+Write.inherit ?= _Write
+
+
 #--------------------------------
 # Built-in Classes
 #--------------------------------
-
 
 # The `File` class is used to construct an instance when `get` is called
 # with a target ID that is not an instance.  It implements the builder
@@ -67,7 +96,7 @@ Builder.ooIDs = $(call _expand,{orderOnly})
 # `inferClasses` a list of words in the format "CLASS.EXT", implying
 # that each input filename ending in ".EXT" should be replaced wth
 # "CLASS[FILE.EXT]".  This is used to, for example, convert ".c" files
-# to ".o" when they are provided as inputs to a Program instance.
+# to ".o" when they are provided as inputs to a LinkC instance.
 Builder.inferClasses = #
 
 # Note: By default, `outDir`, `outName`, and `outExt` are used to
@@ -83,15 +112,13 @@ _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
 Builder.message = \#-> $C[$A]
-Builder.echoCommand = $(if {message},@echo $(call _shellQuote,{message}))
+Builder.messageCommand = $(if {message},@echo $(call _shellQuote,{message}))
 
 Builder.mkdirCommand = @mkdir -p $(dir {@})
 
 Builder.phonyRule = #
 
 Builder.depsFile = #
-
-_prefixIf = $(if $2,$1$2)
 
 # _defer can be used to embed a function or variable reference that will
 # be expanded when-and-if the recipe is executed.  Generally, all "$"
@@ -104,8 +131,9 @@ _defer = $$$(\t)
 _recipe = $(subst $$$$$(\t)$[,$$$[,$(subst $$,$$$$,$(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))))
 
 define Builder.rule
-{@} : {^} {up^} $(call _prefixIf,| ,$(call get,out,{ooIDs}))
-$(call _recipe,{echoCommand}
+{@} : {^} {up^} | $(call get,out,{ooIDs})
+$(call _recipe,
+{messageCommand}
 {mkdirCommand}
 {command}
 )
@@ -114,18 +142,18 @@ $(addprefix -include ,{depsFile})
 endef
 
 
-# Phony[INPUTS] : Generate a phony rule.
+# _Phony[INPUTS] : Generate a phony rule.
 #
 #   A phony rule does not generate an output file.  Therefore, Make cannot
 #   determine whether its result is "new" or "old", so it is always
 #   considered "old", and its recipe will be executed whenever it is listed
 #   as a target.
 #
-Phony.inherit = Builder
-Phony.phonyRule = .PHONY: {@}
-Phony.mkdirCommand = #
-Phony.message = #
-Phony.command = @true # avoid "nothing to be done for..." message
+_Phony.inherit = Builder
+_Phony.phonyRule = .PHONY: {@}
+_Phony.mkdirCommand = #
+_Phony.message = #
+_Phony.command = @true
 
 
 # Alias[GOAL] : Generate a rule that builds GOAL (a named alias, instance,
@@ -168,151 +196,159 @@ $(call _recipe,
 endef
 
 
-# Compile[SOURCE] : Compile a C file to an object file.
+# _Compile[SOURCE] : Base class for invoking a compiler.
 #
-Compile.inherit = Builder
-Compile.outExt = .o
-Compile.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsFile}
-Compile.compiler = gcc
-Compile.depsFile = {@}.d
-Compile.flags = {optFlags} {warnFlags} {libFlags} $(addprefix -I,{includes})
-Compile.optFlags = -Os
-Compile.warnFlags = -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror
-Compile.libFlags = #
-Compile.includes = #
+_Compile.inherit = Builder
+_Compile.outExt = .o
+_Compile.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsFile}
+_Compile.depsFile = {@}.d
+_Compile.flags = {optFlags} {warnFlags} {libFlags} $(addprefix -I,{includes})
+_Compile.optFlags = -Os
+_Compile.warnFlags =
+_Compile.libFlags =
+_Compile.includes =
 
 
-# Compile++[SOURCE] : Compile a C++ file to an object file.
+# _CC[SOURCE] : Compile a C file to an object file.
 #
-Compile++.inherit = Compile
-Compile++.compiler = g++
-Compile++.warnFlags = -W -Wall -Wmultichar -Wpointer-arith -Wcast-align -Wcast-qual -Wwrite-strings -Wredundant-decls -Wdisabled-optimization -Woverloaded-virtual -Wsign-promo -Werror
+_CC.inherit = Compile
+_CC.compiler = gcc
 
 
-# Program[INPUTS] : Link a command-line C program.
+# _CC++[SOURCE] : Compile a C++ file to an object file.
 #
-Program.inherit = Builder
-Program.outExt = #
-Program.command = {compiler} -o {@} {^} {flags} 
-Program.compiler = gcc
-Program.inferClasses = Compile.c
-Program.flags = {libFlags}
-Program.libFlags = #
+_CC++.inherit = Compile
+_CC++.compiler = g++
 
 
-# Program++[INPUTS] : Link a command-line C++ program.
+# _Link[INPUTS] : Link a command-line C program.
 #
-Program++.inherit = Program
-Program++.compiler = g++
-Program++.inferClasses = Compile.c Compile++.cpp
+_Link.inherit = Builder
+_Link.outExt = #
+_Link.command = {compiler} -o {@} {^} {flags} 
+_Link.flags = #
 
 
-# Shell[PROGRAM] : This is a mixin that supports running command-line
-# programs.
+# _LinkC[INPUTS] : Link a command-line C program.
 #
-Shell.exec = {exportPrefix}./{<} {args}
-Shell.inferClasses = Program.c Program.o Program++.cpp
-Shell.args = #
-Shell.exports = #
-Shell.exportPrefix = $(foreach v,{exports},$v=$(call _shellQuote,{$v}) )
+_LinkC.inherit = _Link
+_LinkC.compiler = gcc
+_LinkC.inferClasses = CC.c
 
 
-# Exec[PROGRAM] : Run PROGRAM, capturing its output (stdout).
+# _LinkC++[INPUTS] : Link a command-line C++ program.
 #
-Exec.inherit = Shell Builder
-Exec.command = ( {exec} ) > {@} || rm {@}
-Exec.outExt = .out
+_LinkC++.inherit = _Link
+_LinkC++.compiler = g++
+_LinkC++.inferClasses = CC.c CC++.cpp CC++.cc
 
 
-# Run[PROGRAM] : run program (as a Phony rule)
+# _Shell[PROGRAM] : This class defines properties shared by Exec and Run.
+# It does not define Builder properties.
 #
-Run.inherit = Shell Phony
-Run.command = {exec}
+_Shell.exec = {exportPrefix}./{<} {args}
+_Shell.inferClasses = LinkC.c LinkC.o LinkC++.cpp
+_Shell.args = #
+_Shell.exports = #
+_Shell.exportPrefix = $(foreach v,{exports},$v=$(call _shellQuote,{$v}) )
 
 
-# Copy[INPUT]
-# Copy[INPUT,out=OUT]
+# _Exec[PROGRAM] : Run PROGRAM, capturing its output (stdout).
+#
+_Exec.inherit = Shell Builder
+_Exec.command = ( {exec} ) > {@} || rm {@}
+_Exec.outExt = .out
+
+
+# _Run[PROGRAM] : run program (as a Phony rule)
+#
+_Run.inherit = Shell Phony
+_Run.command = {exec}
+
+
+# _Copy[INPUT]
+# _Copy[INPUT,out=OUT]
 #
 #   Copy an artifact.  If OUT is not provided, the file is copied to a
 #   directory named $(OUTDIR)$C.
 #
-Copy.inherit = Builder
-Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
-Copy.outDir = $(OUTDIR)$C/
-Copy.command = cp {<} {@}
+_Copy.inherit = Builder
+_Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
+_Copy.outDir = $(OUTDIR)$C/
+_Copy.command = cp {<} {@}
 
 
-# Mkdir[DIR] : Create directory
+# _Mkdir[DIR] : Create directory
 #
-Mkdir.inherit = Builder
-Mkdir.in =
-Mkdir.out = $A
-Mkdir.command = mkdir -p {@}
+_Mkdir.inherit = Builder
+_Mkdir.in =
+_Mkdir.out = $A
+_Mkdir.command = mkdir -p {@}
 
 
-# Touch[FILE] : Create empty file
+# _Touch[FILE] : Create empty file
 #
-Touch.inherit = Builder
-Touch.in =
-Touch.out = $A
-Touch.command = touch {@}
+_Touch.inherit = Builder
+_Touch.in =
+_Touch.out = $A
+_Touch.command = touch {@}
 
 
-# Remove[FILE] : Remove FILE from the file system
+# _Remove[FILE] : Remove FILE from the file system
 #
-Remove.inherit = Phony
-Remove.in =
-Remove.command = rm -f $A
+_Remove.inherit = Phony
+_Remove.in =
+_Remove.command = rm -f $A
 
 
-# Print[INPUT] : Write artifact to stdout.
+# _Print[INPUT] : Write artifact to stdout.
 #
-Print.inherit = Phony
-Print.command = @cat {<}
+_Print.inherit = Phony
+_Print.command = @cat {<}
 
 
-# Tar[INPUTS] : Construct a TAR file
+# _Tar[INPUTS] : Construct a TAR file
 #
-Tar.inherit = Builder
-Tar.outExt = .tar
-Tar.command = tar -cvf {@} {^}
+_Tar.inherit = Builder
+_Tar.outExt = .tar
+_Tar.command = tar -cvf {@} {^}
 
 
-# Gzip[INPUT] :  Compress an artifact.
+# _Gzip[INPUT] :  Compress an artifact.
 #
-Gzip.inherit = Builder
-Gzip.command = cat {<} | gzip - > {@} || rm {@}
-Gzip.outExt = %.gz
+_Gzip.inherit = Builder
+_Gzip.command = cat {<} | gzip - > {@} || rm {@}
+_Gzip.outExt = %.gz
 
 
-# Zip[INPUTS] : Construct a ZIP file
+# _Zip[INPUTS] : Construct a ZIP file
 #
-Zip.inherit = Builder
-Zip.outExt = .zip
-Zip.command = zip {@} {^}
+_Zip.inherit = Builder
+_Zip.outExt = .zip
+_Zip.command = zip {@} {^}
 
 
-# Unzip[OUT] : Extract from a zip file
+# _Unzip[OUT] : Extract from a zip file
 #
 #   The argument is the name of the file to extract from ther ZIP file.  The
 #   ZIP file name is based on the class name.  Declare a subclass with the
 #   appropriate name, or override its `in` property to specify the zip file.
 #
-Unzip.inherit = Builder
-Unzip.command = unzip -p {<} $A > {@} || rm {@}
-Unzip.in = $C.zip
+_Unzip.inherit = Builder
+_Unzip.command = unzip -p {<} $A > {@} || rm {@}
+_Unzip.in = $C.zip
 
 
-# Write[VAR]
-# Write[VAR,out=OUT]
+# _Write[VAR]
+# _Write[VAR,out=OUT]
 #
 #   Write the value of a variable to a file.
 #
-Write.inherit = Builder
-Write.out = $(or $(foreach K,out,$(_arg1)),$(OUTDIR)$C/$(notdir $(_arg1)))
-Write.command = @$(call _printf,{data}) > {@}
-Write.data = $($(_arg1))
-Write.in = $(MAKEFILE_LIST)
+_Write.inherit = Builder
+_Write.out = $(or $(foreach K,out,$(_arg1)),$(OUTDIR)$C/$(notdir $(_arg1)))
+_Write.command = @$(call _printf,{data}) > {@}
+_Write.data = $($(_arg1))
+_Write.in = $(MAKEFILE_LIST)
 
 
 #--------------------------------

@@ -1,6 +1,6 @@
 sources = hello.c binsort.c
 
 make_default = Exec*sources
-make_deploy = Copy*Program*sources
+make_deploy = Copy*LinkC*sources
 
 include ../minion.mk

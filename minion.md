@@ -17,8 +17,8 @@ If you pass arguments on the command line, Minion will treat the arguments
 as a set of targets and build them.  Each argument may be one of the
 following:
 
-  * A *instance*, such as `Compile[foo.c]`
-  * An *indirection*, such as `*var` or `Compile*var`
+  * A *instance*, such as `CC[foo.c]`
+  * An *indirection*, such as `*var` or `CC*var`
   * An ordinary Make target name
   * An *alias*
 
@@ -66,17 +66,16 @@ or more target IDs (instances or ordinary target names).
 
 A mapped indirection applies the CLASS constructor individually to the
 targets resulting from the expansion of `*VAR`.  For example, if `*var`
-expands to `a.c b.c`, then `Compile*var` will expand to `Compile[a.c]
-Compile[b.c]`.
+expands to `a.c b.c`, then `CC*var` will expand to `CC[a.c] CC[b.c]`.
 
 Mapped indirections can also use a "chained" syntax.  Using the same example
 `var` as above, `C1*C2*var`, would yield `C1[C2[a.c]] C1[C2[b.c]]`.
 
 `CLASS` and `VAR` may not contain `[` or `]`, and the indirection must be an
 entire word that matches one of the above two forms.  For example,
-`Compile[*sources]` is a target ID, *not* an indirection, and will not be
-altered during the expansion step.  Its argument, on the other hand, *is* an
-indirection, and it will be expanded when the `Compile[*sources]` instance
+`CC[*sources]` is a target ID, *not* an indirection, and will not be altered
+during the expansion step.  Its argument, on the other hand, *is* an
+indirection, and it will be expanded when the `CC[*sources]` instance
 requests its input files.
 
 ## Instances
@@ -101,12 +100,12 @@ inherited value of the current property of the current instance.  To include
 an actual `{` or `}` character, use `$(\L)` or `$(\R)`.  Finally,`$C` and
 `$A` expand to the class name and argument string of the current instance.
 
-For example, the following user-defined class extends the `Compile` class to
+For example, the following user-defined class extends the `CC` class to
 pass and additional flag to the compiler:
 
-    MyCompile.inherit = Compile
-    MyCompile.flags = {inherit} {myFlags}
-    MyCompile.myFlags = --my-custom-flag
+    MyCC.inherit = CC
+    MyCC.flags = {inherit} {myFlags}
+    MyCC.myFlags = --my-custom-flag
 
 A recursive property definition can obtain the value of properties of other
 instances using the `get` function: `$(call get,PROPERTY,INSTANCES)`.
@@ -181,9 +180,9 @@ as a command line goal, `:` characters must be used in place of `=`
 
 The `in` property of an instance identifies a set of input files.  This
 defaults to all unnamed values in the argument.  Being a target set, it may
-contain indirections.  For example, `Compile[foo.c]` has one input file,
-`foo.c`, and `Program[*var]` may identify many input files (listed in the
-value of variable `var`).
+contain indirections.  For example, `CC[foo.c]` has one input file, `foo.c`,
+and `LinkC[*var]` may have many input files (listed in the value of variable
+`var`).
 
 A class may make use of other input files that are not specified by the user
 via arguments or the `in` property, and instead are built into the
@@ -199,7 +198,7 @@ that `^` & `<` do not contain the files in `up^` & `up<`.
 
 Rule inference is performed on input files.  For example, inference allows a
 ".c" file to be supplied where a ".o" file is expected, as in
-`Program[hello.c]`.  Each class can define its own inference rules by
+`LinkC[hello.c]`.  Each class can define its own inference rules by
 overriding the `inferClasses` property.  It consists of a list of entries of
 the form `CLASS.EXT`, each indicating that `CLASS` should be applied to a
 input file ending in `.EXT`.
@@ -297,8 +296,8 @@ Assume a Makefile contains the following:
     make_default = *results
     make_deploy = Deploy[*results]
 
-    results = Program[*objects]
-    objects = baz.o Compile*sources
+    results = LinkC[*objects]
+    objects = baz.o CC*sources
     sources = foo.c bar.c
 
     include minion.mk
@@ -306,21 +305,21 @@ Assume a Makefile contains the following:
 Typing `make` or `make default` will build `*results`, and typing `make
 deploy` will build `Deploy[*results]`.
 
-There is a single `Program` instance, and its argument is `*objects`.
+There is a single `LinkC` instance, and its argument is `*objects`.
 The program's `in` property defaults to its argument's unnamed values:
 
-    Program[*objects].in --> "*objects"
+    LinkC[*objects].in --> "*objects"
 
 The `inIDs` property gives the result of expanding indirections:
 
-    Program[*objects].inIDs
-       --> "baz.o Compile[foo.c] Compile[bar.c]"
+    LinkC[*objects].inIDs
+       --> "baz.o CC[foo.c] CC[bar.c]"
 
 The `prereqs` property resolves these target IDs to their corresponding
 outputs:
 
-    Program[*objects].prereqs
-       --> "baz.o .out/Compile/foo.o .out/Compile/bar.o"
+    LinkC[*objects].prereqs
+       --> "baz.o .out/CC/foo.o .out/CC/bar.o"
 
 
 ## Exported Definitions

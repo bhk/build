@@ -29,21 +29,21 @@ of an input to the build step.  `CLASS` is the name of a class that is
 defined by Minion or your Makefile.  To get started, let's use some classes
 built into Minion:
 
-    $ make Compile[hello.c]
-    $ make Program[Compile[hello.c]]
-    $ make Run[Program[Compile[hello.c]]]
+    $ make CC[hello.c]
+    $ make LinkC[CC[hello.c]]
+    $ make Run[LinkC[CC[hello.c]]]
 
 
 ## Inference
 
 Some classes have the ability to *infer* intermediate build steps, based on
 the file extension.  For example, if we provide a ".c" file directly to
-`Program`, it knows how to generate the intermediate artifacts.
+`LinkC`, it knows how to generate the intermediate artifacts.
 
-    $ make Program[hello.c]
+    $ make LinkC[hello.c]
 
 This builds the program, but `hello.o` was not rebuilt.  This is because we
-have already built `Compile[hello.c]`.  Doing nothing, whenever possible, is
+have already built `CC[hello.c]`.  Doing nothing, whenever possible, is
 what a build system is all about.
 
 We can demonstrate that everything will get re-built, if necessary, by
@@ -52,10 +52,10 @@ defined by Minion, and it removes the "output directory", which, by default,
 contains all generated artifacts.
 
     $ make clean
-    $ make Program[hello.c]
+    $ make LinkC[hello.c]
 
-Likewise, `Run` can also infer a `Program` instance (which in turn will
-infer a `Compile` instance):
+Likewise, `Run` can also infer a `LinkC` instance (which in turn will infer
+a `CC` instance):
 
     $ make Run[hello.c]
 
@@ -113,7 +113,7 @@ for each target identified in the variable.
 
     $ make help Run*sources sources='hello.c binsort.c'
     $ make Run*sources sources='hello.c binsort.c'
-    $ make Tar[Compile*sources] sources='hello.c binsort.c'
+    $ make Tar[CC*sources] sources='hello.c binsort.c'
 
 
 ## Alias Goals

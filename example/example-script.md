@@ -20,14 +20,14 @@ determine what Make actually does when it is invoked.
 
 ## Instances
 
-The salient feature of Minion is instances.  An *instance* is a description
-of a built artifact, written as `CLASS[ARGUMENT]`.  With Minion, instances
-may be provided as goals, or as arguments to other instances.  (Like other
-target names, instances may not contain whitespace characters.)
+The salient feature of Minion is instances.  An instance is a description of
+a build step.  Instances can be provided as goals or as inputs to other
+build steps.
 
-`ARGUMENT` typically is the name of an input to the build step.  `CLASS` is
-the name of a class that is defined by Minion or your Makefile.  To get
-started, let's use some classes built into Minion:
+An instance is written `CLASS[ARGUMENT]`.  `ARGUMENT` typically is the name
+of an input to the build step.  `CLASS` is the name of a class that is
+defined by Minion or your Makefile.  To get started, let's use some classes
+built into Minion:
 
     $ make Compile[hello.c]
     $ make Program[Compile[hello.c]]
@@ -48,7 +48,8 @@ what a build system is all about.
 
 We can demonstrate that everything will get re-built, if necessary, by
 re-issuing this command after invoking `make clean`.  The `clean` target is
-defined by Minion, and it removes all generated artifacts.
+defined by Minion, and it removes the "output directory", which, by default,
+contains all generated artifacts.
 
     $ make clean
     $ make Program[hello.c]
@@ -61,12 +62,12 @@ infer a `Compile` instance):
 
 ## Phony Targets
 
-A `Run` instance writes to `stdout`, and it does not generate an output
-file.  It does not make sense to talk about whether its output file needs to
-be "rebuilt", because there is no output file.  Targets like this, that
-exist for side effects only, are called phony targets.  They are always
-executed whenever they are named as a goal, or as a prerequisite of a target
-named as a goal, and so on.
+A `Run` instance writes to `stdout` and does not generate an output file.
+It does not make sense to talk about whether its output file needs to be
+"rebuilt", because there is no output file.  Targets like this, that exist
+for side effects only, are called phony targets.  They are always executed
+whenever they are named as a goal, or as a prerequisite of a target named as
+a goal, and so on.
 
     $ make Run[hello.c]
 
@@ -77,8 +78,8 @@ file, so its instances are *not* phony.
 
 Using `Exec` is a way to run unit tests.  The existence of the output file
 is evidence that the unit test passed (the program exited without an error
-code).  If we want to view the output, we can use `Print`, a class that
-generates a phony target that writes its input to `stdout`:
+code).  If we want to view the output, we can use `Print`, which generates a
+phony target that writes its input to `stdout`:
 
     $ make Print[hello.c]
     $ make Print[Exec[hello.c]]

@@ -116,15 +116,18 @@ for each target identified in the variable.
     $ make Tar[CC*sources] sources='hello.c binsort.c'
 
 
-## Alias Goals
+## Aliases
 
 So far we haven't added anything to our Makefile, so we can only build what
 we explicitly describe on the command line.  We want to be able to describe
 complex builds in a Makefile so they can invoked with a simple command, like
-`make` or `make deploy`.  Minion provides alias goals for this purpose.  An
-*alias goal* is a name that, when provided on the command line, causes a
-list of targets to be built.  To define one, define a variable named
-`make_NAME`, setting its value to the list of targets to be built.
+`make` or `make deploy`.  Minion provides aliases for this purpose.  An
+alias is a name that identifies a phony target instead of an actual file.
+
+To define an alias, define a variable named `Alias[NAME].in` to specify a
+list of targets to be built when NAME is given as a goal, *or* define
+`Alias[NAME].command` to specify a command to be executed when NAME is given
+as a goal.  Or define both.
 
 This next Makefile defines alias goals for "default" and "deploy":
 

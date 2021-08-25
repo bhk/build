@@ -1,4 +1,4 @@
-make_default = # nothing
+Alias[default].in = #nothing
 include minion.mk
 
 true = $(if $1,1)
@@ -101,13 +101,17 @@ $(call _expectEQ,\
 
 # _goalID
 
-make_alias1 =
-MAKE_alias2 =
+Alias[alias1].in = x
+Alias[alias2].command = y
+Alias[alias3].in = x3
+Alias[alias3].command = y3
 
+$(call _expectEQ,$(_getAliases),alias1 alias2 alias3 clean default)
+
+_aliases := alias1 alias2
 $(call _expectEQ,$(call _goalID,alias1),Alias[alias1])
-$(call _expectEQ,$(call _goalID,alias2),CAlias[alias2])
-$(call _expectEQ,$(call _goalID,*asdf),Alias[*asdf])
-$(call _expectEQ,$(call _goalID,as[df]),Alias[as[df]])
+$(call _expectEQ,$(call _goalID,*asdf),Goal[*asdf])
+$(call _expectEQ,$(call _goalID,as[df]),Goal[as[df]])
 $(call _expectEQ,$(call _goalID,asdf),)
 
 # Help

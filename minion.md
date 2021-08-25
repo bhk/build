@@ -29,21 +29,12 @@ will output a description of the arguments, rather than build them.
 
 Aliases are names that may be used on the command line as goals.
 
-If your makefile defines a variable named `make_NAME` or `MAKE_NAME`, then
-`NAME` is a valid *alias*.  The value of that variable describes all the
-targets that the alias will build.  It can contain instances, indirections,
-or ordinary target names.
-
-Each alias may be given a command to execute by defining a variable named
-`Alias[NAME].command`.
-
-The uppercase prefix, `MAKE_`, designate a *compiled* alias.  Compiled
-aliases generate the same results, but accomplish this by writing the build
-rules to a separate makefile instead of using `$(eval ...)`.  The generated
-makefile will be rebuilt only when your makefile changes.  This can make for
-faster incremental build times, but if the behavior of your makefile depends
-on some dynamic state of the system -- for example, if you call `$(shell
-...)` -- then the results of re-builds may not reflect those state changes.
+If your makefile defines a variable named `Alias[NAME].in` or
+`Alias[NAME].command`, then `NAME` is a valid *alias*.  The value of the
+`...in` variable, if defined, describes all the targets that the alias will
+cause to be built.  It can contain instances, indirections, or ordinary
+target names.  The value of the `...command` variable, if defined, is a
+command line to be executed when the alias is named as a goal.
 
 ## Indirections
 

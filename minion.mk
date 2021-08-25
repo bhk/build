@@ -44,8 +44,8 @@ Write.inherit ?= _Write
 # instances, so inheritance is not available.
 #
 File.out = $A
-File.rule = #
-File.needs = #
+File.rule =
+File.needs =
 
 
 # Builder[ARG]:  Base class for builders.
@@ -86,18 +86,18 @@ Builder.inFiles = $(call _pairFiles,{inPairs})
 
 # `up` contains dependencies that are typically specified by the class
 # itself, not by the instance argument or `in` property.
-Builder.up = #
+Builder.up =
 Builder.upIDs = $(call _expand,{up})
 
 # `orderOnly` is a target list (just like `in`)
-Builder.orderOnly = #
+Builder.orderOnly =
 Builder.ooIDs = $(call _expand,{orderOnly})
 
 # `inferClasses` a list of words in the format "CLASS.EXT", implying
 # that each input filename ending in ".EXT" should be replaced wth
 # "CLASS[FILE.EXT]".  This is used to, for example, convert ".c" files
 # to ".o" when they are provided as inputs to a LinkC instance.
-Builder.inferClasses = #
+Builder.inferClasses =
 
 # Note: By default, `outDir`, `outName`, and `outExt` are used to
 # construct `out`, but any of them can be overridden.  Do not assume
@@ -116,9 +116,9 @@ Builder.messageCommand = $(if {message},@echo $(call _shellQuote,{message}))
 
 Builder.mkdirCommand = @mkdir -p $(dir {@})
 
-Builder.phonyRule = #
+Builder.phonyRule =
 
-Builder.depsFile = #
+Builder.depsFile =
 
 # _defer can be used to embed a function or variable reference that will
 # be expanded when-and-if the recipe is executed.  Generally, all "$"
@@ -151,31 +151,33 @@ endef
 #
 _Phony.inherit = Builder
 _Phony.phonyRule = .PHONY: {@}
-_Phony.mkdirCommand = #
-_Phony.message = #
+_Phony.mkdirCommand =
+_Phony.message =
 _Phony.command = @true
 
 
-# Alias[GOAL] : Generate a rule that builds GOAL (a named alias, instance,
-#    or indirection).  Goals may use `:` in place of `=` in order to allow
-#    them to be used on the Make command line.
+# Alias[TARGETNAME] : Generate a phony rule whose {out} matches TARGETNAME.
+#     {command} and/or {in} are supplied by the user makefile.
 #
 Alias.inherit = Phony
-Alias.in = $(or $(addprefix *,$(call _aliasVar,$A)),$(subst :,=,$A))
 Alias.out = $(subst :,\:,$A)
+Alias.in =
 
 
-# NullAlias[GOAL] : Generate a rule for GOAL that does nothing.
+# Goal[TARGETNAME] : Generate a phony rule for an instance or indirection
+#    goal.  Its {out} should match the name provided on the command line,
+#    and its {in} is the named instance or indirection.
 #
-NullAlias.inherit = Alias
-NullAlias.in = #
-
-
-# CAlias[GOAL] : Build GOAL using a "compiled" Makefile.
+#    Goals that are intsance names must use `:` in place of `=` in order to
+#    allow them to be used on the Make command line.
 #
-CAlias.inherit = Alias
-CAlias.in = Makefile[Alias[$A]]
-CAlias.command = @$(MAKE) -f {<}
+Goal.inherit = Alias
+Goal.in = $(subst :,=,$A)
+
+
+# NullGoal[TARGETNAME] : Generate a rule that does nothing.
+#
+NullGoal.inherit = Alias
 
 
 # Makefile[ID] : Generate a makefile that builds ID.
@@ -224,9 +226,9 @@ _CC++.compiler = g++
 # _Link[INPUTS] : Link a command-line C program.
 #
 _Link.inherit = Builder
-_Link.outExt = #
+_Link.outExt =
 _Link.command = {compiler} -o {@} {^} {flags} 
-_Link.flags = #
+_Link.flags =
 
 
 # _LinkC[INPUTS] : Link a command-line C program.
@@ -248,8 +250,8 @@ _LinkC++.inferClasses = CC.c CC++.cpp CC++.cc
 #
 _Shell.exec = {exportPrefix}./{<} {args}
 _Shell.inferClasses = LinkC.c LinkC.o LinkC++.cpp
-_Shell.args = #
-_Shell.exports = #
+_Shell.args =
+_Shell.exports =
 _Shell.exportPrefix = $(foreach v,{exports},$v=$(call _shellQuote,{$v}) )
 
 
@@ -412,10 +414,14 @@ _expand = $(foreach w,$1,$(or $(filter %],$w),$(if $(findstring *,$w),$(if $(fil
 # Inspect targets/goals
 _isInstance = $(filter %],$1)
 _isIndirect = $(findstring *,$(word 1,$(subst [,[ ,$1)))
-_aliasVar = $(or $(call _isDefined,make_$1),$(call _isDefined,MAKE_$1))
+_isAlias = $(filter $(_aliases),$1)
 
-# Translate goal $1 to a instance if a rule needs to be generated.
-_goalID = $(if $(or $(_isInstance),$(_isIndirect),$(_aliasVar)),$(if $(filter M%,$(_aliasVar)),C)Alias[$1])
+# Translate goal $1 to a instance, *if* a rule needs to be generated for it.
+_goalID = $(if $(_isAlias),Alias[$1],$(if $(_isInstance),Goal[$1],$(if $(_isIndirect),Goal[$1])))
+
+# find all defined aliases
+_getAliases = $(sort $(patsubst Alias[%].in,%,$(filter %].in,$(patsubst %.command,%.in,$(filter Alias[%,$(.VARIABLES))))))
+_aliases = $(call _once,_getAliases)
 
 # Get all instances in $1 and in their `needs`, transitively.
 # $1 = list of IDs  $2 = seen IDs
@@ -488,10 +494,12 @@ _getID.P = $(foreach p,$(or $(lastword $(subst ].,] ,$1)),$(error Empty property
 _isProp = $(filter ].%,$(lastword $(subst ], ],$1)))
 
 # instance, indirection, alias, other
-_goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_aliasVar),Alias,$(if $(_isProp),Property,Other))))
+_goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,$(if $(_isProp),Property,Other))))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
 
+# $(call _showVar,VAR,LINEPREFIX)
+_showVar = $(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,$2define $1$(\n)$(value $1)$(\n)endef),$2$1 = $(value $1)),$2$1 := $(subst $(\n),$$(\n),$($1)))
 
 define _helpInstance
 Target ID "$1" is an instance (a generated artifact).
@@ -507,7 +515,7 @@ endef
 define _helpIndirect
 "$1" is an indirection on the following variable:
 
-   $(_ivar) = $(value $(_ivar))
+$(call _showVar,$(_ivar),   )
 
 It expands to the following targets: $(call _fmtList,$(call _expand,$1))
 endef
@@ -515,12 +523,12 @@ endef
 
 define _helpAlias
 Target "$1" is an alias defined by:
-
-   $(_aliasVar) = $(value $(_aliasVar))
-
+$(foreach v,$(filter Alias[$1].%,$(.VARIABLES)),
+$(call _showVar,$v,   )
+)
 $(call _helpDeps,Alias[$1])
 
-Alias[$1] generates the following rule: $(call _qv,$(call get,rule,Alias[$1]))
+$1 generates the following rule: $(call _qv,$(call get,rule,Alias[$1]))
 endef
 
 
@@ -554,8 +562,7 @@ $$%: ; @$(info $$$* = $(call _qv,$(call or,$$$*)))
 
 _OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 
-.PHONY: clean
-clean: ; $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
+Alias[clean].command ?= $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
 
 end = $(eval $(value _epilogue))
 
@@ -576,7 +583,7 @@ define _epilogue
     # things to describe, not build.  We display help messages right now and
     # emit "null" rules for the goals.
     $(call _help!,$(subst :,=,$(filter-out help,$(MAKECMDGOALS))))
-    _goalIDs := $(MAKECMDGOALS:%=NullAlias[%])
+    _goalIDs := $(MAKECMDGOALS:%=NullGoal[%])
   else
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
   endif

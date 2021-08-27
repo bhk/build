@@ -190,12 +190,24 @@ NullGoal.inherit = Alias
 Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.command = $(_defer)(call get,deferredCommand,$C[$A])
+Makefile.IDs = $(call _rollup,$(call _expand,$A))
 define Makefile.deferredCommand
 $(call _recipe,
-@rm -f {@}_tmp_ $(foreach I,$(call _rollup,$A),
-@$(call _printf,$(call get,rule,$I)$(\n)) >> {@}_tmp_)
+@rm -f {@}
+@echo '_cachedIDs = {IDs}' > {@}_tmp_
+$(foreach i,{IDs},
+@$(call _printf,$(call get,rule,$i)$(\n)) >> {@}_tmp_)
 @mv {@}_tmp_ {@})
 endef
+
+
+# UseCache[IDS] : Include a cached makefile.
+#
+UseCache.inherit =
+UseCache.out = 
+UseCache.rule = -include {^}
+UseCache.needs = Makefile[$A]
+UseCache.^ = $(call get,out,{needs})
 
 
 # _Compile[SOURCE] : Base class for invoking a compiler.
@@ -423,9 +435,13 @@ _goalID = $(if $(_isAlias),Alias[$1],$(if $(_isInstance),Goal[$1],$(if $(_isIndi
 _getAliases = $(sort $(patsubst Alias[%].in,%,$(filter %].in,$(patsubst %.command,%.in,$(filter Alias[%,$(.VARIABLES))))))
 _aliases = $(call _once,_getAliases)
 
-# Get all instances in $1 and in their `needs`, transitively.
-# $1 = list of IDs  $2 = seen IDs
-_rollup = $(if $1,$(call _rollup,$(filter-out $1 $2,$(sort $(call get,needs,$(_isInstance)))),$2 $1),$(filter %],$2))
+# Get all instances in IDS and in their `needs`, transitively.
+# $(call _rollup,IDS,EXCLUDES,[seen])
+_rollup = $(call _rollupx,$(filter %],$(filter-out $2,$1)),$2)
+_rollupx = $(if $1,$(call _rollupx,$(filter-out $1 $2 $3,$(sort $(filter %],$(call get,needs,$1)))),$2,$3 $1),$3)
+
+# $(call _evalIDs,IDs,EXCLUDES) : Evaluate rules of IDs and their transitive dependencies
+_evalIDs = $(foreach i,$(filter %],$(call _rollup,$1,$2)),$(call _eval,eval-$i,$(call get,rule,$i)))
 
 # Report an error (called by object system)
 _error = $(error $1)
@@ -572,6 +588,13 @@ define _epilogue
     $(error OUTDIR must end in "/")
   endif
 
+  ifneq "" "$(minion_cache)"
+    $(call _evalIDs,UseCache[*minion_cache])
+    ifndef _cachedIDs
+       _cachedIDs = %
+    endif
+  endif
+
   ifndef MAKECMDGOALS
     # .DEFAULT_GOAL only matters when there are no command line goals
     .DEFAULT_GOAL = default
@@ -588,9 +611,7 @@ define _epilogue
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
   endif
 
-  _allIDs := $(filter %],$(call _rollup,$(_goalIDs)))
-  $(call _log,all,$(_allIDs))
-  $(foreach g,$(_allIDs),$(call _eval,eval-$g,$(call get,rule,$g)))
+  $(call _evalIDs,$(_goalIDs),$(_cachedIDs))
 endef
 
 

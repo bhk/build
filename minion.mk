@@ -180,23 +180,25 @@ Goal.in = $(subst :,=,$A)
 NullGoal.inherit = Alias
 
 
-# Makefile[ID] : Generate a makefile that builds ID.
+# Makefile[VAR] : Generate a makefile that includes rules for IDs in $(VAR)
+#   and their transitive dependencies, excluding IDs in $(VAR_exclude).
 #
-#   The makefile includes rules for all dependencies, with ID apeparing
-#   first.  Command expansion is deferred to rule processing phase, so that
-#   we can avoid the time it takes to generate all the rules whenever the
-#   target makefile is fresh.
+#   Command expansion is deferred to the rule processing phase, so when the
+#   makefile is fresh we avoid the time it takes to compute all the rules.
 #
 Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.command = $(_defer)(call get,deferredCommand,$C[$A])
-Makefile.IDs = $(call _rollup,$(call _expand,$A))
+Makefile.excludeIDs = $(filter %],$(call _expand,*$A_exclude))
+Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,*$A)))
 define Makefile.deferredCommand
 $(call _recipe,
 @rm -f {@}
 @echo '_cachedIDs = {IDs}' > {@}_tmp_
 $(foreach i,{IDs},
-@$(call _printf,$(call get,rule,$i)$(\n)) >> {@}_tmp_)
+@$(call _printf,$(call get,rule,$i)
+$(if {excludeIDs},_$i_needs = $(filter {excludeIDs},$(call _depsOf,$i))
+)) >> {@}_tmp_)
 @mv {@}_tmp_ {@})
 endef
 
@@ -435,13 +437,8 @@ _goalID = $(if $(_isAlias),Alias[$1],$(if $(_isInstance),Goal[$1],$(if $(_isIndi
 _getAliases = $(sort $(patsubst Alias[%].in,%,$(filter %].in,$(patsubst %.command,%.in,$(filter Alias[%,$(.VARIABLES))))))
 _aliases = $(call _once,_getAliases)
 
-# Get all instances in IDS and in their `needs`, transitively.
-# $(call _rollup,IDS,EXCLUDES,[seen])
-_rollup = $(call _rollupx,$(filter %],$(filter-out $2,$1)),$2)
-_rollupx = $(if $1,$(call _rollupx,$(filter-out $1 $2 $3,$(sort $(filter %],$(call get,needs,$1)))),$2,$3 $1),$3)
-
 # $(call _evalIDs,IDs,EXCLUDES) : Evaluate rules of IDs and their transitive dependencies
-_evalIDs = $(foreach i,$(filter %],$(call _rollup,$1,$2)),$(call _eval,eval-$i,$(call get,rule,$i)))
+_evalIDs = $(foreach i,$(call _rollupEx,$(_isInstance),$2),$(call _eval,eval-$i,$(call get,rule,$i)))
 
 # Report an error (called by object system)
 _error = $(error $1)
@@ -467,6 +464,9 @@ _ivar = $(lastword $(subst *, ,$1))
 _pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
 _pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
 _inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%[$(call _pairIDs,$w)],$2))),$x$$$(call get,out,$x)),$w)),$1)
+_depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
+_rollup = $(sort $(foreach w,$(filter %],$1),$w $(call _depsOf,$w)))
+_rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
 
 # argument parsing
 
@@ -588,13 +588,6 @@ define _epilogue
     $(error OUTDIR must end in "/")
   endif
 
-  ifneq "" "$(minion_cache)"
-    $(call _evalIDs,UseCache[*minion_cache])
-    ifndef _cachedIDs
-       _cachedIDs = %
-    endif
-  endif
-
   ifndef MAKECMDGOALS
     # .DEFAULT_GOAL only matters when there are no command line goals
     .DEFAULT_GOAL = default
@@ -604,14 +597,23 @@ define _epilogue
   else ifneq "" "$(filter help,$(MAKECMDGOALS))"
     # When `help` is given on the command line, we treat all other goals as
     # things to describe, not build.  We display help messages right now and
-    # emit "null" rules for the goals.
+    # emit "null" rules for the goals, so we need to avoid the cache
+    # makefile and its potential for auto-restart.
     $(call _help!,$(subst :,=,$(filter-out help,$(MAKECMDGOALS))))
-    _goalIDs := $(MAKECMDGOALS:%=NullGoal[%])
+    $(call _evalIDs,$(MAKECMDGOALS:%=NullGoal[%]))
   else
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
   endif
 
-  $(call _evalIDs,$(_goalIDs),$(_cachedIDs))
+  ifdef _goalIDs
+    ifdef minion_cache
+      # If the cache is stale or yet to be created, Make will restart. Set
+      # _cachedIDs to "%" (to skip all eval's) if we can predict restart.
+      $(call _evalIDs,UseCache[minion_cache])
+      _cachedIDs ?= %
+    endif
+    $(call _evalIDs,$(_goalIDs),$(_cachedIDs))
+  endif
 endef
 
 

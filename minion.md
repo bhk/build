@@ -1,4 +1,4 @@
-# Minion
+# Minion Reference
 
 ## Introduction
 
@@ -31,18 +31,18 @@ Aliases are names that may be used on the command line as goals.
 
 If your makefile defines a variable named `Alias[NAME].in` or
 `Alias[NAME].command`, then `NAME` is a valid *alias*.  The value of the
-`...in` variable, if defined, describes all the targets that the alias will
-cause to be built.  It can contain instances, indirections, or ordinary
-target names.  The value of the `...command` variable, if defined, is a
-command line to be executed when the alias is named as a goal.
+`.in` variable, if defined, lists all the targets that the alias will cause
+to be built.  It can contain instances, indirections, or ordinary target
+names.  The value of the `.command` variable, if defined, is a shell command
+to be executed when the alias is named as a goal.
 
 ## Indirections
 
 An "indirection" is a word that names a variable that contains target
-descriptions.  Indirections may appear in certain contexts that expect
-multiple target names, namely: the command line arguments passed to make,
-and the `in` property of a build product.  In these contexts, an "expansion"
-step is performed, in which indirections are replaced with the targets they
+descriptions.  Indirections may appear in contexts that expect multiple
+target names, namely, the command line arguments passed to make, and the
+`in` property of a build product.  In these contexts, an "expansion" step is
+performed, in which indirections are replaced with the targets they
 reference.
 
 There are two forms of indirections:
@@ -66,8 +66,8 @@ Mapped indirections can also use a "chained" syntax.  Using the same example
 entire word that matches one of the above two forms.  For example,
 `CC[*sources]` is a target ID, *not* an indirection, and will not be altered
 during the expansion step.  Its argument, on the other hand, *is* an
-indirection, and it will be expanded when the `CC[*sources]` instance
-requests its input files.
+indirection, and it will be expanded when the `CC[*sources]` instance's
+inputs are evaluated.
 
 ## Instances
 
@@ -76,12 +76,13 @@ other artifacts, structured as:
 
     `CLASS[ARG]`
 
-`CLASS` must match [-+_.A-Za-z0-9]+.  `ARG` must not be an empty string.
+Neither `CLASS` nor `ARG` may be empty.  (Complete [syntax](#Syntax) details
+are given below.)
 
-Property definitions are associated with the class name.  A property
-definition is a Make variable with a name of the form "CLASS.PROPERTY".
-Property definitions may use "simple" variables (assigned using `:=`) or
-"recursive" variables (using `=` or `define`).
+Property definitions may be associated with the class by defining a Make
+variable named `CLASS.PROPERTY`.  Property definitions may use "simple"
+variables (assigned using `:=`) or "recursive" variables (using `=` or
+`define`).
 
 Recursive property definitions can make use of ordinary Make syntax, but
 must use `$(...)`, not `${...}`, for Make variables and functions.
@@ -127,6 +128,45 @@ of "creating" or "destroying" instances.  We cannot say whether an instance
 Think of a class as a function -- somewhat elaborate and multi-facted, but
 ultimately a function that yields a set of property definitions.  An
 instance identifies the function (class) and its input (argument).
+
+## Cached Rules
+
+Ordinarily, every time you invoke `make`, Minion computes the `rule`
+property for every goal and their transitive dependencies prior to Make's
+rule processing phase.  If your makefile describes hundreds or thousands of
+build steps, this can take a perceptible amount of time.  To accelerate
+incremental builds, Minion can write many or all of its generated rules to a
+"cache" file, and avoid re-computing them every time `make` is invoked.
+
+To enable this, assign to the variable `minion_cache` a list of targets or
+indirections to be cached.  All of the rules of the referenced instances and
+their transitive depenencies will be written to a cache file.
+
+When using `minion_cache`, you can still build either cached or non-cached
+goals.  Minion will use cached rules when they are present, and dynamically
+generate any other required rules.
+
+The cache file will be re-generated whenever your makefile changes, so
+generally the results of building with cached rules will be the same as when
+you build without cached rules.  However, if you have an instance that makes
+use of some dynamic state of the system -- for example, environment
+variables, make command-line variables, or `$(shell ...)` results -- then
+its cached rule will reflect those values as of the time when the cache file
+was generated, which may differ from what those values are when you invoke
+make.  To avoid this situation, list any such instances in
+`minion_cache_exclude`; their rules will be excluded from the cache file and
+instead be generated each time you invoke make.  Note that whereas
+`minion_cache` implicitly includes all transitive dependencies of the listed
+targets, `minion_cache_exclude` does not.  It is intended to target
+individual problematic build steps.
+
+For example:
+
+    ...
+    minion_cache = Alias[all]
+    minion_cache_exclude = Write[date,out=timestamp.txt]
+    date = $(shell date +%Y-%m-%d)
+    ...
 
 ## Shorthand Properties
 
@@ -202,22 +242,19 @@ functionality from it.
 
 Rules generated by `Builder` provide the following features:
 
- * Output directories are automatically created by each rule.
-
- * The output file locations and name is computed.  (See "Outputs", below).
+ * Default output file name and location is computed.  (See "Outputs",
+   below).
 
  * The build command is escaped for Make syntax to avoid unintended
    evaluation, and multi-line commands are supported.
 
- * This supports use of auto-generated implied dependencies, as with
-   GCC's `-M -MF` options. See the `depsFile` property for more.
+ * Output directories are automatically created by each rule.
+
+ * Auto-generated implied dependencies are supported, as with GCC's `-M -MF`
+   options. See the `depsFile` property for more.
 
  * Order-only dependencies may be specified by defining the `orderOnly`
    property.
-
- * `.PHONY: ...` is output when `isPhony` is true.  (Also, the target
-   name is simplified and `mkdir` is avoided.)
-
 
 ## Outputs
 
@@ -246,7 +283,6 @@ when the variable name is used.  For example:
     Class[*VAR]       VAR
     Class[C*VAR]      VAR
 
-
 ### Overriding `out`, `outDir`, or `outName`
 
 When using Minion, we generally don't care where intermediate output files
@@ -269,7 +305,6 @@ Be aware of the following implications:
     then Builder's definition of `outDir` will not ensure that conflicts are
     avoided.
 
-
 ### Output Directories
 
 An architectural pillar of Minion is that, generally, intermediate output
@@ -278,14 +313,13 @@ and navigable output diretories for the sake of those rare cases where a
 user does directly encounter them.  The precise structure is an
 implementation detail; refer to prototype.scm for details.
 
-
 ## Example
 
 Assume a Makefile contains the following:
 
 
-    make_default = *results
-    make_deploy = Deploy[*results]
+    Alias[default].in = *results
+    Alias[deploy].in = Deploy[*results]
 
     results = LinkC[*objects]
     objects = baz.o CC*sources
@@ -310,8 +344,7 @@ The `prereqs` property resolves these target IDs to their corresponding
 outputs:
 
     LinkC[*objects].prereqs
-       --> "baz.o .out/CC/foo.o .out/CC/bar.o"
-
+       --> "baz.o .out/CC.c/foo.o .out/CC.c/bar.o"
 
 ## Exported Definitions
 
@@ -324,11 +357,11 @@ Makefiles.
 
 * `$(call .,PROP)`
 
-  Evaluate property PROP for the current instance
+  Evaluate property PROP for the current instance.
 
 * `$(call _shellQuote,STR)`
 
-  Quote STR as an argument for /bin/sh or /bin/bash
+  Quote STR as an argument for /bin/sh or /bin/bash.
 
 * `$(call _printfEsc,STR)`
 
@@ -360,7 +393,6 @@ Makefiles.
 * `$(_arg1)`
 
   Same as `$(word 1,$(_args))`.
-
 
 ## Syntax
 

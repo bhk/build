@@ -683,6 +683,86 @@
         "a.x IP[a.o]$out/P/a IP[IC[a.c]]$out/IP_IC/a")
 
 
+;; Return transitive dependencies of ID, excluding non-instances.  Memoize
+;; results so this can be applied efficiently to many IDs in arbitrary
+;; order.
+;;
+(define (_depsOf id)
+  &native
+  (define `memoVar (.. "_&deps-" id))
+  (define `xdeps
+    (sort (foreach (i (isInstance (get "needs" id)))
+            (._. i (_depsOf i)))))
+  (or (native-var memoVar)
+      (_set memoVar (or xdeps " "))))
+
+(export (native-name _depsOf) nil)
+
+
+;; Return IDS and their transitive dependencies, excluding non-instances.
+;;
+(define (_rollup ids)
+  &native
+  (sort
+   (foreach (i (isInstance ids))
+     (._. i (_depsOf i)))))
+
+(export (native-name _rollup) 1)
+
+
+;; Return IDS and their transitive dependencies that are instances,
+;; excluding those listed in EXCLUDES.  For instances that are in EXCLUDES,
+;; use $($(_i_cachedNeeds)) rather than {needs} to obtain their
+;; dependencies.
+;;
+(define (_rollupEx ids excludes ?seen)
+  &native
+  (define `(cachedNeeds id)
+    (native-value (.. "_" id "_needs")))
+
+  (define `deps
+    (sort
+     (._. (isInstance (get "needs" (filter-out excludes ids)))
+          (foreach (i (filter excludes ids))
+            (cachedNeeds i)))))
+
+  (if ids
+      (_rollupEx (filter-out (._. seen ids) deps)
+                 excludes
+                 (._. seen ids))
+      (filter-out excludes seen)))
+
+(export (native-name _rollupEx) nil)
+
+
+(begin
+  ;; Test _depsOf, _rollup, _rollupEx
+  (set-native "R[a].needs" "R[b] R[c] x y z")
+  (set-native "R[b].needs" "R[c] R[d] x y z")
+  (set-native "R[c].needs" "R[d]")
+  (set-native "R[d].needs" "R[e]")
+  (set-native "R[e].needs" "")
+
+  (expect (_depsOf "R[a]")
+          "R[b] R[c] R[d] R[e]")
+
+  (expect (_rollup "R[a]")
+          "R[a] R[b] R[c] R[d] R[e]")
+
+  (expect (strip (_rollupEx "R[a]" ""))
+          "R[a] R[b] R[c] R[d] R[e]")
+
+  (expect (strip (_rollupEx "R[a]" "R[d]"))
+          "R[a] R[b] R[c]")
+
+  (set-native "_R[d]_needs" "R[x]")
+  (set-native "R[x].needs" "")
+
+  (expect (strip (_rollupEx "R[a]" "R[d]"))
+          "R[a] R[b] R[c] R[x]")
+  nil)
+
+
 ;;----------------------------------------------------------------
 ;; Argument string parsing
 ;;----------------------------------------------------------------

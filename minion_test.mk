@@ -114,6 +114,37 @@ $(call _expectEQ,$(call _goalID,*asdf),Goal[*asdf])
 $(call _expectEQ,$(call _goalID,as[df]),Goal[as[df]])
 $(call _expectEQ,$(call _goalID,asdf),)
 
+
+# _depsOf, _rollup, _rollupEx
+
+R[a].needs = R[b] R[c] x y z
+R[b].needs = R[c] x y z
+R[c].needs = R[d]
+R[d].needs = R[e]
+R[e].needs = 
+
+$(call _expectEQ,\
+  $(call _depsOf,R[a]),\
+  R[b] R[c] R[d] R[e])
+$(call _expectEQ,\
+   $(call _rollup,R[a]),\
+   R[a] R[b] R[c] R[d] R[e])
+$(call _expectEQ,\
+  $(strip $(call _rollupEx,R[a])),\
+  R[a] R[b] R[c] R[d] R[e])
+$(call _expectEQ,\
+  $(strip $(call _rollupEx,R[a],R[d])),\
+  R[a] R[b] R[c])
+
+
+_R[d]_needs = R[x]
+R[x].needs=
+
+$(call _expectEQ,\
+  $(strip $(call _rollupEx,R[a],R[d])),\
+  R[a] R[b] R[c] R[x])
+
+
 # Help
 
 C.inherit = Builder

@@ -116,8 +116,6 @@ Builder.messageCommand = $(if {message},@echo $(call _shellQuote,{message}))
 
 Builder.mkdirCommand = @mkdir -p $(dir {@})
 
-Builder.phonyRule =
-
 Builder.depsFile =
 
 # _defer can be used to embed a function or variable reference that will
@@ -137,7 +135,6 @@ $(call _recipe,
 {mkdirCommand}
 {command}
 )
-{phonyRule}
 $(addprefix -include ,{depsFile})
 endef
 
@@ -150,7 +147,7 @@ endef
 #   as a target.
 #
 _Phony.inherit = Builder
-_Phony.phonyRule = .PHONY: {@}
+_Phony.rule = .PHONY: {@}$(\n){inherit}
 _Phony.mkdirCommand =
 _Phony.message =
 _Phony.command = @true

@@ -151,10 +151,10 @@ Target ID "Run[hello.c]" is an instance (a generated artifact).
 Output: .out/Run/hello.c
 
 Rule: 
+  | .PHONY: .out/Run/hello.c
   | .out/Run/hello.c : .out/LinkC.c/hello  | 
   | 	./.out/LinkC.c/hello 
   | 
-  | .PHONY: .out/Run/hello.c
   | 
 
 Direct dependencies: 
@@ -174,7 +174,6 @@ Rule:
   | 	@echo '#-> Exec[hello.c]'
   | 	@mkdir -p .out/Exec.c/
   | 	( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
-  | 
   | 
   | 
 
@@ -236,15 +235,18 @@ tar -cvf .out/Tar_CC@/sources.tar .out/CC.c/hello.o .out/CC.c/binsort.o
 ```
 
 
-## Alias Goals
+## Aliases
 
 So far we haven't added anything to our Makefile, so we can only build what
 we explicitly describe on the command line.  We want to be able to describe
 complex builds in a Makefile so they can invoked with a simple command, like
-`make` or `make deploy`.  Minion provides alias goals for this purpose.  An
-*alias goal* is a name that, when provided on the command line, causes a
-list of targets to be built.  To define one, define a variable named
-`make_NAME`, setting its value to the list of targets to be built.
+`make` or `make deploy`.  Minion provides aliases for this purpose.  An
+alias is a name that identifies a phony target instead of an actual file.
+
+To define an alias, define a variable named `Alias[NAME].in` to specify a
+list of targets to be built when NAME is given as a goal, *or* define
+`Alias[NAME].command` to specify a command to be executed when NAME is given
+as a goal.  Or define both.
 
 This next Makefile defines alias goals for "default" and "deploy":
 
@@ -255,8 +257,8 @@ $ cp Makefile2 Makefile
 $ cat Makefile
 sources = hello.c binsort.c
 
-make_default = Exec*sources
-make_deploy = Copy*LinkC*sources
+Alias[default].in = Exec*sources
+Alias[deploy].in = Copy*LinkC*sources
 
 include ../minion.mk
 ```
@@ -290,25 +292,23 @@ Minion:
 
 ```console
 $ make default deploy minion_debug=%
-all: 'Alias[default] Alias[deploy] Copy[LinkC[binsort.c]] Copy[LinkC[hello.c]] Exec[binsort.c] Exec[hello.c] LinkC[binsort.c] LinkC[hello.c] CC[binsort.c] CC[hello.c]'
 eval-Alias[default]: 
+  | .PHONY: default
   | default : .out/Exec.c/hello.out .out/Exec.c/binsort.out  | 
   | 	@true
   | 
-  | .PHONY: default
   | 
 eval-Alias[deploy]: 
+  | .PHONY: deploy
   | deploy : .out/Copy/hello .out/Copy/binsort  | 
   | 	@true
   | 
-  | .PHONY: deploy
   | 
 eval-Copy[LinkC[binsort.c]]: 
   | .out/Copy/binsort : .out/LinkC.c/binsort  | 
   | 	@echo '#-> Copy[LinkC[binsort.c]]'
   | 	@mkdir -p .out/Copy/
   | 	cp .out/LinkC.c/binsort .out/Copy/binsort
-  | 
   | 
   | 
 eval-Copy[LinkC[hello.c]]: 
@@ -318,13 +318,11 @@ eval-Copy[LinkC[hello.c]]:
   | 	cp .out/LinkC.c/hello .out/Copy/hello
   | 
   | 
-  | 
 eval-Exec[binsort.c]: 
   | .out/Exec.c/binsort.out : .out/LinkC.c/binsort  | 
   | 	@echo '#-> Exec[binsort.c]'
   | 	@mkdir -p .out/Exec.c/
   | 	( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
-  | 
   | 
   | 
 eval-Exec[hello.c]: 
@@ -334,13 +332,11 @@ eval-Exec[hello.c]:
   | 	( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
   | 
   | 
-  | 
 eval-LinkC[binsort.c]: 
   | .out/LinkC.c/binsort : .out/CC.c/binsort.o  | 
   | 	@echo '#-> LinkC[binsort.c]'
   | 	@mkdir -p .out/LinkC.c/
   | 	gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
-  | 
   | 
   | 
 eval-LinkC[hello.c]: 
@@ -350,13 +346,11 @@ eval-LinkC[hello.c]:
   | 	gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
   | 
   | 
-  | 
 eval-CC[binsort.c]: 
   | .out/CC.c/binsort.o : binsort.c  | 
   | 	@echo '#-> CC[binsort.c]'
   | 	@mkdir -p .out/CC.c/
   | 	gcc -c -o .out/CC.c/binsort.o binsort.c -Os    -MMD -MP -MF .out/CC.c/binsort.o.d
-  | 
   | 
   | -include .out/CC.c/binsort.o.d
 eval-CC[hello.c]: 
@@ -364,7 +358,6 @@ eval-CC[hello.c]:
   | 	@echo '#-> CC[hello.c]'
   | 	@mkdir -p .out/CC.c/
   | 	gcc -c -o .out/CC.c/hello.o hello.c -Os    -MMD -MP -MF .out/CC.c/hello.o.d
-  | 
   | 
   | -include .out/CC.c/hello.o.d
 ```

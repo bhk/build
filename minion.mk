@@ -434,7 +434,7 @@ _getAliases = $(sort $(patsubst Alias[%].in,%,$(filter %].in,$(patsubst %.comman
 _aliases = $(call _once,_getAliases)
 
 # $(call _evalIDs,IDs,EXCLUDES) : Evaluate rules of IDs and their transitive dependencies
-_evalIDs = $(foreach i,$(call _rollupEx,$(_isInstance),$2),$(call _eval,eval-$i,$(call get,rule,$i)))
+_evalIDs = $(foreach i,$(call _rollupEx,$(sort $(_isInstance)),$2),$(call _eval,eval-$i,$(call get,rule,$i)))
 
 # Report an error (called by object system)
 _error = $(error $1)

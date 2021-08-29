@@ -148,25 +148,36 @@ generate any other required rules.
 
 The cache file will be re-generated whenever your makefile changes, so
 generally the results of building with cached rules will be the same as when
-you build without cached rules.  However, if you have an instance that makes
-use of some dynamic state of the system -- for example, environment
-variables, make command-line variables, or `$(shell ...)` results -- then
-its cached rule will reflect those values as of the time when the cache file
-was generated, which may differ from what those values are when you invoke
-make.  To avoid this situation, list any such instances in
-`minion_cache_exclude`; their rules will be excluded from the cache file and
-instead be generated each time you invoke make.  Note that whereas
-`minion_cache` implicitly includes all transitive dependencies of the listed
-targets, `minion_cache_exclude` does not.  It is intended to target
-individual problematic build steps.
+you build without cached rules.  However, if the commands in your build
+steps depend on the dynamic state of the system, then the cached rules will
+reflect those values as of the time when the cache file was generated, which
+may differ from what those values are when you invoke make.
 
-For example:
+One such scenario occurs when you override variables on the Make command
+line in order to perform a one-off customized build.  When doing so, you can
+also set `minion_cache` to the empty string to perform that build without
+caching, avoiding any problems with stale cached rules.  For example:
+
+    $ make CC.optFlags=-Ot minion_cache=
+
+Another such scenario occurs when you have instances whose commands are
+based on information pulled from the system via, for example, `$(wildcard
+...)` or `$(shell ...)`.  When this is the case, you can list those specific
+instances in the variable `minion_cache_exclude`, so that their rules will
+be excluded from the cache file and instead be generated each time you
+invoke make.  For example:
 
     ...
-    minion_cache = Alias[all]
-    minion_cache_exclude = Write[date,out=timestamp.txt]
-    date = $(shell date +%Y-%m-%d)
+    minion_cache = Alias[default]
+    minion_cache_exclude = LinkC[*prog]
     ...
+    prog = $(wildcard *.c)
+    ...
+
+Note that whereas `minion_cache` implicitly includes all transitive
+dependencies of the listed targets, `minion_cache_exclude` does not.  It is
+intended to target individual "dynamic" build steps.
+
 
 ## Builders
 

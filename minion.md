@@ -168,52 +168,99 @@ For example:
     date = $(shell date +%Y-%m-%d)
     ...
 
-## Shorthand Properties
-
-The properties `@`, `^`, and `<` are defined to mimic the behavior of Make's
-"automatic variables" `$@`, `$^`, and `$<` (which are unavailable in Minion,
-since command expansion happens prior to the rule processing phase).  The
-value of `{^}` is not identical to Make's `$^`, but it is more often what
-you want: it is a list of the inputs to the class, whereas `$^` includes all
-prerequisites (which may include tools and other files that one would not
-normally list as command line arguments).
-
 ## Builders
 
 All instances being built must implement this interface.  It consists of
-just a few properties:
+just three properties:
 
-* `rule` : a string of Make source code, that, when eval'ed, will define a
-  Make rule for the target.
+ * `rule` : a string of Make source code, that, when eval'ed, will define a
+   Make rule for the target.
 
-* `out`: the resulting file path (or phony Make target name).
+ * `out`: the resulting file path, or phony Make target name.
 
-* `needs`: a list of target IDs that produce prerequisites of `rule`.
+ * `needs`: a list of target IDs that are prerequisites of `rule`.
 
 User-defined classes do not need to implement these directly.  Instead, they
 should inherit from `Builder`.
 
-## Builder Conventions
+## Builder
 
-Generally, when defining build steps one does not specify output file
-locations.  In Minion, we use instance names, not output file locations, to
-refer to build products.
+`Builder` is a built-in class that implements the builder interface and
+handles a number of low-level responsibilities, including the following:
 
-Output files are organized under `$(OUTDIR)` and segregated by class name to
-avoid potential conflicts.  `OUTDIR` defaults to `.out/`; user Makefiles may
-assign it a different value.  Classes inheriting from `Builder` generally
-only need to specify `outExt`.
+ * An output file name and location is computed.  (See [Outputs](#outputs),
+   below).
 
-Arguments may also contain multiple comma-delimited values, each with an
-optional `NAME=` prefix.  When an instance name with a named value is typed
-as a command line goal, `:` characters must be used in place of `=`
-(otherwise, Make will interpret it as a variable assignment, not a goal.
+ * [Argument values](#argument-values) are parsed.
 
-The `in` property of an instance identifies a set of input files.  This
-defaults to all unnamed values in the argument.  Being a target set, it may
-contain indirections.  For example, `CC[foo.c]` has one input file, `foo.c`,
-and `LinkC[*var]` may have many input files (listed in the value of variable
-`var`).
+ * Inputs are obtained from the unnamed values in the argument.  Being a
+   target list, it may contain indirections.
+
+ * The build command is escaped for Make syntax to avoid unintended
+   evaluation, and the output file's directory is created prior to execution
+   of the command.
+
+Subclasses can leverage this functionality by inheriting from Builder, and
+can then customize their functionality by defining or overriding properties.
+
+### `{command}`
+
+At a miniumum, subclasses of Builder must provide a definition for the
+`command` property.  Builder will provide defaults for everything else.  The
+`command` property is a one or more shell commands separated by newline
+characters.  Its definition may make use of the following property
+references:
+
+ * `{@}`: the output file
+ * `{<}`: the first input file
+ * `{^}`: all input files
+
+These approximate the behavior of Make's "automatic variables" `$@`, `$<`,
+and `$^`, which are unavailable in Minion, since command expansion happens
+prior to the rule processing phase.  The value of `{^}` is not identical to
+Make's `$^`, but it is more often what you want: it is a list of the *inputs*
+to the class, whereas `$^` includes all prerequisites (which may include
+tools, implied dependencies, and other files that one would not normally
+list as command line arguments).
+
+For example, the `Tar` class inherits this definition of `command`:
+
+    _Tar.command = tar -cvf {@} {^}
+
+### `{outExt}`
+
+Most subclasses of `Builder` will define `{outExt}`, which specifies the
+extension (including the ".") that the output file will have.  A `%`
+character in `{outExt}` represents the extension of the input file.
+Builder.outExt is defined as `%`, so by default output files will have the
+same extension as the input file.
+
+For example:
+
+    _Tar.outExt = .tar
+
+### `{in}` and `{out}`
+
+Typically, an instance can be thought of as a function that accepts one or
+more input files and generates one output file, but there are exceptions to
+this rule.  In those cases, the class may override `{in}` and/or `{out}`.
+
+The `Mkdir` class has no inputs, and uses the argument name to specify the
+output.  It inherits from `_Mkdir`:
+
+    _Mkdir.in =
+    _Mkdir.out = $A
+
+The `Copy` class exists to deploy files to a specific, well-known location,
+rather than an automatically-generated unique location, so it allows the
+output file location to be specified by an argument with the name `out`:
+
+    _Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
+
+For example, `Copy[CC[foo.c],out=deploy/foo.o]` will place its result in
+"deploy/foo.o".
+
+### `{up}`
 
 A class may make use of other input files that are not specified by the user
 via arguments or the `in` property, and instead are built into the
@@ -227,6 +274,18 @@ target set.  The specific file names obtained from the `up` targets are
 available as properties `up^` and `up<`, analogous to `^` and `<`.  Note
 that `^` & `<` do not contain the files in `up^` & `up<`.
 
+### `{orderOnly}`
+
+Order-only dependencies can be specified by defining the `orderOnly`
+property (a target list).
+
+## Argument Values
+
+Arguments may contain multiple comma-delimited values, each with an optional
+`NAME=` prefix.  When an instance name with a named value is typed as a
+command line goal, `:` characters must be used in place of `=` (otherwise,
+Make will interpret it as a variable assignment, not a goal.
+
 Rule inference is performed on input files.  For example, inference allows a
 ".c" file to be supplied where a ".o" file is expected, as in
 `LinkC[hello.c]`.  Each class can define its own inference rules by
@@ -234,32 +293,10 @@ overriding the `inferClasses` property.  It consists of a list of entries of
 the form `CLASS.EXT`, each indicating that `CLASS` should be applied to a
 input file ending in `.EXT`.
 
-## The `Builder` Class
-
-`Builder` is a built-in class that implements the builder interface and
-includes logic for constructing Make rules.  Other built-in classes inherit
-functionality from it.
-
-Rules generated by `Builder` provide the following features:
-
- * Default output file name and location is computed.  (See "Outputs",
-   below).
-
- * The build command is escaped for Make syntax to avoid unintended
-   evaluation, and multi-line commands are supported.
-
- * Output directories are automatically created by each rule.
-
- * Auto-generated implied dependencies are supported, as with GCC's `-M -MF`
-   options. See the `depsFile` property for more.
-
- * Order-only dependencies may be specified by defining the `orderOnly`
-   property.
-
 ## Outputs
 
 An instance's output file location is given by the value of its `out`
-property.  Builder defines a `out` in a way that is designed to avoid
+property.  Builder provides a definition of `out` that is designed to avoid
 conflicts between instances, by ensuring that different instance names
 always generate different output file paths.  Its `out` property is composed
 of `outDir` and `outName` properties.
@@ -267,6 +304,9 @@ of `outDir` and `outName` properties.
     Builder.out = {outDir}{outName}
     Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
     Builder.outExt = %
+
+The output directory is underneath `$(OUTDIR)`, which defaults to `.out/`
+and may be overridden by user makefiles.
 
 Derived classes typically override just the `outExt` property, which is used
 in constructing the output file name.  Within `outExt`, `%` represents the
@@ -348,8 +388,20 @@ outputs:
 
 ## Exported Definitions
 
-Minion defines a number of variables and functions for use by user
-Makefiles.
+Minion defines a number of variables and functions for use by user Makefiles
+within recursive property definitions.
+
+* Character constants
+
+  - `$(\n)`: newline
+  - `$(\t)`: tab
+  - `$(\s)`: space
+  - `$[` : `(`
+  - `$]` : `)`
+  - `$;` : `,`
+  - `$(\H)`: `#`
+  - `$(\L)`: `{`
+  - `$(\R)`: `}`
 
 * `$(call get,PROP,IDS)`
 

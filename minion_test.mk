@@ -260,7 +260,6 @@ define DeferRule
 	@mkdir -p .out/Defer/
 	true $(a)
 
-
 endef
 
 $(call _expectEQ,$(call get,rule,Defer[a]),$(value DeferRule))
@@ -274,7 +273,6 @@ define WWrule
 	@echo '#-> Write[WVAR]'
 	@mkdir -p .out/Write/
 	@printf "%b" 'test' > .out/Write/WVAR
-
 
 endef
 

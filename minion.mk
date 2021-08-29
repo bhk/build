@@ -116,8 +116,6 @@ Builder.messageCommand = $(if {message},@echo $(call _shellQuote,{message}))
 
 Builder.mkdirCommand = @mkdir -p $(dir {@})
 
-Builder.depsFile =
-
 # _defer can be used to embed a function or variable reference that will
 # be expanded when-and-if the recipe is executed.  Generally, all "$"
 # characters within {command} will be escaped to avoid expansion by
@@ -135,7 +133,6 @@ $(call _recipe,
 {mkdirCommand}
 {command}
 )
-$(addprefix -include ,{depsFile})
 endef
 
 
@@ -215,6 +212,7 @@ _Compile.inherit = Builder
 _Compile.outExt = .o
 _Compile.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsFile}
 _Compile.depsFile = {@}.d
+_Compile.rule = {inherit}-include {depsFile}$(\n)
 _Compile.flags = {optFlags} {warnFlags} {libFlags} $(addprefix -I,{includes})
 _Compile.optFlags = -Os
 _Compile.warnFlags =

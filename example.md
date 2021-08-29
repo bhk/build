@@ -155,7 +155,6 @@ Rule:
   | .out/Run/hello.c : .out/LinkC.c/hello  | 
   | 	./.out/LinkC.c/hello 
   | 
-  | 
 
 Direct dependencies: 
    LinkC[hello.c]
@@ -174,7 +173,6 @@ Rule:
   | 	@echo '#-> Exec[hello.c]'
   | 	@mkdir -p .out/Exec.c/
   | 	( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
-  | 
   | 
 
 Direct dependencies: 
@@ -297,12 +295,10 @@ eval-Alias[default]:
   | default : .out/Exec.c/hello.out .out/Exec.c/binsort.out  | 
   | 	@true
   | 
-  | 
 eval-Alias[deploy]: 
   | .PHONY: deploy
   | deploy : .out/Copy/hello .out/Copy/binsort  | 
   | 	@true
-  | 
   | 
 eval-Copy[LinkC[binsort.c]]: 
   | .out/Copy/binsort : .out/LinkC.c/binsort  | 
@@ -310,13 +306,11 @@ eval-Copy[LinkC[binsort.c]]:
   | 	@mkdir -p .out/Copy/
   | 	cp .out/LinkC.c/binsort .out/Copy/binsort
   | 
-  | 
 eval-Copy[LinkC[hello.c]]: 
   | .out/Copy/hello : .out/LinkC.c/hello  | 
   | 	@echo '#-> Copy[LinkC[hello.c]]'
   | 	@mkdir -p .out/Copy/
   | 	cp .out/LinkC.c/hello .out/Copy/hello
-  | 
   | 
 eval-Exec[binsort.c]: 
   | .out/Exec.c/binsort.out : .out/LinkC.c/binsort  | 
@@ -324,13 +318,11 @@ eval-Exec[binsort.c]:
   | 	@mkdir -p .out/Exec.c/
   | 	( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
   | 
-  | 
 eval-Exec[hello.c]: 
   | .out/Exec.c/hello.out : .out/LinkC.c/hello  | 
   | 	@echo '#-> Exec[hello.c]'
   | 	@mkdir -p .out/Exec.c/
   | 	( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
-  | 
   | 
 eval-LinkC[binsort.c]: 
   | .out/LinkC.c/binsort : .out/CC.c/binsort.o  | 
@@ -338,28 +330,26 @@ eval-LinkC[binsort.c]:
   | 	@mkdir -p .out/LinkC.c/
   | 	gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
   | 
-  | 
 eval-LinkC[hello.c]: 
   | .out/LinkC.c/hello : .out/CC.c/hello.o  | 
   | 	@echo '#-> LinkC[hello.c]'
   | 	@mkdir -p .out/LinkC.c/
   | 	gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
   | 
-  | 
 eval-CC[binsort.c]: 
   | .out/CC.c/binsort.o : binsort.c  | 
   | 	@echo '#-> CC[binsort.c]'
   | 	@mkdir -p .out/CC.c/
   | 	gcc -c -o .out/CC.c/binsort.o binsort.c -Os    -MMD -MP -MF .out/CC.c/binsort.o.d
-  | 
   | -include .out/CC.c/binsort.o.d
+  | 
 eval-CC[hello.c]: 
   | .out/CC.c/hello.o : hello.c  | 
   | 	@echo '#-> CC[hello.c]'
   | 	@mkdir -p .out/CC.c/
   | 	gcc -c -o .out/CC.c/hello.o hello.c -Os    -MMD -MP -MF .out/CC.c/hello.o.d
-  | 
   | -include .out/CC.c/hello.o.d
+  | 
 ```
 
 

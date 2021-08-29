@@ -169,9 +169,10 @@ Goal.inherit = Alias
 Goal.in = $(subst :,=,$A)
 
 
-# NullGoal[TARGETNAME] : Generate a rule that does nothing.
+# HelpGoal[TARGETNAME] : Generate a rule that invokes `_help!`
 #
-NullGoal.inherit = Alias
+HelpGoal.inherit = Alias
+HelpGoal.command = @true$(_defer)(call _help!,$A)
 
 
 # Makefile[VAR] : Generate a makefile that includes rules for IDs in $(VAR)
@@ -552,11 +553,10 @@ file or a target defined by a rule in the Makefile.
 endef
 
 
-# $1 = command line goals other than "help"
 _help! = \
-  $(if $1,,$(info $(_helpMessage)))\
-  $(foreach g,$1,\
-    $(info $(call _help$(call _goalType,$g),$g)))
+  $(if $(filter help,$1),\
+    $(if $(filter-out help,$(MAKECMDGOALS)),,$(info $(_helpMessage))),\
+    $(info $(call _help$(call _goalType,$1),$1)))
 
 
 #--------------------------------
@@ -588,27 +588,22 @@ define _epilogue
     .DEFAULT_GOAL = default
     _goalIDs := $(call _goalID,default)
   else ifneq "" "$(filter $$%,$(MAKECMDGOALS))"
-    # ignore when a '$(...)' target is given
+    # Don't try to interpret goals when a '$...' target is given
   else ifneq "" "$(filter help,$(MAKECMDGOALS))"
     # When `help` is given on the command line, we treat all other goals as
-    # things to describe, not build.  We display help messages right now and
-    # emit "null" rules for the goals, so we need to avoid the cache
-    # makefile and its potential for auto-restart.
-    $(call _help!,$(subst :,=,$(filter-out help,$(MAKECMDGOALS))))
-    $(call _evalIDs,$(MAKECMDGOALS:%=NullGoal[%]))
+    # things to describe, not build.
+    _goalIDs := $(MAKECMDGOALS:%=HelpGoal[%])
   else
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
   endif
 
-  ifdef _goalIDs
-    ifdef minion_cache
-      # If the cache is stale or yet to be created, Make will restart. Set
-      # _cachedIDs to "%" (to skip all eval's) if we can predict restart.
-      $(call _evalIDs,UseCache[minion_cache])
-      _cachedIDs ?= %
-    endif
-    $(call _evalIDs,$(_goalIDs),$(_cachedIDs))
+  ifdef minion_cache
+    $(call _evalIDs,UseCache[minion_cache])
+    # _cachedIDs is unset => Make will restart, so skip all rule computation.
+    _cachedIDs ?= %
   endif
+
+  $(call _evalIDs,$(_goalIDs),$(_cachedIDs))
 endef
 
 

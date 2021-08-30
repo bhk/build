@@ -1,3 +1,5 @@
+# minion_test.mk
+
 Alias[default].in = #nothing
 include minion.mk
 
@@ -217,7 +219,7 @@ $(call _expectEQ,\
 P.inherit = Builder
 P.outExt = %.p
 
-$(call _expectEQ,$(call get,outBasis,P[a.o]),P/a.o)
+$(call _expectEQ,$(call get,outBasis,P[a.o]),.out/P/a.o)
 $(call _expectEQ,$(call get,outExt,P[a.o]),%.p)
 $(call _expectEQ,$(call get,outName,P[a.o]),a.o.p)
 $(call _expectEQ,$(call get,outDir,P[a.o]),.out/P/)
@@ -249,16 +251,39 @@ $(call _expectEQ,\
 
 $(call _expectEQ,$(call _recipe,$(\n)a$(\n)),$(\t)a$(\n))
 
+# Validation value logic & _vvEnc
+
+define vvEncEval
+_dv = $(call _vvEnc,$1,OUT)
+ifeq "$$(_dv)" "$(call _vvEnc,$2,OUT)"
+  vvIsOK=1
+else
+  vvIsOK=
+endif
+endef
+
+vvEQ? = $(eval $(call vvEncEval,$1,$2))$(vvIsOK)
+vvOK? = $(call vvEQ?,$1,$1)
+
+$(call _expectEQ,1,$(call vvOK?,abc))
+# Trailing "\" can cause problems if not guarded
+$(call _expectEQ,1,$(call vvOK?,abc\))
+# Leading and trailing spaces; validate assumptions about Make syntax
+$(call _expectEQ,1,$(call vvOK?, \# \ \\ $$a $(\t) ))
+
+
 # _defer
 
 Defer.inherit = Builder
 Defer.command = true $(_defer)($A)
+Defer.vvFile =
 
 define DeferRule
 .out/Defer/a : a  | 
 	@echo '#-> Defer[a]'
 	@mkdir -p .out/Defer/
 	true $(a)
+
 
 endef
 
@@ -269,10 +294,17 @@ $(call _expectEQ,$(call get,rule,Defer[a]),$(value DeferRule))
 WVAR = test
 
 define WWrule
-.out/Write/WVAR : minion_test.mk minion.mk  | 
+.out/Write/WVAR :   | 
 	@echo '#-> Write[WVAR]'
 	@mkdir -p .out/Write/
+	@echo '_vv=.@printf !`%b!` `test` > !@.' > .out/Write/WVAR.vv
 	@printf "%b" 'test' > .out/Write/WVAR
+
+_vv =
+-include .out/Write/WVAR.vv
+ifneq "$(_vv)" ".@printf !`%b!` `test` > !@."
+  .out/Write/WVAR: .out/FORCE
+endif
 
 endef
 

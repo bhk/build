@@ -211,6 +211,10 @@ handles a number of low-level responsibilities, including the following:
    evaluation, and the output file's directory is created prior to execution
    of the command.
 
+ * After changes to makefiles affect the way artifacts are built, the
+   affected artifacts (and only those) will be rebuilt.  See (validity
+   values)[#validity-values].
+
 Subclasses can leverage this functionality by inheriting from Builder, and
 can then customize their functionality by defining or overriding properties.
 
@@ -333,6 +337,21 @@ when the variable name is used.  For example:
     Class[C[A]]       $(call get,out,C[A])
     Class[*VAR]       VAR
     Class[C*VAR]      VAR
+
+### Validity Values
+
+By default, the *command* used to build a target is treated as a dependency
+of the target.  That is, if any changes to makefiles result in changes to
+the build command, previous outputs (built by different commands) are
+considered stale, so they will be rebuilt the next time they are freshened
+with `make`.
+
+This is controlled by the `vvFile` property, which identifies a file that
+holds the value of the previous command.  If the value of `vvFile` is empty,
+this validity check is disabled.  Phony targets disable this feature because
+they are always treated as stale.  User makefiles can disable this on a
+per-instance or per-class basis by setting `vvFile` to the empty string, and
+may disable it globally by setting `Builder.vvFile` to the empty string.
 
 ### Overriding `out`, `outDir`, or `outName`
 

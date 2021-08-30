@@ -103,18 +103,40 @@ Builder.inferClasses =
 # construct `out`, but any of them can be overridden.  Do not assume
 # that, for example, `outDir` is always the same as `$(dir {out})`.
 Builder.out = {outDir}{outName}
-Builder.outDir = $(OUTDIR)$(dir {outBasis})
+Builder.outDir = $(dir {outBasis})
 Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(call _outBasis,$C,$A,{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
+Builder.outBasis = $(OUTDIR)$(call _outBasis,$C,$A,{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
 Builder.message = \#-> $C[$A]
-Builder.messageCommand = $(if {message},@echo $(call _shellQuote,{message}))
 
-Builder.mkdirCommand = @mkdir -p $(dir {@})
+Builder.mkdirs = $(sort $(dir {@} {vvFile}))
+
+# Validity value
+#
+# If {vvFile} is non-empty, the rule will compare {vvValue} will to the
+# value it had when the target file was last updated.  If they do not match,
+# the tareget file will be treated as stale.
+#
+Builder.vvFile ?= {outBasis}.vv
+Builder.vvValue = $(call _vvEnc,{command},{@})
+
+define Builder.vvRule
+_vv =
+-include {vvFile}
+ifneq "$$(_vv)" "{vvValue}"
+  {@}: $(_forceTarget)
+endif
+
+endef
+
+# $(call _vvEnc,DATA,OUTFILE) : Encode to be shell-safe (within single
+#   quotes) and Make-safe (within double-quotes or RHS of assignment).
+#   Avoid pathological case: ' --> '\'' -->  !q\!q!q
+_vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\t),!+,$(subst \#,!H,$(subst $2,!@,$(subst !,!1,$1)))))))).#'
 
 # _defer can be used to embed a function or variable reference that will
 # be expanded when-and-if the recipe is executed.  Generally, all "$"
@@ -122,17 +144,25 @@ Builder.mkdirCommand = @mkdir -p $(dir {@})
 # Make, but "$(_defer)(...)" becomes "$(...)" in the resulting recipe.
 _defer = $$$(\t)
 
-# Remove empty lines, prefix remaining lines with \t, and escape `$`.
-# Un-escape $(_defer) to enable on-demand execution of functions.
-_recipe = $(subst $$$$$(\t)$[,$$$[,$(subst $$,$$$$,$(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))))
+# Remove empty lines, prefix remaining lines with \t
+_recipeLines = $(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))
 
+# Format recipe lines and escape for rule-phase expansion. Un-escape
+# $(_defer) to enable on-demand execution of functions.
+_recipe = $(subst $$$$$(\t)$[,$$$[,$(subst $$,$$$$,$(_recipeLines)))
+
+# A Minion instance's "rule" is all the Make source code required to build
+# it.  It contains a Make rule (target, prereqs, recipe) and perhaps other
+# statements.
+#
 define Builder.rule
 {@} : {^} {up^} | $(call get,out,{ooIDs})
 $(call _recipe,
-{messageCommand}
-{mkdirCommand}
-{command}
-)
+$(if {message},@echo $(call _shellQuote,{message}))
+$(if {mkdirs},@mkdir -p {mkdirs})
+$(if {vvFile},@echo '_vv={vvValue}' > {vvFile})
+{command})
+$(if {vvFile},{vvRule})
 endef
 
 
@@ -145,9 +175,10 @@ endef
 #
 _Phony.inherit = Builder
 _Phony.rule = .PHONY: {@}$(\n){inherit}
-_Phony.mkdirCommand =
+_Phony.mkdirs = # not a real file => no need to create directory
 _Phony.message =
 _Phony.command = @true
+_Phony.vvFile = # always runs => no point in validating
 
 
 # Alias[TARGETNAME] : Generate a phony rule whose {out} matches TARGETNAME.
@@ -183,13 +214,15 @@ HelpGoal.command = @true$(_defer)(call _help!,$A)
 #
 Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
+Makefile.vvFile = # too costly; defeats the purpose
 Makefile.command = $(_defer)(call get,deferredCommand,$C[$A])
 Makefile.excludeIDs = $(filter %],$(call _expand,*$A_exclude))
 Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,*$A)))
 define Makefile.deferredCommand
-$(call _recipe,
+$(call _recipeLines,
 @rm -f {@}
 @echo '_cachedIDs = {IDs}' > {@}_tmp_
+@$(call _printf,$(_globalRules)$(\n)$(\n)) >> {@}_tmp_
 $(foreach i,{IDs},
 @$(call _printf,$(call get,rule,$i)
 $(if {excludeIDs},_$i_needs = $(filter {excludeIDs},$(call _depsOf,$i))
@@ -295,6 +328,7 @@ _Copy.command = cp {<} {@}
 _Mkdir.inherit = Builder
 _Mkdir.in =
 _Mkdir.out = $A
+_Mkdir.mkdirs =
 _Mkdir.command = mkdir -p {@}
 
 
@@ -360,7 +394,7 @@ _Write.inherit = Builder
 _Write.out = $(or $(foreach K,out,$(_arg1)),$(OUTDIR)$C/$(notdir $(_arg1)))
 _Write.command = @$(call _printf,{data}) > {@}
 _Write.data = $($(_arg1))
-_Write.in = $(MAKEFILE_LIST)
+_Write.in =
 
 
 #--------------------------------
@@ -563,6 +597,13 @@ _help! = \
 # Rules
 #--------------------------------
 
+_forceTarget = $(OUTDIR)FORCE
+
+define _globalRules
+$(_forceTarget):
+endef
+
+
 # This will be the default target when `$(end)` is omitted (and
 # no goal is named on the command line)
 _error_default: ; $(error Makefile included minion-start.mk but did not call `$$(end)`)
@@ -603,6 +644,7 @@ define _epilogue
     _cachedIDs ?= %
   endif
 
+  $(eval $(_globalRules))
   $(call _evalIDs,$(_goalIDs),$(_cachedIDs))
 endef
 

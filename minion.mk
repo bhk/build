@@ -497,6 +497,9 @@ _inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %],$(pat
 _depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
 _rollup = $(sort $(foreach w,$(filter %],$1),$w $(call _depsOf,$w)))
 _rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
+_showVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
+_showDefs2 = $(or $(if $(filter u%,$(flavor $1$3)),$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3),$(call _showVar,$1$3,   )$(if $(and $(filter r%,$(flavor $1$3)),$(findstring {inherit},$(value $1$3))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3))),... no definition in scope!)
+_showDefs = $(call _showDefs2,$1,$(or $(&|$(word 1,$(subst [, ,$1))),$(call _set,&|$(word 1,$(subst [, ,$1)),$(call _chain,$(word 1,$(subst [, ,$1))))),.$2)
 
 # argument parsing
 
@@ -521,9 +524,9 @@ define _helpMessage
 $(word 1,$(MAKEFILE_LIST)) usage:
 
    make                     Build the target named "default"
-   make GOALS...            Build the named targets
+   make GOALS...            Build the named goals
    make help                Show this message
-   make help GOALS...       Describe the named targets
+   make help GOALS...       Describe the named goals
    make help C[A].P         Compute value of property P for C[A]
    make clean               `$(call get,command,Alias[clean])`
 
@@ -543,9 +546,6 @@ _isProp = $(filter ].%,$(lastword $(subst ], ],$1)))
 _goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,$(if $(_isProp),Property,Other))))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
-
-# $(call _showVar,VAR,LINEPREFIX)
-_showVar = $(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,$2define $1$(\n)$(value $1)$(\n)endef),$2$1 = $(value $1)),$2$1 := $(subst $(\n),$$(\n),$($1)))
 
 define _helpInstance
 Target ID "$1" is an instance (a generated artifact).
@@ -578,7 +578,16 @@ $1 generates the following rule: $(call _qv,$(call get,rule,Alias[$1]))
 endef
 
 
-_helpProperty = $1 = $(call _qv,$(call _getID.P,$1))
+define _helpProperty
+$(foreach p,$(or $(lastword $(subst ].,] ,$1)),$(error Empty property name in $1)),$(foreach id,$(patsubst %].$p,%],$1),$(id) inherits from: $(call _chain,$(word 1,$(subst [, ,$(id))))
+
+$1 is defined by:
+
+$(call _showDefs,$(id),$p)
+
+Its value is: $(call _qv,$(call get,$p,$(id)))
+))
+endef
 
 
 define _helpOther

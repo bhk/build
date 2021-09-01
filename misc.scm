@@ -191,12 +191,12 @@
     (and (recursive? var)
          (findstring "{inherit}" (native-value var))))
 
-  (or (if (undefined? var)
+  (if s1
+      (if (undefined? var)
           (recur)
           (.. (_showVar var "   ")
               (if inherits
                   (.. "\n\n...wherein {inherit} references:\n\n" (recur)))))
-
       "... no definition in scope!"))
 
 (export (native-name _showDefs2) nil)
@@ -223,5 +223,8 @@
               "...wherein {inherit} references:\n"
               "\n"
               "   SDPP.foo := b"))
+
+  (expect (_showDefs "UNDEF[a]" "foo")
+          (.. "... no definition in scope!"))
 
   nil)

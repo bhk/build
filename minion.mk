@@ -478,8 +478,8 @@ _error = $(error $1)
 # object system
 
 _set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
-_once = $(if $(filter-out u%,$(flavor _|$1)),$(_|$1),$(call _set,_|$1,$($1)))
-_getE1 = $(call _error,Reference to undefined property '$(word 2,$(subst .,. ,$1))' for $C[$A]$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$Cis not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(patsubst &%,%,$(patsubst ^%,%,$4)),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(word 2,$(subst .,. ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
+_once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
+_getE1 = $(call _error,Reference to undefined property '$(word 2,$(subst .,. ,$1))' for $C[$A]$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(patsubst &%,%,$(patsubst ^%,%,$4)),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(word 2,$(subst .,. ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
 _chain = $1 $(foreach w,$($1.inherit),$(call _chain,$w))
 _& = $(filter %,$(foreach w,$(or $(&|$C),$(call _set,&|$C,$(call _chain,$C))),$(if $(filter u%,$(flavor $w.$1)),,$w.$1)))
 _cp = $(or $(foreach w,$(word 1,$2),$(eval $1 = $$(or )$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(if $(filter r%,$(flavor $w)),$(subst },$(if ,,,^$w$]),$(subst {,$(if ,,$$$[call .,),$(if $(findstring {inherit},$(value $w)),$(subst {inherit},$$(call $(if $(value $3),$3,$(call _cp,$3,$(wordlist 2,99999999,$2),_$3,^$1))),$(value $w)),$(value $w)))),$(subst $$,$$$$,$(value $w))))))$1),$(_getE1),$1)
@@ -498,7 +498,7 @@ _depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filt
 _rollup = $(sort $(foreach w,$(filter %],$1),$w $(call _depsOf,$w)))
 _rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
 _showVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
-_showDefs2 = $(or $(if $(filter u%,$(flavor $1$3)),$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3),$(call _showVar,$1$3,   )$(if $(and $(filter r%,$(flavor $1$3)),$(findstring {inherit},$(value $1$3))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3))),... no definition in scope!)
+_showDefs2 = $(if $1,$(if $(filter u%,$(flavor $1$3)),$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3),$(call _showVar,$1$3,   )$(if $(and $(filter r%,$(flavor $1$3)),$(findstring {inherit},$(value $1$3))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3))),... no definition in scope!)
 _showDefs = $(call _showDefs2,$1,$(or $(&|$(word 1,$(subst [, ,$1))),$(call _set,&|$(word 1,$(subst [, ,$1)),$(call _chain,$(word 1,$(subst [, ,$1))))),.$2)
 
 # argument parsing
@@ -579,12 +579,11 @@ endef
 
 
 define _helpProperty
-$(foreach p,$(or $(lastword $(subst ].,] ,$1)),$(error Empty property name in $1)),$(foreach id,$(patsubst %].$p,%],$1),$(id) inherits from: $(call _chain,$(word 1,$(subst [, ,$(id))))
+$(foreach p,$(or $(lastword $(subst ].,] ,$1)),$(error Empty property name in $1)),$(foreach id,$(patsubst %].$p,%],$1),$(info $(id) inherits from: $(call _chain,$(word 1,$(subst [, ,$(id))))
 
 $1 is defined by:
 
-$(call _showDefs,$(id),$p)
-
+$(call _showDefs,$(id),$p))
 Its value is: $(call _qv,$(call get,$p,$(id)))
 ))
 endef

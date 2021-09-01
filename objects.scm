@@ -138,7 +138,7 @@
   (define `cause
     (cond
      ((undefined? (.. class ".inherit"))
-      (.. ";\n" class "is not a valid class name "
+      (.. ";\n" class " is not a valid class name "
           "(" class ".inherit is not defined)"))
      (who
       (foreach (src-var (patsubst "&%" "%" (patsubst "^%" "%" who)))

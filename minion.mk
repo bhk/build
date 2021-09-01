@@ -648,9 +648,14 @@ define _epilogue
   endif
 
   ifdef minion_cache
-    $(call _evalIDs,UseCache[minion_cache])
-    # _cachedIDs is unset => Make will restart, so skip all rule computation.
-    _cachedIDs ?= %
+    # Use cache only if some of the goals have dependencies.  This avoids
+    # using the cache for `help ...` (which would lead to conflicting rules)
+    # and for `clean` and similar user-defined targets.
+    ifneq "" "$(strip $(call get,needs,$(_goalIDs)))"
+      $(call _evalIDs,UseCache[minion_cache])
+      # _cachedIDs is unset => Make will restart, so skip all rule computation.
+      _cachedIDs ?= %
+    endif
   endif
 
   $(eval $(_globalRules))

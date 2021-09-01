@@ -84,14 +84,14 @@ Builder.inPairs = $(call _inferPairs,$(if $(call _eq?,{in},$(_args)),$(call _pai
 Builder.inIDs = $(call _pairIDs,{inPairs})
 Builder.inFiles = $(call _pairFiles,{inPairs})
 
-# `up` contains dependencies that are typically specified by the class
-# itself, not by the instance argument or `in` property.
+# `up` lists dependencies that are typically specified by the class itself,
+# not by the instance argument or `in` property.
 Builder.up =
 Builder.upIDs = $(call _expand,{up})
 
-# `orderOnly` is a target list (just like `in`)
-Builder.orderOnly =
-Builder.ooIDs = $(call _expand,{orderOnly})
+# `oo` lists order-only dependencies.
+Builder.oo =
+Builder.ooIDs = $(call _expand,{oo})
 
 # `inferClasses` a list of words in the format "CLASS.EXT", implying
 # that each input filename ending in ".EXT" should be replaced wth

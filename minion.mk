@@ -643,7 +643,7 @@ _error_default: ; $(error Makefile included minion-start.mk but did not call `$$
 
 # Using "$*" in the following pattern rule we can capture the entirety of
 # the goal, including embedded spaces.
-$$%: ; @$(info $$$* = $(call _qv,$(call or,$$$*)))
+$$%: ; @#$(info $$$* = $(call _qv,$(call or,$$$*)))
 
 _OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 

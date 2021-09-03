@@ -26,6 +26,11 @@ $(call _expectEQ,$(call _shellQuote,'a'),''\''a'\''')
 $(call _expectEQ,$(call _printfEsc,a\b$(\t)c$(\n)d%e%%f),a\\b\tc\nd%e%%f)
 
 
+# _escArg
+
+$(call _expectEQ,$(call _escArg,(a,b)),$$[a$$;b$$])
+
+
 # Catch & re-enable fatal errors
 
 error0 := $(value _error)
@@ -275,7 +280,7 @@ $(call _expectEQ,1,$(call vvOK?, \# \ \\ $$a $(\t) ))
 # _defer
 
 Defer.inherit = Builder
-Defer.command = true $(_defer)($A)
+Defer.command = true $(call _defer,$$($A))
 Defer.vvFile =
 
 define DeferRule

@@ -106,7 +106,7 @@ Builder.out = {outDir}{outName}
 Builder.outDir = $(dir {outBasis})
 Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(OUTDIR)$(call _outBasis,$C,$A,{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
+Builder.outBasis = $(VARDIR)$(call _outBasis,$C,$A,{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
@@ -138,18 +138,19 @@ endef
 #   Avoid pathological case: ' --> '\'' -->  !q\!q!q
 _vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\t),!+,$(subst \#,!H,$(subst $2,!@,$(subst !,!1,$1)))))))).#'
 
-# _defer can be used to embed a function or variable reference that will
-# be expanded when-and-if the recipe is executed.  Generally, all "$"
-# characters within {command} will be escaped to avoid expansion by
-# Make, but "$(_defer)(...)" becomes "$(...)" in the resulting recipe.
-_defer = $$$(\t)
+
+# $(call _defer,MAKESRC) : Encode MAKESRC for inclusion in a recipe so that
+# it will be expanded when and if the recipe is executed.  Otherwise, all
+# "$" characters will will be escaped to avoid expansion by Make. For
+# example: $(call _defer,$$(info X=$$X))
+_defer = $(subst $$,$$\$(\t),$1)
 
 # Remove empty lines, prefix remaining lines with \t
 _recipeLines = $(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))
 
 # Format recipe lines and escape for rule-phase expansion. Un-escape
-# $(_defer) to enable on-demand execution of functions.
-_recipe = $(subst $$$$$(\t)$[,$$$[,$(subst $$,$$$$,$(_recipeLines)))
+# _defer encoding to enable on-demand execution of functions.
+_recipe = $(subst $$$$\$(\t),$$,$(subst $$,$$$$,$(_recipeLines)))
 
 # A Minion instance's "rule" is all the Make source code required to build
 # it.  It contains a Make rule (target, prereqs, recipe) and perhaps other
@@ -193,8 +194,8 @@ Alias.in =
 #    goal.  Its {out} should match the name provided on the command line,
 #    and its {in} is the named instance or indirection.
 #
-#    Goals that are intsance names must use `:` in place of `=` in order to
-#    allow them to be used on the Make command line.
+#    Goals cannot contain `=` because Make would treat them as command-line
+#    variable assignments, so `:` characters can be substituted.
 #
 Goal.inherit = Alias
 Goal.in = $(subst :,=,$A)
@@ -203,7 +204,21 @@ Goal.in = $(subst :,=,$A)
 # HelpGoal[TARGETNAME] : Generate a rule that invokes `_help!`
 #
 HelpGoal.inherit = Alias
-HelpGoal.command = @true$(_defer)(call _help!,$A)
+HelpGoal.command = @true$(call _defer,$$(call _help!,$(call _escArg,$(subst :,=,$A))))
+
+
+# Variants[TARGETNAME] : Build {all} variants of TARGETNAME.  Each variant
+#    is defined in a separate rule so they can all proceed concurrently.
+#
+Variants.inherit = Phony
+Variants.in = $(foreach v,{all},Variant[$A,V=$v])
+
+
+# Variant[TARGETNAME,V=VARIANT] : Build VARIANT of TARGETNAME.
+#
+Variant.inherit = Phony
+Variant.in =
+Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(subst =,:,$(_arg1)) V=$(foreach K,V,$(_arg1))
 
 
 # Makefile[VAR] : Generate a makefile that includes rules for IDs in $(VAR)
@@ -215,7 +230,7 @@ HelpGoal.command = @true$(_defer)(call _help!,$A)
 Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.vvFile = # too costly; defeats the purpose
-Makefile.command = $(_defer)(call get,deferredCommand,$C[$A])
+Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$C[$A])))
 Makefile.excludeIDs = $(filter %],$(call _expand,*$A_exclude))
 Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,*$A)))
 define Makefile.deferredCommand
@@ -315,11 +330,11 @@ _Run.command = {exec}
 # _Copy[INPUT,out=OUT]
 #
 #   Copy an artifact.  If OUT is not provided, the file is copied to a
-#   directory named $(OUTDIR)$C.
+#   directory named $(VARDIR)$C.
 #
 _Copy.inherit = Builder
 _Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
-_Copy.outDir = $(OUTDIR)$C/
+_Copy.outDir = $(VARDIR)$C/
 _Copy.command = cp {<} {@}
 
 
@@ -391,7 +406,7 @@ _Unzip.in = $C.zip
 #   Write the value of a variable to a file.
 #
 _Write.inherit = Builder
-_Write.out = $(or $(foreach K,out,$(_arg1)),$(OUTDIR)$C/$(notdir $(_arg1)))
+_Write.out = $(or $(foreach K,out,$(_arg1)),$(VARDIR)$C/$(notdir $(_arg1)))
 _Write.command = @$(call _printf,{data}) > {@}
 _Write.data = $($(_arg1))
 _Write.in =
@@ -401,8 +416,14 @@ _Write.in =
 # Variable & Function Definitions
 #--------------------------------
 
-# All build products are placed under this directory
+# V defaults to first word of Variants.all
+V ?= $(word 1,$(Variants.all))
+
+# All Minion build products are placed under this directory
 OUTDIR ?= .out/
+
+# Build products for the current V are placed here
+VARDIR ?= $(OUTDIR)$(if $V,$V/)
 
 # Character constants
 
@@ -470,6 +491,9 @@ _aliases = $(call _once,_getAliases)
 # $(call _evalIDs,IDs,EXCLUDES) : Evaluate rules of IDs and their transitive dependencies
 _evalIDs = $(foreach i,$(call _rollupEx,$(sort $(_isInstance)),$2),$(call _eval,eval-$i,$(call get,rule,$i)))
 
+# Escape an instance argument as a Make function argument
+_escArg = $(subst $[,$$[,$(subst $],$$],$(subst $;,$$;,$(subst $$,$$$$,$1))))
+
 # Report an error (called by object system)
 _error = $(error $1)
 
@@ -512,7 +536,7 @@ _hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
 _fsenc = $(subst *,@_,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1))))))))))
 _outBX = $(subst @D,/,$(subst $(\s),,$(patsubst /%@_,_%@,$(addprefix /,$(subst @_,@_ ,$(_fsenc))))))
-_outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
+_outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(VARDIR)%,_%,$(if $(filter %],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
 _outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
 
 
@@ -546,6 +570,7 @@ _isProp = $(filter ].%,$(lastword $(subst ], ],$1)))
 _goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,$(if $(_isProp),Property,Other))))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
+
 
 define _helpInstance
 Target ID "$1" is an instance (a generated artifact).

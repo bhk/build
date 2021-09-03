@@ -255,7 +255,9 @@ actual file.
 To define an alias, define a variable named `Alias[NAME].in` to specify a
 list of targets to be built when NAME is given as a goal, *or* define
 `Alias[NAME].command` to specify a command to be executed when NAME is given
-as a goal.  Or define both.
+as a goal.  Or define both.  Then, when Minion sees `NAME` listed on the
+command line, it will know it should build the corresponding `Alias[NAME]`
+instance.
 
 This next Makefile defines alias goals for "default" and "deploy":
 
@@ -291,6 +293,14 @@ $ make
 $ make default
 ```
 
+One last note about aliases: alias names are just for the Make command line.
+Within a Minion makefile, when specifying targets we use only instances,
+source file names, or targets of Make rules.  So if you want to refer to one
+alias as a dependency of another alias, use its instance name:
+`Alias[NAME]`.  For example:
+
+    Alias[default].in = Alias[exes] Alias[tests]
+
 
 ## Properties and Customization
 
@@ -304,6 +314,8 @@ $ make CC[hello.c].flags=-Os
 gcc -c -o .out/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/CC.c/hello.o.d
 #-> LinkC[hello.c]
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
+#-> Exec[hello.c]
+( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
 ```
 
 Observe how this affected the `gcc` command line.  [Also, as a side note,
@@ -320,8 +332,6 @@ $ make CC.flags=-Os
 gcc -c -o .out/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/CC.c/binsort.o.d
 #-> LinkC[binsort.c]
 gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
-#-> Exec[binsort.c]
-( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
 ```
 
 So what's going on here?
@@ -371,13 +381,14 @@ they have their own instance-specific definitions).
 An important note about overriding class properties: `CC` is a *user class*,
 intended for customization by user makefiles.  Minion does not attach any
 properties *directly* to user classes; it just provides a default
-inheritance, which also can be overridden by the user makefile.  User
+inheritance, and that, too, can be overridden by the user makefile.  User
 classes are listed in `minion.mk`, and you can easily identify a user class
 because it will inherit from an internal class that has the same name except
 for a prefixed underscore (`_`).
 
 Directly re-defining properties of non-user classes in Minion is not
-supported.  Instead, feel free to define you own classes.
+supported.  Instead, define you own sub-classes.
+
 
 ## Custom Classes
 
@@ -440,143 +451,153 @@ Its value is: '-g -Wall    '
 ```
 
 
-## Wrap-up
+## Variants
 
-We can use a debug feature of Minion to see the Make rules that it
-generates.  We bring this up just to illustrate what an equivalent Makefile
-would look like, if one were to write it by hand, instead of leveraging
-Minion:
+We can build different *variants* of our the project described by our
+Makefile.  Variants are separate instantiations of our build that will have
+a similar overall structure, but may differ from each other in various ways.
+For example, we may have "release" and "debug" variants, or "ARM" and
+"Intel" variants of a C project.
+
+Furthermore, we want these variants to exist side-by-side and not interfere
+with each other, so we can retain the benefits of incremental builds.  We
+have shown how typing `make CC.flags=-g` and then later `make CC.flags=-O3`
+could be used to achieve some sort of "debug" vs. "release" distinction, but
+not only is this cumbersome, it is inefficient.  Each time we switch
+"variants", it has to compile everything again.  Instead, we do the
+following:
+
+  * Use the variable `V` to identify a variant name, so that `make
+    V=<name>` can be used to build a specific variant.
+
+  * Define properties in a way that depends on `$V`.
+
+  * Incorporate `$V` into the output directory.  Minion does this by default
+    when `V` is assigned a non-empty value.
+
+When defining variant-dependent properties, we could use Make's functions:
+
+    CC.flags = $(if $(filter debug,$V),-g, ... )
+
+Instead, it is much more elegant to leverage Minion's property evaluation
+and group property definitions into classes whose names incorporate `$V`.
+
+    CC.inherit = CC-$V _CC
+
+    CC-debug.flags = -g
+    CC-fast.flags = -O3
+    CC-small.flags = -Os
 
 ```console
-$ make default deploy minion_debug=%
-eval-Alias[default]: 
-  | .PHONY: default
-  | default : .out/Exec.c/hello.out .out/Exec.c/binsort.out  | 
-  | 	@true
-  | 
-  | 
-eval-Alias[deploy]: 
-  | .PHONY: deploy
-  | deploy : .out/Copy/hello .out/Copy/binsort  | 
-  | 	@true
-  | 
-  | 
-eval-Copy[LinkC[binsort.c]]: 
-  | .out/Copy/binsort : .out/LinkC.c/binsort  | 
-  | 	@echo '#-> Copy[LinkC[binsort.c]]'
-  | 	@mkdir -p .out/Copy/ .out/Copy_LinkC.c/
-  | 	@echo '_vv=.cp .out/LinkC.c/binsort !@.' > .out/Copy_LinkC.c/binsort.vv
-  | 	cp .out/LinkC.c/binsort .out/Copy/binsort
-  | 
-  | _vv =
-  | -include .out/Copy_LinkC.c/binsort.vv
-  | ifneq "$(_vv)" ".cp .out/LinkC.c/binsort !@."
-  |   .out/Copy/binsort: .out/FORCE
-  | endif
-  | 
-eval-Copy[LinkC[hello.c]]: 
-  | .out/Copy/hello : .out/LinkC.c/hello  | 
-  | 	@echo '#-> Copy[LinkC[hello.c]]'
-  | 	@mkdir -p .out/Copy/ .out/Copy_LinkC.c/
-  | 	@echo '_vv=.cp .out/LinkC.c/hello !@.' > .out/Copy_LinkC.c/hello.vv
-  | 	cp .out/LinkC.c/hello .out/Copy/hello
-  | 
-  | _vv =
-  | -include .out/Copy_LinkC.c/hello.vv
-  | ifneq "$(_vv)" ".cp .out/LinkC.c/hello !@."
-  |   .out/Copy/hello: .out/FORCE
-  | endif
-  | 
-eval-Exec[binsort.c]: 
-  | .out/Exec.c/binsort.out : .out/LinkC.c/binsort  | 
-  | 	@echo '#-> Exec[binsort.c]'
-  | 	@mkdir -p .out/Exec.c/
-  | 	@echo '_vv=.( ./.out/LinkC.c/binsort  ) > !@ || rm !@.' > .out/Exec.c/binsort.c.vv
-  | 	( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
-  | 
-  | _vv =
-  | -include .out/Exec.c/binsort.c.vv
-  | ifneq "$(_vv)" ".( ./.out/LinkC.c/binsort  ) > !@ || rm !@."
-  |   .out/Exec.c/binsort.out: .out/FORCE
-  | endif
-  | 
-eval-Exec[hello.c]: 
-  | .out/Exec.c/hello.out : .out/LinkC.c/hello  | 
-  | 	@echo '#-> Exec[hello.c]'
-  | 	@mkdir -p .out/Exec.c/
-  | 	@echo '_vv=.( ./.out/LinkC.c/hello  ) > !@ || rm !@.' > .out/Exec.c/hello.c.vv
-  | 	( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
-  | 
-  | _vv =
-  | -include .out/Exec.c/hello.c.vv
-  | ifneq "$(_vv)" ".( ./.out/LinkC.c/hello  ) > !@ || rm !@."
-  |   .out/Exec.c/hello.out: .out/FORCE
-  | endif
-  | 
-eval-LinkC[binsort.c]: 
-  | .out/LinkC.c/binsort : .out/CC.c/binsort.o  | 
-  | 	@echo '#-> LinkC[binsort.c]'
-  | 	@mkdir -p .out/LinkC.c/
-  | 	@echo '_vv=.gcc -o !@ .out/CC.c/binsort.o  .' > .out/LinkC.c/binsort.c.vv
-  | 	gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
-  | 
-  | _vv =
-  | -include .out/LinkC.c/binsort.c.vv
-  | ifneq "$(_vv)" ".gcc -o !@ .out/CC.c/binsort.o  ."
-  |   .out/LinkC.c/binsort: .out/FORCE
-  | endif
-  | 
-eval-LinkC[hello.c]: 
-  | .out/LinkC.c/hello : .out/CC.c/hello.o  | 
-  | 	@echo '#-> LinkC[hello.c]'
-  | 	@mkdir -p .out/LinkC.c/
-  | 	@echo '_vv=.gcc -o !@ .out/CC.c/hello.o  .' > .out/LinkC.c/hello.c.vv
-  | 	gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
-  | 
-  | _vv =
-  | -include .out/LinkC.c/hello.c.vv
-  | ifneq "$(_vv)" ".gcc -o !@ .out/CC.c/hello.o  ."
-  |   .out/LinkC.c/hello: .out/FORCE
-  | endif
-  | 
-eval-CC[binsort.c]: 
-  | .out/CC.c/binsort.o : binsort.c  | 
-  | 	@echo '#-> CC[binsort.c]'
-  | 	@mkdir -p .out/CC.c/
-  | 	@echo '_vv=.gcc -c -o !@ binsort.c     -MMD -MP -MF !@.d.' > .out/CC.c/binsort.c.vv
-  | 	gcc -c -o .out/CC.c/binsort.o binsort.c     -MMD -MP -MF .out/CC.c/binsort.o.d
-  | 
-  | _vv =
-  | -include .out/CC.c/binsort.c.vv
-  | ifneq "$(_vv)" ".gcc -c -o !@ binsort.c     -MMD -MP -MF !@.d."
-  |   .out/CC.c/binsort.o: .out/FORCE
-  | endif
-  | -include .out/CC.c/binsort.o.d
-  | 
-eval-CC[hello.c]: 
-  | .out/CC.c/hello.o : hello.c  | 
-  | 	@echo '#-> CC[hello.c]'
-  | 	@mkdir -p .out/CC.c/
-  | 	@echo '_vv=.gcc -c -o !@ hello.c     -MMD -MP -MF !@.d.' > .out/CC.c/hello.c.vv
-  | 	gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
-  | 
-  | _vv =
-  | -include .out/CC.c/hello.c.vv
-  | ifneq "$(_vv)" ".gcc -c -o !@ hello.c     -MMD -MP -MF !@.d."
-  |   .out/CC.c/hello.o: .out/FORCE
-  | endif
-  | -include .out/CC.c/hello.o.d
-  | 
-#-> LinkC[hello.c]
-gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
-#-> Exec[hello.c]
-( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
-#-> CC[binsort.c]
-gcc -c -o .out/CC.c/binsort.o binsort.c     -MMD -MP -MF .out/CC.c/binsort.o.d
-#-> Copy[LinkC[hello.c]]
-cp .out/LinkC.c/hello .out/Copy/hello
-#-> Copy[LinkC[binsort.c]]
-cp .out/LinkC.c/binsort .out/Copy/binsort
+$ cp Makefile4 Makefile
 ```
+```console
+$ make V=debug help CC[hello.c].flags
+CC[hello.c] inherits from: CC CC-debug  _CC Compile _Compile Builder 
+
+CC[hello.c].flags is defined by:
+
+   CC-debug.flags = -g
+
+Its value is: '-g'
+
+```
+```console
+$ make V=fast help CC[hello.c].flags
+CC[hello.c] inherits from: CC CC-fast  _CC Compile _Compile Builder 
+
+CC[hello.c].flags is defined by:
+
+   CC-fast.flags = -O3
+
+Its value is: '-O3'
+
+```
+
+Finally, we want to be able to build multiple variants with a single
+invocation.  Minion provides a built-in class, `Variants[TARGET]`, that
+builds a number of variants of the target `TARGET`.  The `all` property
+gives the list of variants, so assigning `Variants.all` will establish a
+default set of variants for all instances of `Variants`.
+
+The variable `Variants.all` is also used to provide a default for `V`: it
+defaults to the first word in `Variants.all`.
+
+```console
+$ make sizes           # default (first) variant
+#-> CC[hello.c]
+gcc -c -o .out/debug/CC.c/hello.o hello.c -g -MMD -MP -MF .out/debug/CC.c/hello.o.d
+#-> LinkC[hello.c]
+gcc -o .out/debug/LinkC.c/hello .out/debug/CC.c/hello.o  
+#-> CC[binsort.c]
+gcc -c -o .out/debug/CC.c/binsort.o binsort.c -g -MMD -MP -MF .out/debug/CC.c/binsort.o.d
+#-> LinkC[binsort.c]
+gcc -o .out/debug/LinkC.c/binsort .out/debug/CC.c/binsort.o  
+wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
+   49648 .out/debug/LinkC.c/hello
+   49928 .out/debug/LinkC.c/binsort
+   99576 total
+```
+```console
+$ make sizes V=fast    # "fast" variant
+#-> CC[hello.c]
+gcc -c -o .out/fast/CC.c/hello.o hello.c -O3 -MMD -MP -MF .out/fast/CC.c/hello.o.d
+#-> LinkC[hello.c]
+gcc -o .out/fast/LinkC.c/hello .out/fast/CC.c/hello.o  
+#-> CC[binsort.c]
+gcc -c -o .out/fast/CC.c/binsort.o binsort.c -O3 -MMD -MP -MF .out/fast/CC.c/binsort.o.d
+#-> LinkC[binsort.c]
+gcc -o .out/fast/LinkC.c/binsort .out/fast/CC.c/binsort.o  
+wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
+   49424 .out/fast/LinkC.c/hello
+   49456 .out/fast/LinkC.c/binsort
+   98880 total
+```
+```console
+$ make all-sizes       # sizes for *all* variants
+wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
+   49648 .out/debug/LinkC.c/hello
+   49928 .out/debug/LinkC.c/binsort
+   99576 total
+wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
+   49424 .out/fast/LinkC.c/hello
+   49456 .out/fast/LinkC.c/binsort
+   98880 total
+#-> CC[hello.c]
+gcc -c -o .out/small/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/small/CC.c/hello.o.d
+#-> LinkC[hello.c]
+gcc -o .out/small/LinkC.c/hello .out/small/CC.c/hello.o  
+#-> CC[binsort.c]
+gcc -c -o .out/small/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/small/CC.c/binsort.o.d
+#-> LinkC[binsort.c]
+gcc -o .out/small/LinkC.c/binsort .out/small/CC.c/binsort.o  
+wc -c .out/small/LinkC.c/hello .out/small/LinkC.c/binsort
+   49424 .out/small/LinkC.c/hello
+   49456 .out/small/LinkC.c/binsort
+   98880 total
+```
+
+
+## Recap
+
+To summarize the key concepts in Minion:
+
+ - *Instances* are function-like descriptions of build products.  They can
+   be given as targets, and named as inputs to other instances.  They
+   consist of a *class* name and an *argument*.
+
+ - *Indirections* are ways to reference Make variables that hold lists of
+   other targets.  They can be used as arguments to instances, or in the
+   `in` property for an instance, or on the command line.
+
+ - *Aliases* are short names that can be specified on the command line.
+   They can identify sets of other targets to build and/or commands to be
+   executed when they are built.
+
+ - Properties dictate how instances behave.  Properties are associated with
+   classes or instances, and classes may inherit from other classes.
+   Properties are defined using Make variable assignments, wherein the
+   variable name is structured `CLASSNAME.PROPERTYNAME`.  The definitions
+   are in Make syntax, and can refer to other properties using `{NAME}`.
 
 

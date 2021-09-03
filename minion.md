@@ -176,7 +176,7 @@ invoke make.  For example:
 
 Note that whereas `minion_cache` implicitly includes all transitive
 dependencies of the listed targets, `minion_cache_exclude` does not.  It is
-intended to target individual "dynamic" build steps.
+intended to target individual build steps.
 
 
 ## Builders

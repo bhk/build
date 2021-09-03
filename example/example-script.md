@@ -127,7 +127,9 @@ actual file.
 To define an alias, define a variable named `Alias[NAME].in` to specify a
 list of targets to be built when NAME is given as a goal, *or* define
 `Alias[NAME].command` to specify a command to be executed when NAME is given
-as a goal.  Or define both.
+as a goal.  Or define both.  Then, when Minion sees `NAME` listed on the
+command line, it will know it should build the corresponding `Alias[NAME]`
+instance.
 
 This next Makefile defines alias goals for "default" and "deploy":
 
@@ -140,6 +142,14 @@ target named `default`, so these commands do the same thing:
 
     $ make
     $ make default
+
+One last note about aliases: alias names are just for the Make command line.
+Within a Minion makefile, when specifying targets we use only instances,
+source file names, or targets of Make rules.  So if you want to refer to one
+alias as a dependency of another alias, use its instance name:
+`Alias[NAME]`.  For example:
+
+    Alias[default].in = Alias[exes] Alias[tests]
 
 
 ## Properties and Customization
@@ -197,13 +207,14 @@ they have their own instance-specific definitions).
 An important note about overriding class properties: `CC` is a *user class*,
 intended for customization by user makefiles.  Minion does not attach any
 properties *directly* to user classes; it just provides a default
-inheritance, which also can be overridden by the user makefile.  User
+inheritance, and that, too, can be overridden by the user makefile.  User
 classes are listed in `minion.mk`, and you can easily identify a user class
 because it will inherit from an internal class that has the same name except
 for a prefixed underscore (`_`).
 
 Directly re-defining properties of non-user classes in Minion is not
-supported.  Instead, feel free to define you own classes.
+supported.  Instead, define you own sub-classes.
+
 
 ## Custom Classes
 
@@ -229,11 +240,79 @@ next-lower-precedence definition.  Perhaps the following will illustrate:
     $ make help CCg[hello.c].flags CC.flags='-Wall {inherit}'
 
 
-## Wrap-up
+## Variants
 
-We can use a debug feature of Minion to see the Make rules that it
-generates.  We bring this up just to illustrate what an equivalent Makefile
-would look like, if one were to write it by hand, instead of leveraging
-Minion:
+We can build different *variants* of our the project described by our
+Makefile.  Variants are separate instantiations of our build that will have
+a similar overall structure, but may differ from each other in various ways.
+For example, we may have "release" and "debug" variants, or "ARM" and
+"Intel" variants of a C project.
 
-    $ make default deploy minion_debug=%
+Furthermore, we want these variants to exist side-by-side and not interfere
+with each other, so we can retain the benefits of incremental builds.  We
+have shown how typing `make CC.flags=-g` and then later `make CC.flags=-O3`
+could be used to achieve some sort of "debug" vs. "release" distinction, but
+not only is this cumbersome, it is inefficient.  Each time we switch
+"variants", it has to compile everything again.  Instead, we do the
+following:
+
+  * Use the variable `V` to identify a variant name, so that `make
+    V=<name>` can be used to build a specific variant.
+
+  * Define properties in a way that depends on `$V`.
+
+  * Incorporate `$V` into the output directory.  Minion does this by default
+    when `V` is assigned a non-empty value.
+
+When defining variant-dependent properties, we could use Make's functions:
+
+    CC.flags = $(if $(filter debug,$V),-g, ... )
+
+Instead, it is much more elegant to leverage Minion's property evaluation
+and group property definitions into classes whose names incorporate `$V`.
+
+    CC.inherit = CC-$V _CC
+
+    CC-debug.flags = -g
+    CC-fast.flags = -O3
+    CC-small.flags = -Os
+
+    $ cp Makefile4 Makefile
+    $ make V=debug help CC[hello.c].flags
+    $ make V=fast help CC[hello.c].flags
+
+Finally, we want to be able to build multiple variants with a single
+invocation.  Minion provides a built-in class, `Variants[TARGET]`, that
+builds a number of variants of the target `TARGET`.  The `all` property
+gives the list of variants, so assigning `Variants.all` will establish a
+default set of variants for all instances of `Variants`.
+
+The variable `Variants.all` is also used to provide a default for `V`: it
+defaults to the first word in `Variants.all`.
+
+    $ make sizes           # default (first) variant
+    $ make sizes V=fast    # "fast" variant
+    $ make all-sizes       # sizes for *all* variants
+
+
+## Recap
+
+To summarize the key concepts in Minion:
+
+ - *Instances* are function-like descriptions of build products.  They can
+   be given as targets, and named as inputs to other instances.  They
+   consist of a *class* name and an *argument*.
+
+ - *Indirections* are ways to reference Make variables that hold lists of
+   other targets.  They can be used as arguments to instances, or in the
+   `in` property for an instance, or on the command line.
+
+ - *Aliases* are short names that can be specified on the command line.
+   They can identify sets of other targets to build and/or commands to be
+   executed when they are built.
+
+ - Properties dictate how instances behave.  Properties are associated with
+   classes or instances, and classes may inherit from other classes.
+   Properties are defined using Make variable assignments, wherein the
+   variable name is structured `CLASSNAME.PROPERTYNAME`.  The definitions
+   are in Make syntax, and can refer to other properties using `{NAME}`.

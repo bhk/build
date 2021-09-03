@@ -5,11 +5,16 @@
 
 
 ;; Exec command; trim trailing blank line; prefix lines with line-prefix
+;;
 (define (exec command)
+  ;; Trim comments from end of command
+  (define `cmd-expr
+    (first (filter-out "#%" (subst "#" " #" [command]))))
+
   (.. (fprintf 2 (.. "$ " command "\n"))
       "```console\n"
       "$ " command "\n"
-      (concat-vec (shell-lines "%s" command) "\n")
+      (concat-vec (shell-lines "%s" cmd-expr) "\n")
       "```\n"))
 
 (define (main argv)

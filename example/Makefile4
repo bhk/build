@@ -1,0 +1,18 @@
+Variants.all = debug fast small
+
+Alias[sizes].in = Sizes[LinkC*sources]
+Alias[all-sizes].in = Variants[Alias[sizes]]
+Alias[default].in = Alias[sizes]
+
+sources = hello.c binsort.c
+
+CC.inherit = CC-$V _CC
+
+CC-debug.flags = -g
+CC-fast.flags = -O3
+CC-small.flags = -Os
+
+Sizes.inherit = Phony
+Sizes.command = wc -c {^}
+
+include ../minion.mk

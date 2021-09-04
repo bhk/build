@@ -1,18 +1,17 @@
 ;;----------------------------------------------------------------
-;; Misc. Minion functions
+;; Minion "Tools" functions
 ;;----------------------------------------------------------------
 
 (require "core")
 (require "export.scm")
+(require "base.scm")
 (require "objects.scm")
 
-(export-comment " misc")
+(export-comment " tools.scm")
 
-(define (_ivar id)
-  &native
-  (lastword (subst "*" " " id)))
-
-(export (native-name _ivar) 1)
+;;----------------------------------------------------------------
+;; _inferPairs
+;;----------------------------------------------------------------
 
 
 (define `(pair id file)

@@ -65,8 +65,6 @@ $(call _expectEQ,$(error0),$(value _error))
 
 # Reference Expansion
 
-$(call _expectEQ,$(call _expv,c,c*a),*a)
-$(call _expectEQ,$(call _expv,c,c*d*e*a),d*e*a)
 ev1 = o1 *ev2 o4
 ev2 = o2 o3
 ev3 = #empty
@@ -112,8 +110,6 @@ Alias[alias1].in = x
 Alias[alias2].command = y
 Alias[alias3].in = x3
 Alias[alias3].command = y3
-
-$(call _expectEQ,$(_getAliases),alias1 alias2 alias3 clean default)
 
 _aliases := alias1 alias2
 $(call _expectEQ,$(call _goalID,alias1),Alias[alias1])

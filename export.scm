@@ -123,18 +123,3 @@
         (show-export e))))
 
 (at-exit show-exports)
-
-;; Minion-defined symbols
-
-(define OUTDIR
-  &public
-  &native
-  ".out/")
-
-
-(print "Imports: \\H \\n \\L \\R [ ]")
-
-(define \H &native &public "#")
-(define \n &native &public "\n")
-(set-native "\\L" "{")
-(set-native "\\R" "}")

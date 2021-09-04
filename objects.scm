@@ -1,104 +1,12 @@
 ;;----------------------------------------------------------------
 ;; Object system
 ;;----------------------------------------------------------------
+
 (require "core")
 (require "export.scm")
+(require "base.scm")
 
-(export-comment " object system")
-
-
-(define `(isInstance target)
-  &public
-  (filter "%]" target))
-
-(define (_isIndirect target)
-  &public
-  &native
-  (findstring "*" (word 1 (subst "[" "[ " target))))
-
-;; We expect this to be provided by minion.mk
-;;(export (native-name _isIndirect) 1)
-
-
-;; Return non-nil if VAR has been assigned a value.
-;;
-(define `(undefined? var)
-  &public
-  (filter "u%" (native-flavor var)))
-
-(define `(recursive? var)
-  &public
-  (filter "r%" (native-flavor var)))
-
-(define `(simple? var)
-  &public
-  (filter "s%" (native-flavor var)))
-
-
-;; Set variable named KEY to VALUE; return VALUE.
-;;
-;; We assume KEY does not contain ":", "=", "$", or whitespace.
-(define (_set key value)
-  &public
-  &native
-  (define `(escape str)
-    "$(or )" (subst "$" "$$" "\n" "$(\\n)" "#" "$(\\H)" str))
-  (.. (native-eval (.. key " := " (escape value)))
-      value))
-
-(export (native-name _set) 1)
-
-
-(begin
-  (define `(test value)
-    (_set "tmp_set_test" value)
-    (expect (native-var "tmp_set_test") value))
-  (test "a\\b#c\\#\\\\$v\nz"))
-
-
-;; Assign a recursive variable, given the code to be evaluated.  The
-;; resulting value will differ, but the result of its evaluation should be
-;; the same as that of VALUE.
-;;
-(define `(_setfn name value)
-  &native
-  (native-eval (.. name " = $(or )" (subst "\n" "$(\\n)" "#" "$(\\H)" value))))
-
-
-(begin
-  (define `(test var-name)
-    (define `out (.. "~" var-name))
-    (_setfn out (native-value var-name))
-    (expect (native-var var-name) (native-var out)))
-
-  (native-eval "define TX\n   abc   \n\n\nendef\n")
-  (test "TX")
-  (native-eval "TX = a\\\\\\\\c\\#c")
-  (test "TX")
-  (native-eval "TX = echo '#-> x'")
-  (test "TX"))
-
-
-;; Return value of VAR, evaluating it only the first time.
-;;
-(define (_once var)
-  &native
-  (define `cacheVar (.. "_|" var))
-
-  (if (undefined? cacheVar)
-      (_set cacheVar (native-var var))
-      (native-var cacheVar)))
-
-(export (native-name _once) nil)
-
-(begin
-  ;; test _once
-  (native-eval "fv = 1")
-  (native-eval "ff = $(fv)")
-  (expect 1 (_once "ff"))
-  (native-eval "fv = 2")
-  (expect 2 (native-var "ff"))
-  (expect 1 (_once "ff")))
+(export-comment " objects.scm")
 
 
 ;; Dynamic state during property evaluation enables `.`, `C`, `A`, and
@@ -110,14 +18,12 @@
 (declare A &native)
 
 
-
 ;; This "mock" _error records the last error for testing
 ;;
 (define *last-error* nil)
 (define (_error msg)
   &native
   (set *last-error* msg))
-
 
 
 ;; Construct an E1 (undefined property) error message

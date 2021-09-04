@@ -2,7 +2,7 @@
 ;; prototype.scm:  SCAM prototypes of functions for Minion
 ;;----------------------------------------------------------------
 
+(require "base.scm")
 (require "objects.scm")
-(require "misc.scm")
-(require "args.scm")
+(require "tools.scm")
 (require "outputs.scm")

@@ -1,13 +1,12 @@
 (require "core")
 (require "export.scm")
-(require "objects.scm")
-(require "args.scm")
+(require "base.scm")
 
 ;;----------------------------------------------------------------
 ;; Output file defaults
 ;;----------------------------------------------------------------
 
-(export-comment " output file defaults")
+(export-comment " outputs.scm")
 
 ;; The chief requirement for output file names is that conflicts must be
 ;; avoided.  Avoiding conflicts is complicated by the inference feature, which

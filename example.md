@@ -332,6 +332,8 @@ $ make CC.flags=-Os
 gcc -c -o .out/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/CC.c/binsort.o.d
 #-> LinkC[binsort.c]
 gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
+#-> Exec[binsort.c]
+( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
 ```
 
 So what's going on here?

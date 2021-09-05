@@ -323,9 +323,7 @@ entire set of generated headers.
 ## Argument Values
 
 Arguments may contain multiple comma-delimited values, each with an optional
-`NAME=` prefix.  When an instance name with a named value is typed as a
-command line goal, `:` characters must be used in place of `=` (otherwise,
-Make will interpret it as a variable assignment, not a goal.
+`NAME:` prefix.
 
 Rule inference is performed on input files.  For example, inference allows a
 ".c" file to be supplied where a ".o" file is expected, as in
@@ -493,7 +491,7 @@ within recursive property definitions.
   whose name matches `K`.  `K` is a variable that defaults to the empty
   string, which identifies unnamed values, and can be bound to other values
   using `foreach`.  For example, during evaluation of a property of
-  `Class(a,b,x=1,x=2)`:
+  `Class(a,b,x:1,x:2)`:
 
       $(_args) => "a b"
       $(foreach K,x,$(_args)) => "1 2"
@@ -518,8 +516,8 @@ The following BNF summarizes:
     Instance := Class '(' Argument ')'
     Class    := ClassChar+
     Argument := ArgEntry ( ',' ArgEntry )*
-    ArgEntry := ( Name `=` )? Value
-    Value    := ( Instance | NameChar | PropChar )+
+    ArgEntry := ( Name `:` )? Value
+    Value    := ( Instance | Name | Property )+
     Property := PropChar+
 
 These definitions rely on the following character classes:
@@ -531,11 +529,8 @@ These definitions rely on the following character classes:
 Note that arguments must contain at least one value, and each argument value
 must contain at least one character.  Argument values may contain other
 instances embedded within them, which means they can contain `(` and `)`,
-characters, but only in balanced pairs, as well as `,` and `=`, but only
+characters, but only in balanced pairs, as well as `,` and `:`, but only
 within nested parentheses.
 
 In general, instances will contain special shell characters, so they may
-have to be quoted when being passed on the command line.  Additionally, `=`
-cannot appear in a Make command-line goal (it will be interpreted as a
-variable assignment), so Minion understands `:` to represent `=` (in this
-context only).
+have to be quoted when being passed on the command line.

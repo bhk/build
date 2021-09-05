@@ -194,27 +194,24 @@ Alias.in =
 #    goal.  Its {out} should match the name provided on the command line,
 #    and its {in} is the named instance or indirection.
 #
-#    Goals cannot contain `=` because Make would treat them as command-line
-#    variable assignments, so `:` characters can be substituted.
-#
 Goal.inherit = Alias
-Goal.in = $(subst :,=,$A)
+Goal.in = $A
 
 
 # HelpGoal(TARGETNAME) : Generate a rule that invokes `_help!`
 #
 HelpGoal.inherit = Alias
-HelpGoal.command = @true$(call _defer,$$(call _help!,$(call _escArg,$(subst :,=,$A))))
+HelpGoal.command = @true$(call _defer,$$(call _help!,$(call _escArg,$A)))
 
 
 # Variants(TARGETNAME) : Build {all} variants of TARGETNAME.  Each variant
 #    is defined in a separate rule so they can all proceed concurrently.
 #
 Variants.inherit = Phony
-Variants.in = $(foreach v,{all},Variant($A,V=$v))
+Variants.in = $(foreach v,{all},Variant($A,V:$v))
 
 
-# Variant(TARGETNAME,V=VARIANT) : Build VARIANT of TARGETNAME.
+# Variant(TARGETNAME,V:VARIANT) : Build VARIANT of TARGETNAME.
 #
 Variant.inherit = Phony
 Variant.in =
@@ -327,7 +324,7 @@ _Run.command = {exec}
 
 
 # _Copy(INPUT)
-# _Copy(INPUT,out=OUT)
+# _Copy(INPUT,out:OUT)
 #
 #   Copy an artifact.  If OUT is not provided, the file is copied to a
 #   directory named $(VARDIR)$C.
@@ -401,7 +398,7 @@ _Unzip.in = $C.zip
 
 
 # _Write(VAR)
-# _Write(VAR,out=OUT)
+# _Write(VAR,out:OUT)
 #
 #   Write the value of a variable to a file.
 #
@@ -416,7 +413,7 @@ _Write.in =
 # Variable & Function Definitions
 #--------------------------------
 
-# V defaults to first word of Variants.all
+# V defaults to the first word of Variants.all
 V ?= $(word 1,$(Variants.all))
 
 # All Minion build products are placed under this directory
@@ -493,10 +490,10 @@ _expandX = $(foreach w,$1,$(or $(filter %$],$w),$(if $(findstring @,$w),$(patsub
 _expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
 _set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
 _once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
-_argGroup = $(if $(findstring :$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) :$],$]: ,$(patsubst :$[%,:$[% ,$(subst :$], :$],$(subst :$[, :$[,$1)))),$(if $(filter %:,$w),$(subst :,,$w),$w))),$1)),$1)
-_argHash2 = $(subst :,,$(foreach w,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$(subst $;,:$;,$(subst $],:$],$(subst $[,:$[,$1)))))),$(if $(findstring :=,$w),,=)$w))
-_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring =,$1)),$(_argHash2),=$(subst $;, =,$1))
-_hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
+_argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)
+_argHash2 = $(subst `,,$(foreach w,$(subst $(if ,,`,), ,$(call _argGroup,$(subst :,`:,$(subst $;,$(if ,,`,),$(subst $],`$],$(subst $[,`$[,$1)))))),$(if $(findstring `:,$w),,:)$w))
+_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(_argHash2),:$(subst $;, :,$1))
+_hashGet = $(patsubst $2:%,%,$(filter $2:%,$1))
 
 # objects.scm
 
@@ -523,7 +520,7 @@ _showDefs = $(call _showDefs2,$1,$(or $(&|$(word 1,$(subst $[, ,$1))),$(call _se
 
 # outputs.scm
 
-_fsenc = $(subst >,@r,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst =,@E,$(subst $],@-,$(subst $[,@+,$(subst |,@1,$(subst @,@_,$1))))))))))
+_fsenc = $(subst >,@r,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst :,@C,$(subst $],@-,$(subst $[,@+,$(subst |,@1,$(subst @,@_,$1))))))))))
 _outBX = $(subst @D,/,$(subst $(\s),,$(patsubst /%@_,_%@,$(addprefix /,$(subst @_,@_ ,$(_fsenc))))))
 _outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %$],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
 _outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))

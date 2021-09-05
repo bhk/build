@@ -72,7 +72,7 @@
 ;;     Instance Name           outDir                          outName
 ;;     ---------------------   -----------------------------   ------------
 ;;     CLASS(D/NAME.EXT,...)   OUTDIR/CLASS.EXT__{encArg}/D/   NAME{outExt}
-;;     P(d/a.c,x.c,opt=3)      .out/P.c__@1,x.c,opt@E3/d/      a
+;;     P(d/a.c,x.c,opt:=3)      .out/P.c__@1,x.c,opt@C3/d/      a
 ;;
 ;;
 ;; Output file names should avoid Make and shell special characters, so that
@@ -83,9 +83,9 @@
 ;;
 ;; File:   _ - + { } / ^ . ~
 ;; Class:  _ - + { } / ^   ~ !
-;; Value:  _ - + { } / ^ . ~ ! @ = ( ) < >
-;; Arg:    _ - + { } / ^ . ~ ! @ = ( ) < > ,
-;; ~Make:                  ~     =     < >   [ ] * ? # $ % ; \ :
+;; Value:  _ - + { } / ^ . ~ ! @ : ( ) < >
+;; Arg:    _ - + { } / ^ . ~ ! @ : ( ) < > ,
+;; ~Make:                  ~     :     < >   [ ] * ? # $ % ; \ =
 ;; ~Bash:                  ~ !     ( ) < >   [ ] * ? # $ % ; \   | & ` ' "
 ;;
 
@@ -100,7 +100,7 @@
          "|" "@1"
          "(" "@+"
          ")" "@-"
-         "=" "@E"
+         ":" "@C"
          "!" "@B"
          "~" "@T"
          "/" "@D"
@@ -262,14 +262,14 @@
 
   ;; Complex (arg1 is an input ID)
   (t1 "P(a,b)"          "P_@1,b/a")
-  (t1 "P(d/a.c,o=3)"    "P_@1,o@E3.c/d/a.c")
-  (t1 "Q(d/a.c,o=3)"    "Q_@1,o@E3/d/a.c")
-  (t1 "P(C(d/a.c),o=3)" "P_@1,o@E3.o_C.c/d/a.o")
-  (t1 "P(@v,o=3)"       "P_@1,o@E3_@/v")
-  (t1 "P(C@v,o=3)"      "P_@1,o@E3_C@/v")
+  (t1 "P(d/a.c,o:3)"    "P_@1,o@C3.c/d/a.c")
+  (t1 "Q(d/a.c,o:3)"    "Q_@1,o@C3/d/a.c")
+  (t1 "P(C(d/a.c),o:3)" "P_@1,o@C3.o_C.c/d/a.o")
+  (t1 "P(@v,o:3)"       "P_@1,o@C3_@/v")
+  (t1 "P(C@v,o:3)"      "P_@1,o@C3_C@/v")
 
   ;; Complex (arg1 is NOT an input ID)
   (t1 "PX(C(a.c),b)"    "PX_@1,b/C@+a.c@-")
-  (t1 "P(x=1,y=2)"      "P_x@E1,y@E2/out")  ;; no unnamed arg
+  (t1 "P(x:1,y:2)"      "P_x@C1,y@C2/out")  ;; no unnamed arg
 
   nil)

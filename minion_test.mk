@@ -184,18 +184,18 @@ $(call _expectEQ,$(o1),1)
 # _args
 
 $(call _expectEQ,1,$(call true,_argError)) # minion.mk should supply one
-_argError = $(subst :$[,<[>,$(subst :$],<]>,$1))
+_argError = $(subst `$[,<[>,$(subst `$],<]>,$1))
 
-$(call _expectEQ,$(call _argHash,a$;x=1),=a x=1)
-$(call _expectEQ,$(call _argHash,a$]),=a<]>)
+$(call _expectEQ,$(call _argHash,a$;x:1),:a x:1)
+$(call _expectEQ,$(call _argHash,a$]),:a<]>)
 
 Foo.inherit = Builder
 Foo.args = $(_args)
 Foo.argX = $(foreach K,X,$(_args))
 
-$(call _expectEQ,$(call get,argHash,Foo(C(A)$;B$;X=Y)),=C(A) =B X=Y)
-$(call _expectEQ,$(call get,args,Foo(C(A)$;B$;X=Y)),C(A) B)
-$(call _expectEQ,$(call get,argX,Foo(C(A)$;B$;X=Y)),Y)
+$(call _expectEQ,$(call get,argHash,Foo(C(A)$;B$;X:Y)),:C(A) :B X:Y)
+$(call _expectEQ,$(call get,args,Foo(C(A)$;B$;X:Y)),C(A) B)
+$(call _expectEQ,$(call get,argX,Foo(C(A)$;B$;X:Y)),Y)
 
 EC.inherit = #
 EC.args = $(_args)
@@ -212,8 +212,8 @@ $(call _expectEQ,$(call _outBasis,C,a.c,,a.c,a.c),C.c/a.c)
 $(call _expectEQ,$(call _outBasis,P,C@D@d/v,,,C@D@d/v),P_C@_D@/d/v)
 # complex
 $(call _expectEQ,\
-  $(call _outBasis,P,C(d/a.c)$;o=3,%,.out/C.c/d/a.o,C(d/a.c)),\
-  P_@1$;o@E3_C.c/d/a.o)
+  $(call _outBasis,P,C(d/a.c)$;o:3,%,.out/C.c/d/a.o,C(d/a.c)),\
+  P_@1$;o@C3_C.c/d/a.o)
 
 # .out
 

@@ -134,9 +134,9 @@ endif
 endef
 
 # $(call _vvEnc,DATA,OUTFILE) : Encode to be shell-safe (within single
-#   quotes) and Make-safe (within double-quotes or RHS of assignment).
-#   Avoid pathological case: ' --> '\'' -->  !q\!q!q
-_vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\t),!+,$(subst \#,!H,$(subst $2,!@,$(subst !,!1,$1)))))))).#'
+#   quotes) and Make-safe (within double-quotes or RHS of assignment)
+#   and echo-safe (across /bin/echo and various shell builtins)
+_vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\n),!n,$(subst $(\t),!+,$(subst \#,!H,$(subst $2,!@,$(subst \,!B,$(subst !,!1,$1)))))))))).#'
 
 
 # $(call _defer,MAKESRC) : Encode MAKESRC for inclusion in a recipe so that
@@ -283,7 +283,8 @@ _CC++.compiler = g++
 _Link.inherit = Builder
 _Link.outExt =
 _Link.command = {compiler} -o {@} {^} {flags} 
-_Link.flags =
+_Link.flags = {libFlags}
+_Link.libFlags =
 
 
 # _LinkC(INPUTS) : Link a command-line C program.
@@ -341,6 +342,7 @@ _Mkdir.inherit = Builder
 _Mkdir.in =
 _Mkdir.out = $(_arg1)
 _Mkdir.mkdirs =
+_Mkdir.vvFile = # without {mkdirs}, this will fail
 _Mkdir.command = mkdir -p {@}
 
 

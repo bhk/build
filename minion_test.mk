@@ -270,7 +270,7 @@ $(call _expectEQ,1,$(call vvOK?,abc))
 # Trailing "\" can cause problems if not guarded
 $(call _expectEQ,1,$(call vvOK?,abc\))
 # Leading and trailing spaces; validate assumptions about Make syntax
-$(call _expectEQ,1,$(call vvOK?, \# \ \\ $$a $(\t) ))
+$(call _expectEQ,1,$(call vvOK?, \# \ \\ $$a $(\t)$(\n) x ))
 
 
 # _defer

@@ -625,7 +625,7 @@ endef
 
 # This will be the default target when `$(end)` is omitted (and
 # no goal is named on the command line)
-_error_default: ; $(error Makefile included minion-start.mk but did not call `$$(end)`)
+_error_default: ; $(error Makefile used minion_start but did not call `$$(end)`)
 
 # Using "$*" in the following pattern rule we can capture the entirety of
 # the goal, including embedded spaces.

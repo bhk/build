@@ -48,7 +48,7 @@ File.rule =
 File.needs =
 
 
-# Builder[ARG]:  Base class for builders.
+# Builder(ARG):  Base class for builders.
 
 # Shorthand properties
 Builder.@ = {out}
@@ -77,7 +77,7 @@ Builder.up< = $(firstword {up^})
 #
 Builder.in = $(_args)
 
-_pairs = $(foreach i,$(call _expand,$1),$(if $(filter %],$i),$i$$$(call get,out,$i),$i))
+_pairs = $(foreach i,$(call _expand,$1),$(if $(filter %$],$i),$i$$$(call get,out,$i),$i))
 
 # list of ([ID,]FILE) pairs for inputs (reuse argPairs if relevant)
 Builder.inPairs = $(call _inferPairs,$(if $(call _eq?,{in},$(_args)),$(call _pairs,$(_args)),$(call _pairs,{in})),{inferClasses})
@@ -95,7 +95,7 @@ Builder.ooIDs = $(call _expand,{oo})
 
 # `inferClasses` a list of words in the format "CLASS.EXT", implying
 # that each input filename ending in ".EXT" should be replaced wth
-# "CLASS[FILE.EXT]".  This is used to, for example, convert ".c" files
+# "CLASS(FILE.EXT)".  This is used to, for example, convert ".c" files
 # to ".o" when they are provided as inputs to a LinkC instance.
 Builder.inferClasses =
 
@@ -111,7 +111,7 @@ Builder.outBasis = $(VARDIR)$(call _outBasis,$C,$A,{outExt},$(call get,out,$(fil
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
-Builder.message = \#-> $C[$A]
+Builder.message = \#-> $C($A)
 
 Builder.mkdirs = $(sort $(dir {@} {vvFile}))
 
@@ -167,7 +167,7 @@ $(if {vvFile},{vvRule})
 endef
 
 
-# _Phony[INPUTS] : Generate a phony rule.
+# _Phony(INPUTS) : Generate a phony rule.
 #
 #   A phony rule does not generate an output file.  Therefore, Make cannot
 #   determine whether its result is "new" or "old", so it is always
@@ -182,7 +182,7 @@ _Phony.command = @true
 _Phony.vvFile = # always runs => no point in validating
 
 
-# Alias[TARGETNAME] : Generate a phony rule whose {out} matches TARGETNAME.
+# Alias(TARGETNAME) : Generate a phony rule whose {out} matches TARGETNAME.
 #     {command} and/or {in} are supplied by the user makefile.
 #
 Alias.inherit = Phony
@@ -190,7 +190,7 @@ Alias.out = $(subst :,\:,$A)
 Alias.in =
 
 
-# Goal[TARGETNAME] : Generate a phony rule for an instance or indirection
+# Goal(TARGETNAME) : Generate a phony rule for an instance or indirection
 #    goal.  Its {out} should match the name provided on the command line,
 #    and its {in} is the named instance or indirection.
 #
@@ -201,27 +201,27 @@ Goal.inherit = Alias
 Goal.in = $(subst :,=,$A)
 
 
-# HelpGoal[TARGETNAME] : Generate a rule that invokes `_help!`
+# HelpGoal(TARGETNAME) : Generate a rule that invokes `_help!`
 #
 HelpGoal.inherit = Alias
 HelpGoal.command = @true$(call _defer,$$(call _help!,$(call _escArg,$(subst :,=,$A))))
 
 
-# Variants[TARGETNAME] : Build {all} variants of TARGETNAME.  Each variant
+# Variants(TARGETNAME) : Build {all} variants of TARGETNAME.  Each variant
 #    is defined in a separate rule so they can all proceed concurrently.
 #
 Variants.inherit = Phony
-Variants.in = $(foreach v,{all},Variant[$A,V=$v])
+Variants.in = $(foreach v,{all},Variant($A,V=$v))
 
 
-# Variant[TARGETNAME,V=VARIANT] : Build VARIANT of TARGETNAME.
+# Variant(TARGETNAME,V=VARIANT) : Build VARIANT of TARGETNAME.
 #
 Variant.inherit = Phony
 Variant.in =
-Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(subst =,:,$(_arg1)) V=$(foreach K,V,$(_arg1))
+Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(call _shellQuote,$(subst =,:,$(_arg1))) V=$(call _shellQuote,$(foreach K,V,$(_arg1)))
 
 
-# Makefile[VAR] : Generate a makefile that includes rules for IDs in $(VAR)
+# Makefile(VAR) : Generate a makefile that includes rules for IDs in $(VAR)
 #   and their transitive dependencies, excluding IDs in $(VAR_exclude).
 #
 #   Command expansion is deferred to the rule processing phase, so when the
@@ -230,8 +230,8 @@ Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(
 Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.vvFile = # too costly; defeats the purpose
-Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$C[$A])))
-Makefile.excludeIDs = $(filter %],$(call _expand,@$A_exclude))
+Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$C($A))))
+Makefile.excludeIDs = $(filter %$],$(call _expand,@$A_exclude))
 Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$A)))
 define Makefile.deferredCommand
 $(call _recipeLines,
@@ -246,16 +246,16 @@ $(if {excludeIDs},_$i_needs = $(filter {excludeIDs},$(call _depsOf,$i))
 endef
 
 
-# UseCache[IDS] : Include a cached makefile.
+# UseCache(IDS) : Include a cached makefile.
 #
 UseCache.inherit =
 UseCache.out = 
 UseCache.rule = -include {^}
-UseCache.needs = Makefile[$A]
+UseCache.needs = Makefile($A)
 UseCache.^ = $(call get,out,{needs})
 
 
-# _Compile[SOURCE] : Base class for invoking a compiler.
+# _Compile(SOURCE) : Base class for invoking a compiler.
 #
 _Compile.inherit = Builder
 _Compile.outExt = .o
@@ -269,19 +269,19 @@ _Compile.libFlags =
 _Compile.includes =
 
 
-# _CC[SOURCE] : Compile a C file to an object file.
+# _CC(SOURCE) : Compile a C file to an object file.
 #
 _CC.inherit = Compile
 _CC.compiler = gcc
 
 
-# _CC++[SOURCE] : Compile a C++ file to an object file.
+# _CC++(SOURCE) : Compile a C++ file to an object file.
 #
 _CC++.inherit = Compile
 _CC++.compiler = g++
 
 
-# _Link[INPUTS] : Link a command-line C program.
+# _Link(INPUTS) : Link a command-line C program.
 #
 _Link.inherit = Builder
 _Link.outExt =
@@ -289,21 +289,21 @@ _Link.command = {compiler} -o {@} {^} {flags}
 _Link.flags =
 
 
-# _LinkC[INPUTS] : Link a command-line C program.
+# _LinkC(INPUTS) : Link a command-line C program.
 #
 _LinkC.inherit = _Link
 _LinkC.compiler = gcc
 _LinkC.inferClasses = CC.c
 
 
-# _LinkC++[INPUTS] : Link a command-line C++ program.
+# _LinkC++(INPUTS) : Link a command-line C++ program.
 #
 _LinkC++.inherit = _Link
 _LinkC++.compiler = g++
 _LinkC++.inferClasses = CC.c CC++.cpp CC++.cc
 
 
-# _Shell[PROGRAM] : This class defines properties shared by Exec and Run.
+# _Shell(PROGRAM) : This class defines properties shared by Exec and Run.
 # It does not define Builder properties.
 #
 _Shell.exec = {exportPrefix}./{<} {args}
@@ -313,21 +313,21 @@ _Shell.exports =
 _Shell.exportPrefix = $(foreach v,{exports},$v=$(call _shellQuote,{$v}) )
 
 
-# _Exec[PROGRAM] : Run PROGRAM, capturing its output (stdout).
+# _Exec(PROGRAM) : Run PROGRAM, capturing its output (stdout).
 #
 _Exec.inherit = Shell Builder
 _Exec.command = ( {exec} ) > {@} || rm {@}
 _Exec.outExt = .out
 
 
-# _Run[PROGRAM] : run program (as a Phony rule)
+# _Run(PROGRAM) : run program (as a Phony rule)
 #
 _Run.inherit = Shell Phony
 _Run.command = {exec}
 
 
-# _Copy[INPUT]
-# _Copy[INPUT,out=OUT]
+# _Copy(INPUT)
+# _Copy(INPUT,out=OUT)
 #
 #   Copy an artifact.  If OUT is not provided, the file is copied to a
 #   directory named $(VARDIR)$C.
@@ -338,7 +338,7 @@ _Copy.outDir = $(VARDIR)$C/
 _Copy.command = cp {<} {@}
 
 
-# _Mkdir[DIR] : Create directory
+# _Mkdir(DIR) : Create directory
 #
 _Mkdir.inherit = Builder
 _Mkdir.in =
@@ -347,7 +347,7 @@ _Mkdir.mkdirs =
 _Mkdir.command = mkdir -p {@}
 
 
-# _Touch[FILE] : Create empty file
+# _Touch(FILE) : Create empty file
 #
 _Touch.inherit = Builder
 _Touch.in =
@@ -355,41 +355,41 @@ _Touch.out = $A
 _Touch.command = touch {@}
 
 
-# _Remove[FILE] : Remove FILE from the file system
+# _Remove(FILE) : Remove FILE from the file system
 #
 _Remove.inherit = Phony
 _Remove.in =
 _Remove.command = rm -f $A
 
 
-# _Print[INPUT] : Write artifact to stdout.
+# _Print(INPUT) : Write artifact to stdout.
 #
 _Print.inherit = Phony
 _Print.command = @cat {<}
 
 
-# _Tar[INPUTS] : Construct a TAR file
+# _Tar(INPUTS) : Construct a TAR file
 #
 _Tar.inherit = Builder
 _Tar.outExt = .tar
 _Tar.command = tar -cvf {@} {^}
 
 
-# _Gzip[INPUT] :  Compress an artifact.
+# _Gzip(INPUT) :  Compress an artifact.
 #
 _Gzip.inherit = Builder
 _Gzip.command = cat {<} | gzip - > {@} || rm {@}
 _Gzip.outExt = %.gz
 
 
-# _Zip[INPUTS] : Construct a ZIP file
+# _Zip(INPUTS) : Construct a ZIP file
 #
 _Zip.inherit = Builder
 _Zip.outExt = .zip
 _Zip.command = zip {@} {^}
 
 
-# _Unzip[OUT] : Extract from a zip file
+# _Unzip(OUT) : Extract from a zip file
 #
 #   The argument is the name of the file to extract from ther ZIP file.  The
 #   ZIP file name is based on the class name.  Declare a subclass with the
@@ -400,8 +400,8 @@ _Unzip.command = unzip -p {<} $A > {@} || rm {@}
 _Unzip.in = $C.zip
 
 
-# _Write[VAR]
-# _Write[VAR,out=OUT]
+# _Write(VAR)
+# _Write(VAR,out=OUT)
 #
 #   Write the value of a variable to a file.
 #
@@ -483,49 +483,49 @@ _error = $(error $1)
 
 # base.scm
 
-_isInstance = $(filter %],$1)
-_isIndirect = $(findstring @,$(filter-out %],$1))
-_isAlias = $(filter s% r%,$(flavor Alias[$1].in) $(flavor Alias[$1].command))
-_goalID = $(if $(_isAlias),Alias[$1],$(if $(or $(_isInstance),$(_isIndirect)),Goal[$1]))
+_isInstance = $(filter %$],$1)
+_isIndirect = $(findstring @,$(filter-out %$],$1))
+_isAlias = $(filter s% r%,$(flavor Alias($1).in) $(flavor Alias($1).command))
+_goalID = $(if $(_isAlias),Alias($1),$(if $(or $(_isInstance),$(_isIndirect)),Goal($1)))
 _ivar = $(lastword $(subst @, ,$1))
-_ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %[ %% ],$(subst @,[ ,$1) % $(subst @, ] ,$1))))
-_expandX = $(foreach w,$1,$(or $(filter %],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
+_ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1) % $(subst @, $] ,$1))))
+_expandX = $(foreach w,$1,$(or $(filter %$],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
 _expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
 _set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
 _once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
-_argGroup = $(if $(findstring :[,$(subst ],[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) :],]: ,$(patsubst :[%,:[% ,$(subst :], :],$(subst :[, :[,$1)))),$(if $(filter %:,$w),$(subst :,,$w),$w))),$1)),$1)
-_argHash2 = $(subst :,,$(foreach w,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$(subst $;,:$;,$(subst ],:],$(subst [,:[,$1)))))),$(if $(findstring :=,$w),,=)$w))
-_argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$(_argHash2),=$(subst $;, =,$1))
+_argGroup = $(if $(findstring :$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) :$],$]: ,$(patsubst :$[%,:$[% ,$(subst :$], :$],$(subst :$[, :$[,$1)))),$(if $(filter %:,$w),$(subst :,,$w),$w))),$1)),$1)
+_argHash2 = $(subst :,,$(foreach w,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$(subst $;,:$;,$(subst $],:$],$(subst $[,:$[,$1)))))),$(if $(findstring :=,$w),,=)$w))
+_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring =,$1)),$(_argHash2),=$(subst $;, =,$1))
 _hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
 # objects.scm
 
-_getE1 = $(call _error,Reference to undefined property '$(word 2,$(subst .,. ,$1))' for $C[$A]$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(patsubst &%,%,$(patsubst ^%,%,$4)),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(word 2,$(subst .,. ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
+_getE1 = $(call _error,Reference to undefined property '$(word 2,$(subst .,. ,$1))' for $C($A)$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(if $(filter ^&!.%,$4),$(patsubst ^&!.%,$C($A).%,$4),$(patsubst &%,%,$(patsubst ^%,%,$4))),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(word 2,$(subst .,. ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
 _chain = $1 $(foreach w,$($1.inherit),$(call _chain,$w))
 _& = $(filter %,$(foreach w,$(or $(&|$C),$(call _set,&|$C,$(call _chain,$C))),$(if $(filter u%,$(flavor $w.$1)),,$w.$1)))
 _cp = $(or $(foreach w,$(word 1,$2),$(eval $1 = $$(or )$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(if $(filter r%,$(flavor $w)),$(subst },$(if ,,,^$w$]),$(subst {,$(if ,,$$$[call .,),$(if $(findstring {inherit},$(value $w)),$(subst {inherit},$$(call $(if $(value $3),$3,$(call _cp,$3,$(wordlist 2,99999999,$2),_$3,^$1))),$(value $w)),$(value $w)))),$(subst $$,$$$$,$(value $w))))))$1),$(_getE1),$1)
-_! = $(call $(if $(filter u%,$(flavor $C[$A].$1)),$(if $(value &$C.$1),&$C.$1,$(call _cp,&$C.$1,$(_&),_&$C.$1,$2)),$(call _cp,&$C[$A].$1,$C[$A].$1 $(_&),&$C.$1,$2)))
+_! = $(call $(if $(filter u%,$(flavor $C($A).$1)),$(if $(value &$C.$1),&$C.$1,$(call _cp,&$C.$1,$(_&),_&$C.$1,$2)),$(call _cp,&!.$1,$C($A).$1 $(_&),&$C.$1,$2)))
 . = $(if $(filter s%,$(flavor ~$C[$A].$1)),$(~$C[$A].$1),$(call _set,~$C[$A].$1,$(call _!,$1,$2)))
-_getE0 = $(call _error,Mal-formed instance name '$A'; $(if $(subst [,,$(filter %[,$(word 1,$(subst [,[ ,$A)))),empty ARG,$(if $(filter [%,$A),empty CLASS,missing '[')) in CLASS[ARG])
-get = $(foreach A,$2,$(if $(filter %],$A),$(foreach C,$(or $(subst [,,$(filter %[,$(word 1,$(subst [,[ ,$A)))),$(_getE0)),$(foreach A,$(or $(subst &$C[,,&$(patsubst %],%,$A)),$(_getE0)),$(call .,$1))),$(foreach C,File,$(or $(File.$1),$(call .,$1)))))
+_getE0 = $(call _error,Mal-formed instance name '$A'; $(if $(subst $[,,$(filter %$[,$(word 1,$(subst $[,$[ ,$A)))),empty ARG,$(if $(filter $[%,$A),empty CLASS,missing '$[')) in CLASS(ARG))
+get = $(foreach A,$2,$(if $(filter %$],$A),$(foreach C,$(or $(subst $[,,$(filter %$[,$(word 1,$(subst $[,$[ ,$A)))),$(_getE0)),$(foreach A,$(or $(subst &$C$[,,&$(patsubst %$],%,$A)),$(_getE0)),$(call .,$1))),$(foreach C,File,$(or $(File.$1),$(call .,$1)))))
 
 # tools.scm
 
 _pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
 _pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
-_inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%[$(call _pairIDs,$w)],$2))),$x$$$(call get,out,$x)),$w)),$1)
-_depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
-_rollup = $(sort $(foreach w,$(filter %],$1),$w $(call _depsOf,$w)))
-_rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
+_inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %$],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%($(call _pairIDs,$w)),$2))),$x$$$(call get,out,$x)),$w)),$1)
+_depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %$],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
+_rollup = $(sort $(foreach w,$(filter %$],$1),$w $(call _depsOf,$w)))
+_rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %$],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
 _showVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
 _showDefs2 = $(if $1,$(if $(filter u%,$(flavor $1$3)),$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3),$(call _showVar,$1$3,   )$(if $(and $(filter r%,$(flavor $1$3)),$(findstring {inherit},$(value $1$3))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3))),... no definition in scope!)
-_showDefs = $(call _showDefs2,$1,$(or $(&|$(word 1,$(subst [, ,$1))),$(call _set,&|$(word 1,$(subst [, ,$1)),$(call _chain,$(word 1,$(subst [, ,$1))))),.$2)
+_showDefs = $(call _showDefs2,$1,$(or $(&|$(word 1,$(subst $[, ,$1))),$(call _set,&|$(word 1,$(subst $[, ,$1)),$(call _chain,$(word 1,$(subst $[, ,$1))))),.$2)
 
 # outputs.scm
 
-_fsenc = $(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@_,$1)))))))))
+_fsenc = $(subst >,@r,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst =,@E,$(subst $],@-,$(subst $[,@+,$(subst |,@1,$(subst @,@_,$1))))))))))
 _outBX = $(subst @D,/,$(subst $(\s),,$(patsubst /%@_,_%@,$(addprefix /,$(subst @_,@_ ,$(_fsenc))))))
-_outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
+_outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %$],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
 _outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
 
 
@@ -540,20 +540,20 @@ $(word 1,$(MAKEFILE_LIST)) usage:
    make GOALS...            Build the named goals
    make help                Show this message
    make help GOALS...       Describe the named goals
-   make help C[A].P         Compute value of property P for C[A]
-   make clean               `$(call get,command,Alias[clean])`
+   make help C(A).P         Compute value of property P for C(A)
+   make clean               `$(call get,command,Alias(clean))`
 
 Goals can be ordinary Make targets defined by your Makefile,
-instances (`Class[Arg]`), variable indirections (`@var`), or
+instances (`Class(Arg)`), variable indirections (`@var`), or
 aliases defined by your Makefile.
 
 endef
 
 _fmtList = $(if $(word 1,$1),$(subst $(\s),$(\n)   , $(strip $1)),(none))
 
-_getID.P = $(foreach p,$(or $(lastword $(subst ].,] ,$1)),$(error Empty property name)),$(call get,$p,$(patsubst %].$p,%],$1)))
+_getID.P = $(foreach p,$(or $(lastword $(subst $].,$] ,$1)),$(error Empty property name)),$(call get,$p,$(patsubst %$].$p,%$],$1)))
 
-_isProp = $(filter ].%,$(lastword $(subst ], ],$1)))
+_isProp = $(filter $].%,$(lastword $(subst $], $],$1)))
 
 # instance, indirection, alias, other
 _goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,$(if $(_isProp),Property,Other))))
@@ -583,17 +583,17 @@ endef
 
 define _helpAlias
 Target "$1" is an alias defined by:
-$(foreach v,$(filter Alias[$1].%,$(.VARIABLES)),
+$(foreach v,$(filter Alias($1).%,$(.VARIABLES)),
 $(call _showVar,$v,   )
 )
-$(call _helpDeps,Alias[$1])
+$(call _helpDeps,Alias($1))
 
-$1 generates the following rule: $(call _qv,$(call get,rule,Alias[$1]))
+$1 generates the following rule: $(call _qv,$(call get,rule,Alias($1)))
 endef
 
 
 define _helpProperty
-$(foreach p,$(or $(lastword $(subst ].,] ,$1)),$(error Empty property name in $1)),$(foreach id,$(patsubst %].$p,%],$1),$(info $(id) inherits from: $(call _chain,$(word 1,$(subst [, ,$(id))))
+$(foreach p,$(or $(lastword $(subst $].,$] ,$1)),$(error Empty property name in $1)),$(foreach id,$(patsubst %$].$p,%$],$1),$(info $(id) inherits from: $(call _chain,$(word 1,$(subst $[, ,$(id))))
 
 $1 is defined by:
 
@@ -636,7 +636,7 @@ $$%: ; @#$(info $$$* = $(call _qv,$(call or,$$$*)))
 
 _OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 
-Alias[clean].command ?= $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
+Alias(clean).command ?= $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
 
 end = $(eval $(value _epilogue))
 
@@ -654,8 +654,9 @@ define _epilogue
     # Don't try to interpret goals when a '$...' target is given
   else ifneq "" "$(filter help,$(MAKECMDGOALS))"
     # When `help` is given on the command line, we treat all other goals as
-    # things to describe, not build.
-    _goalIDs := $(MAKECMDGOALS:%=HelpGoal[%])
+    # things to describe, not build.  Note Make quirk: "$(...(...)...)"
+    # terminates "$(" at the first ")"!
+    _goalIDs := $(MAKECMDGOALS:%=HelpGoal$[%$])
   else
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
   endif
@@ -665,7 +666,7 @@ define _epilogue
     # using the cache for `help ...` (which would lead to conflicting rules)
     # and for `clean` and similar user-defined targets.
     ifneq "" "$(strip $(call get,needs,$(_goalIDs)))"
-      $(call _evalIDs,UseCache[minion_cache])
+      $(call _evalIDs,UseCache(minion_cache))
       # _cachedIDs is unset => Make will restart, so skip all rule computation.
       _cachedIDs ?= %
     endif

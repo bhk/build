@@ -22,7 +22,7 @@
 (define (_isIndirect target)
   &public
   &native
-  (findstring "@" (word 1 (subst "[" "[ " target))))
+  (findstring "@" (word 1 (subst "(" "( " target))))
 
 
 (define \H &native &public "#")
@@ -33,22 +33,22 @@
 
 (define `(isInstance target)
   &public
-  (filter "%]" target))
+  (filter "%)" target))
 
 
 ;;--------------------------------
 ;; Exported symbols
 ;;--------------------------------
 
-;; Discriminate instances -- CLASS[ARG] -- from other target list entries or
+;; Discriminate instances -- CLASS(ARG) -- from other target list entries or
 ;; goals.  We assume ID is either a valid target (instance, make target),
 ;; alias, or indirection.
 ;;
-;; Return truth if ID is an instance:  CLASS[ARG]
+;; Return truth if ID is an instance:  CLASS(ARG)
 (define (_isInstance id)
   &public
   &native
-  (filter "%]" id))
+  (filter "%)" id))
 
 (export (native-name _isInstance) 1)
 
@@ -60,7 +60,7 @@
 (define (_isIndirect id)
   &public
   &native
-  (findstring "@" (filter-out "%]" id)))
+  (findstring "@" (filter-out "%)" id)))
 
 (export (native-name _isIndirect) 1)
 
@@ -70,8 +70,8 @@
 (define (_isAlias name)
   &public
   &native
-  (filter "s% r%" (._. (native-flavor (.. "Alias[" name "].in"))
-                       (native-flavor (.. "Alias[" name "].command")))))
+  (filter "s% r%" (._. (native-flavor (.. "Alias(" name ").in"))
+                       (native-flavor (.. "Alias(" name ").command")))))
 
 (export (native-name _isAlias) 1)
 
@@ -83,10 +83,10 @@
 (define (_goalID name)
   &native
   (if (_isAlias name)
-      (.. "Alias[" name "]")
+      (.. "Alias(" name ")")
       (if (or (_isInstance name)
               (_isIndirect name))
-          (.. "Goal[" name "]"))))
+          (.. "Goal(" name ")"))))
 
 (export (native-name _goalID) 1)
 
@@ -102,15 +102,15 @@
 
 
 ;; Return a pattern for expanding an indirection.
-;;    @VAR, C@VAR, D@C@VAR  -->  %, C[%], D[C[%]]
+;;    @VAR, C@VAR, D@C@VAR  -->  %, C(%), D(C(%))
 ;;
 (define (_ipat ref)
   &native
   (if (filter "@%" ref)
       "%"
       (subst " " ""
-             (filter "%[ %% ]"
-                     (.. (subst "@" "[ " ref) " % " (subst "@" " ] " ref))))))
+             (filter "%( %% )"
+                     (.. (subst "@" "( " ref) " % " (subst "@" " ) " ref))))))
 
 (export (native-name _ipat) 1)
 
@@ -118,7 +118,7 @@
 (define (_expandX list)
   &native
   (foreach (w list)
-    (or (filter "%]" w)
+    (or (filter "%)" w)
         (if (findstring "@" w)
             (patsubst "%" (_ipat w) (_expandX (native-var (_ivar w))))
             w))))
@@ -141,10 +141,10 @@
   ;; test _expand
   (set-native-fn "ev0" "")
   (set-native-fn "ev1" "a1 b1")
-  (set-native-fn "ev2" "a2 @ev1 c@ev1 c[@v] D@C@ev1 E@ev0")
+  (set-native-fn "ev2" "a2 @ev1 c@ev1 c(@v) D@C@ev1 E@ev0")
   (expect (_expand "E@ev0") "")
   (expect (_expand "a @ev2")
-          "a a2 a1 b1 c[a1] c[b1] c[@v] D[C[a1]] D[C[b1]]")
+          "a a2 a1 b1 c(a1) c(b1) c(@v) D(C(a1)) D(C(b1))")
   nil)
 
 
@@ -236,7 +236,7 @@
 
 (define (_argError arg)
   &native
-  (subst ":[" "<[>" ":]" "<]>" arg))
+  (subst ":(" "<(>" ":)" "<)>" arg))
 
 (VF! (native-name _argError))
 
@@ -248,15 +248,15 @@
 (define (_argGroup arg ?prev)
   &native
   ;; Split at brackets
-  (define `a (subst ":[" " :[" ":]" " :]" arg))
+  (define `a (subst ":(" " :(" ":)" " :)" arg))
 
-  ;; Mark tail of "[..." with extra space
-  (define `b (patsubst ":[%" ":[% " a))
+  ;; Mark tail of "(..." with extra space
+  (define `b (patsubst ":(%" ":(% " a))
 
-  ;; Merge "[..." with immediately following "]", and mark with trailing ":"
-  (define `c (subst "  :]" "]: " b))
+  ;; Merge "(..." with immediately following ")", and mark with trailing ":"
+  (define `c (subst "  :)" "): " b))
 
-  ;; Denature delimiters within matched "[...]"
+  ;; Denature delimiters within matched "(...)"
   (define `d (foreach (w c)
                (if (filter "%:" w)
                    ;; Convert specials to ordinary chars & remove trailing ":"
@@ -265,7 +265,7 @@
 
   (define `e (subst " " "" d))
 
-  (if (findstring ":[" (subst "]" "[" arg))
+  (if (findstring ":(" (subst ")" "(" arg))
       (if (findstring arg prev)
           (_argError arg)
           (_argGroup e arg))
@@ -282,7 +282,7 @@
 
   ;; Mark delimiters as special by prefixing with ":"
   (define `(escape str)
-    (subst "[" ":[" "]" ":]" "," ":," "=" ":=" str))
+    (subst "(" ":(" ")" ":)" "," ":," "=" ":=" str))
 
   (define `(unescape str)
     (subst ":" "" str))
@@ -300,7 +300,7 @@
   &public
   &native
 
-  (if (or (findstring "[" arg) (findstring "]" arg) (findstring "=" arg))
+  (if (or (findstring "(" arg) (findstring ")" arg) (findstring "=" arg))
       (_argHash2 arg)
       ;; common, fast cast
       (.. "=" (subst "," " =" arg))))
@@ -310,12 +310,12 @@
 (expect (_argHash "a=b=c,d=e,f,g") "a=b=c d=e =f =g")
 (expect (_argHash "a") "=a")
 (expect (_argHash "a,b,c") "=a =b =c")
-(expect (_argHash "C[a]") "=C[a]")
-(expect (_argHash "C[a=b]") "=C[a=b]")
-(expect (_argHash "x=C[a]") "x=C[a]")
-(expect (_argHash "c[a,b=1!R[]],d,x=y") "=c[a,b=1!R[]] =d x=y")
-(expect (_argHash "c[a,b=1[]],d,x=y")   "=c[a,b=1[]] =d x=y")
-(expect (_argHash "c[a,b=1[]],d,x=y][") "=c[a,b=1[]] =d x=y<]><[>")
+(expect (_argHash "C(a)") "=C(a)")
+(expect (_argHash "C(a=b)") "=C(a=b)")
+(expect (_argHash "x=C(a)") "x=C(a)")
+(expect (_argHash "c(a,b=1!R()),d,x=y") "=c(a,b=1!R()) =d x=y")
+(expect (_argHash "c(a,b=1()),d,x=y")   "=c(a,b=1()) =d x=y")
+(expect (_argHash "c(a,b=1()),d,x=y)(") "=c(a,b=1()) =d x=y<)><(>")
 
 (expect (_argHash ",") "= =")
 (expect (_argHash ",a,b,") "= =a =b =")

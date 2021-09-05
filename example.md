@@ -29,23 +29,23 @@ The salient feature of Minion is instances.  An instance is a description of
 a build step.  Instances can be provided as goals or as inputs to other
 build steps.
 
-An instance is written `CLASS[ARGUMENT]`.  `ARGUMENT` typically is the name
+An instance is written `CLASS(ARGUMENT)`.  `ARGUMENT` typically is the name
 of an input to the build step.  `CLASS` is the name of a class that is
 defined by Minion or your Makefile.  To get started, let's use some classes
 built into Minion:
 
 ```console
-$ make CC[hello.c]
-#-> CC[hello.c]
+$ make 'CC(hello.c)'
+#-> CC(hello.c)
 gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
 ```
 ```console
-$ make LinkC[CC[hello.c]]
-#-> LinkC[CC[hello.c]]
+$ make 'LinkC(CC(hello.c))'
+#-> LinkC(CC(hello.c))
 gcc -o .out/LinkC.o_CC.c/hello .out/CC.c/hello.o  
 ```
 ```console
-$ make Run[LinkC[CC[hello.c]]]
+$ make 'Run(LinkC(CC(hello.c)))'
 ./.out/LinkC.o_CC.c/hello 
 Hello world.
 ```
@@ -58,13 +58,13 @@ the file extension.  For example, if we provide a ".c" file directly to
 `LinkC`, it knows how to generate the intermediate artifacts.
 
 ```console
-$ make LinkC[hello.c]
-#-> LinkC[hello.c]
+$ make 'LinkC(hello.c)'
+#-> LinkC(hello.c)
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
 ```
 
 This command linked the program, but did not rebuild `hello.o`.  This is
-because we have already built the inferred dependency, `CC[hello.c]`.  Doing
+because we have already built the inferred dependency, `CC(hello.c)`.  Doing
 nothing, whenever possible, is what a build system is all about.
 
 We can demonstrate that everything will get re-built, if necessary, by
@@ -73,11 +73,11 @@ defined by Minion, and it removes the "output directory", which, by default,
 contains all generated artifacts.
 
 ```console
-$ make clean; make LinkC[hello.c]
+$ make clean; make 'LinkC(hello.c)'
 rm -rf .out/
-#-> CC[hello.c]
+#-> CC(hello.c)
 gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
-#-> LinkC[hello.c]
+#-> LinkC(hello.c)
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
 ```
 
@@ -85,11 +85,11 @@ Likewise, `Run` can also infer a `LinkC` instance (which in turn will infer
 a `CC` instance):
 
 ```console
-$ make clean; make Run[hello.c]
+$ make clean; make 'Run(hello.c)'
 rm -rf .out/
-#-> CC[hello.c]
+#-> CC(hello.c)
 gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
-#-> LinkC[hello.c]
+#-> LinkC(hello.c)
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
 ./.out/LinkC.c/hello 
 Hello world.
@@ -106,7 +106,7 @@ whenever they are named as a goal, or as a prerequisite of a target named as
 a goal, and so on.
 
 ```console
-$ make Run[hello.c]
+$ make 'Run(hello.c)'
 ./.out/LinkC.c/hello 
 Hello world.
 ```
@@ -115,8 +115,8 @@ A class named `Exec` also runs a program, but it captures its output in a
 file, so its targets are *not* phony.
 
 ```console
-$ make Exec[hello.c]
-#-> Exec[hello.c]
+$ make 'Exec(hello.c)'
+#-> Exec(hello.c)
 ( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
 ```
 
@@ -126,7 +126,7 @@ code).  If we want to view the output, we can use `Print`, a class that
 generates a phony target that writes its input to `stdout`:
 
 ```console
-$ make Print[hello.c]
+$ make 'Print(hello.c)'
 #include <stdio.h>
 
 int main() {
@@ -134,7 +134,7 @@ int main() {
 }
 ```
 ```console
-$ make Print[Exec[hello.c]]
+$ make 'Print(Exec(hello.c))'
 Hello world.
 ```
 
@@ -147,8 +147,8 @@ gives us visibility into how things are being interpreted, and how they map
 to underlying Make primitives.
 
 ```console
-$ make help Run[hello.c]
-Target ID "Run[hello.c]" is an instance (a generated artifact).
+$ make help 'Run(hello.c)'
+Target ID "Run(hello.c)" is an instance (a generated artifact).
 
 Output: .out/Run/hello.c
 
@@ -160,20 +160,20 @@ Rule:
   | 
 
 Direct dependencies: 
-   LinkC[hello.c]
+   LinkC(hello.c)
 
 Indirect dependencies: 
-   CC[hello.c]
+   CC(hello.c)
 ```
 ```console
-$ make help Exec[hello.c]
-Target ID "Exec[hello.c]" is an instance (a generated artifact).
+$ make help 'Exec(hello.c)'
+Target ID "Exec(hello.c)" is an instance (a generated artifact).
 
 Output: .out/Exec.c/hello.out
 
 Rule: 
   | .out/Exec.c/hello.out : .out/LinkC.c/hello  | 
-  | 	@echo '#-> Exec[hello.c]'
+  | 	@echo '#-> Exec(hello.c)'
   | 	@mkdir -p .out/Exec.c/
   | 	@echo '_vv=.( ./.out/LinkC.c/hello  ) > !@ || rm !@.' > .out/Exec.c/hello.c.vv
   | 	( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
@@ -186,10 +186,10 @@ Rule:
   | 
 
 Direct dependencies: 
-   LinkC[hello.c]
+   LinkC(hello.c)
 
 Indirect dependencies: 
-   CC[hello.c]
+   CC(hello.c)
 ```
 
 
@@ -204,8 +204,8 @@ indirection, and it represents all of the targets identified in the
 variable.
 
 ```console
-$ make Tar[@sources] sources='hello.c binsort.c'
-#-> Tar[@sources]
+$ make 'Tar(@sources)' sources='hello.c binsort.c'
+#-> Tar(@sources)
 tar -cvf .out/Tar_@/sources.tar hello.c binsort.c
 ```
 
@@ -219,16 +219,16 @@ $ make help Run@sources sources='hello.c binsort.c'
    sources = hello.c binsort.c
 
 It expands to the following targets: 
-   Run[hello.c]
-   Run[binsort.c]
+   Run(hello.c)
+   Run(binsort.c)
 ```
 ```console
 $ make Run@sources sources='hello.c binsort.c'
 ./.out/LinkC.c/hello 
 Hello world.
-#-> CC[binsort.c]
+#-> CC(binsort.c)
 gcc -c -o .out/CC.c/binsort.o binsort.c     -MMD -MP -MF .out/CC.c/binsort.o.d
-#-> LinkC[binsort.c]
+#-> LinkC(binsort.c)
 gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
 ./.out/LinkC.c/binsort 
 srch(7) = 5
@@ -237,8 +237,8 @@ srch(12) = 9
 srch(0) = 9
 ```
 ```console
-$ make Tar[CC@sources] sources='hello.c binsort.c'
-#-> Tar[CC@sources]
+$ make 'Tar(CC@sources)' sources='hello.c binsort.c'
+#-> Tar(CC@sources)
 tar -cvf .out/Tar_CC@/sources.tar .out/CC.c/hello.o .out/CC.c/binsort.o
 ```
 
@@ -252,11 +252,11 @@ command, like `make` or `make deploy`.  Minion provides aliases for this
 purpose.  An alias is a name that identifies a phony target instead of an
 actual file.
 
-To define an alias, define a variable named `Alias[NAME].in` to specify a
+To define an alias, define a variable named `Alias(NAME).in` to specify a
 list of targets to be built when NAME is given as a goal, *or* define
-`Alias[NAME].command` to specify a command to be executed when NAME is given
+`Alias(NAME).command` to specify a command to be executed when NAME is given
 as a goal.  Or define both.  Then, when Minion sees `NAME` listed on the
-command line, it will know it should build the corresponding `Alias[NAME]`
+command line, it will know it should build the corresponding `Alias(NAME)`
 instance.
 
 This next Makefile defines alias goals for "default" and "deploy":
@@ -268,16 +268,16 @@ $ cp Makefile2 Makefile
 $ cat Makefile
 sources = hello.c binsort.c
 
-Alias[default].in = Exec@sources
-Alias[deploy].in = Copy@LinkC@sources
+Alias(default).in = Exec@sources
+Alias(deploy).in = Copy@LinkC@sources
 
 include ../minion.mk
 ```
 ```console
 $ make deploy
-#-> Copy[LinkC[hello.c]]
+#-> Copy(LinkC(hello.c))
 cp .out/LinkC.c/hello .out/Copy/hello
-#-> Copy[LinkC[binsort.c]]
+#-> Copy(LinkC(binsort.c))
 cp .out/LinkC.c/binsort .out/Copy/binsort
 ```
 
@@ -286,7 +286,7 @@ target named `default`, so these commands do the same thing:
 
 ```console
 $ make
-#-> Exec[binsort.c]
+#-> Exec(binsort.c)
 ( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
 ```
 ```console
@@ -297,9 +297,9 @@ One last note about aliases: alias names are just for the Make command line.
 Within a Minion makefile, when specifying targets we use only instances,
 source file names, or targets of Make rules.  So if you want to refer to one
 alias as a dependency of another alias, use its instance name:
-`Alias[NAME]`.  For example:
+`Alias(NAME)`.  For example:
 
-    Alias[default].in = Alias[exes] Alias[tests]
+    Alias(default).in = Alias(exes) Alias(tests)
 
 
 ## Properties and Customization
@@ -309,12 +309,12 @@ generated, and to define entirely new, unanticipated build steps.  Let's
 show a couple of examples, and then dive into how and why they work.
 
 ```console
-$ make CC[hello.c].flags=-Os
-#-> CC[hello.c]
+$ make 'CC(hello.c).flags=-Os'
+#-> CC(hello.c)
 gcc -c -o .out/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/CC.c/hello.o.d
-#-> LinkC[hello.c]
+#-> LinkC(hello.c)
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
-#-> Exec[hello.c]
+#-> Exec(hello.c)
 ( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
 ```
 
@@ -328,9 +328,9 @@ We can make this change apply more widely:
 
 ```console
 $ make CC.flags=-Os
-#-> CC[binsort.c]
+#-> CC(binsort.c)
 gcc -c -o .out/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/CC.c/binsort.o.d
-#-> LinkC[binsort.c]
+#-> LinkC(binsort.c)
 gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
 ```
 
@@ -346,10 +346,10 @@ The `command` property gives the command that will be executed to build an
 output file.  We can ask Minion to describe that property:
 
 ```console
-$ make help CC[hello.c].command
-CC[hello.c] inherits from: CC _CC Compile _Compile Builder 
+$ make help 'CC(hello.c).command'
+CC(hello.c) inherits from: CC _CC Compile _Compile Builder 
 
-CC[hello.c].command is defined by:
+CC(hello.c).command is defined by:
 
    _Compile.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsFile}
 
@@ -371,7 +371,7 @@ and implied dependencies.  It refers to a property named `flags` for
 command-line options that address other concerns.
 
 Our previous two examples, above, provided overriding definitions for
-`flags`.  Setting `CC[hello.c].flags=-Os` defined an instance-specific
+`flags`.  Setting `CC(hello.c).flags=-Os` defined an instance-specific
 property, so it only affected the command line for one object file.  Setting
 `CC.flags` provided a definition inherited by all `CC` instances (unless
 they have their own instance-specific definitions).
@@ -411,10 +411,10 @@ from which `CLASS` inherits.  (It resembles a property definition, but
 subclasses have to define the `command` property in its entirety.
 
 ```console
-$ make Sizes[CC[hello.c],CCg[hello.c]]
-#-> CC[hello.c]
+$ make 'Sizes(CC(hello.c),CCg(hello.c))'
+#-> CC(hello.c)
 gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
-#-> CCg[hello.c]
+#-> CCg(hello.c)
 gcc -c -o .out/CCg.c/hello.o hello.c -g     -MMD -MP -MF .out/CCg.c/hello.o.d
 wc -c .out/CC.c/hello.o .out/CCg.c/hello.o
      776 .out/CC.c/hello.o
@@ -431,10 +431,10 @@ which will then continue up the inheritance chain, looking for the
 next-lower-precedence definition.  Perhaps the following will illustrate:
 
 ```console
-$ make help CCg[hello.c].flags CC.flags='-Wall {inherit}'
-CCg[hello.c] inherits from: CCg CC _CC Compile _Compile Builder 
+$ make help 'CCg(hello.c).flags' CC.flags='-Wall {inherit}'
+CCg(hello.c) inherits from: CCg CC _CC Compile _Compile Builder 
 
-CCg[hello.c].flags is defined by:
+CCg(hello.c).flags is defined by:
 
    CCg.flags = -g {inherit}
 
@@ -492,10 +492,10 @@ and group property definitions into classes whose names incorporate `$V`.
 $ cp Makefile4 Makefile
 ```
 ```console
-$ make V=debug help CC[hello.c].flags
-CC[hello.c] inherits from: CC CC-debug  _CC Compile _Compile Builder 
+$ make V=debug help 'CC(hello.c).flags'
+CC(hello.c) inherits from: CC CC-debug  _CC Compile _Compile Builder 
 
-CC[hello.c].flags is defined by:
+CC(hello.c).flags is defined by:
 
    CC-debug.flags = -g
 
@@ -503,10 +503,10 @@ Its value is: '-g'
 
 ```
 ```console
-$ make V=fast help CC[hello.c].flags
-CC[hello.c] inherits from: CC CC-fast  _CC Compile _Compile Builder 
+$ make V=fast help 'CC(hello.c).flags'
+CC(hello.c) inherits from: CC CC-fast  _CC Compile _Compile Builder 
 
-CC[hello.c].flags is defined by:
+CC(hello.c).flags is defined by:
 
    CC-fast.flags = -O3
 
@@ -515,7 +515,7 @@ Its value is: '-O3'
 ```
 
 Finally, we want to be able to build multiple variants with a single
-invocation.  Minion provides a built-in class, `Variants[TARGET]`, that
+invocation.  Minion provides a built-in class, `Variants(TARGET)`, that
 builds a number of variants of the target `TARGET`.  The `all` property
 gives the list of variants, so assigning `Variants.all` will establish a
 default set of variants for all instances of `Variants`.
@@ -525,13 +525,13 @@ defaults to the first word in `Variants.all`.
 
 ```console
 $ make sizes           # default (first) variant
-#-> CC[hello.c]
+#-> CC(hello.c)
 gcc -c -o .out/debug/CC.c/hello.o hello.c -g -MMD -MP -MF .out/debug/CC.c/hello.o.d
-#-> LinkC[hello.c]
+#-> LinkC(hello.c)
 gcc -o .out/debug/LinkC.c/hello .out/debug/CC.c/hello.o  
-#-> CC[binsort.c]
+#-> CC(binsort.c)
 gcc -c -o .out/debug/CC.c/binsort.o binsort.c -g -MMD -MP -MF .out/debug/CC.c/binsort.o.d
-#-> LinkC[binsort.c]
+#-> LinkC(binsort.c)
 gcc -o .out/debug/LinkC.c/binsort .out/debug/CC.c/binsort.o  
 wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
    49648 .out/debug/LinkC.c/hello
@@ -540,13 +540,13 @@ wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
 ```
 ```console
 $ make sizes V=fast    # "fast" variant
-#-> CC[hello.c]
+#-> CC(hello.c)
 gcc -c -o .out/fast/CC.c/hello.o hello.c -O3 -MMD -MP -MF .out/fast/CC.c/hello.o.d
-#-> LinkC[hello.c]
+#-> LinkC(hello.c)
 gcc -o .out/fast/LinkC.c/hello .out/fast/CC.c/hello.o  
-#-> CC[binsort.c]
+#-> CC(binsort.c)
 gcc -c -o .out/fast/CC.c/binsort.o binsort.c -O3 -MMD -MP -MF .out/fast/CC.c/binsort.o.d
-#-> LinkC[binsort.c]
+#-> LinkC(binsort.c)
 gcc -o .out/fast/LinkC.c/binsort .out/fast/CC.c/binsort.o  
 wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
    49424 .out/fast/LinkC.c/hello
@@ -563,13 +563,13 @@ wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
    49424 .out/fast/LinkC.c/hello
    49456 .out/fast/LinkC.c/binsort
    98880 total
-#-> CC[hello.c]
+#-> CC(hello.c)
 gcc -c -o .out/small/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/small/CC.c/hello.o.d
-#-> LinkC[hello.c]
+#-> LinkC(hello.c)
 gcc -o .out/small/LinkC.c/hello .out/small/CC.c/hello.o  
-#-> CC[binsort.c]
+#-> CC(binsort.c)
 gcc -c -o .out/small/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/small/CC.c/binsort.o.d
-#-> LinkC[binsort.c]
+#-> LinkC(binsort.c)
 gcc -o .out/small/LinkC.c/binsort .out/small/CC.c/binsort.o  
 wc -c .out/small/LinkC.c/hello .out/small/LinkC.c/binsort
    49424 .out/small/LinkC.c/hello

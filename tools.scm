@@ -31,10 +31,10 @@
 (export (native-name _pairFiles) 1)
 
 (expect "a.c" (_pairIDs "a.c"))
-(expect "C[a.c]" (_pairIDs "C[a.c]$a.o"))
+(expect "C(a.c)" (_pairIDs "C(a.c)$a.o"))
 
 (expect "a.c" (_pairFiles "a.c"))
-(expect "a.o" (_pairFiles "C[a.c]$a.o"))
+(expect "a.o" (_pairFiles "C(a.c)$a.o"))
 
 
 
@@ -52,9 +52,9 @@
 
         (define `inferred
           (word 1
-                (filter "%]"
+                (filter "%)"
                         (patsubst (.. "%" (or (suffix file) "."))
-                                  (.. "%[" id "]")
+                                  (.. "%(" id ")")
                                   inferClasses))))
 
         (or (foreach (i inferred)
@@ -65,12 +65,12 @@
 (export (native-name _inferPairs) nil)
 
 
-(set-native "IC[a.c].out" "out/a.o")
-(set-native "IP[a.o].out" "out/P/a")
-(set-native "IP[IC[a.c]].out" "out/IP_IC/a")
+(set-native "IC(a.c).out" "out/a.o")
+(set-native "IP(a.o).out" "out/P/a")
+(set-native "IP(IC(a.c)).out" "out/IP_IC/a")
 
-(expect (_inferPairs "a.x a.o IC[a.c]$out/a.o" "IP.o")
-        "a.x IP[a.o]$out/P/a IP[IC[a.c]]$out/IP_IC/a")
+(expect (_inferPairs "a.x a.o IC(a.c)$out/a.o" "IP.o")
+        "a.x IP(a.o)$out/P/a IP(IC(a.c))$out/IP_IC/a")
 
 
 ;; Return transitive dependencies of ID, excluding non-instances.  Memoize
@@ -127,29 +127,29 @@
 
 (begin
   ;; Test _depsOf, _rollup, _rollupEx
-  (set-native "R[a].needs" "R[b] R[c] x y z")
-  (set-native "R[b].needs" "R[c] R[d] x y z")
-  (set-native "R[c].needs" "R[d]")
-  (set-native "R[d].needs" "R[e]")
-  (set-native "R[e].needs" "")
+  (set-native "R(a).needs" "R(b) R(c) x y z")
+  (set-native "R(b).needs" "R(c) R(d) x y z")
+  (set-native "R(c).needs" "R(d)")
+  (set-native "R(d).needs" "R(e)")
+  (set-native "R(e).needs" "")
 
-  (expect (_depsOf "R[a]")
-          "R[b] R[c] R[d] R[e]")
+  (expect (_depsOf "R(a)")
+          "R(b) R(c) R(d) R(e)")
 
-  (expect (_rollup "R[a]")
-          "R[a] R[b] R[c] R[d] R[e]")
+  (expect (_rollup "R(a)")
+          "R(a) R(b) R(c) R(d) R(e)")
 
-  (expect (strip (_rollupEx "R[a]" ""))
-          "R[a] R[b] R[c] R[d] R[e]")
+  (expect (strip (_rollupEx "R(a)" ""))
+          "R(a) R(b) R(c) R(d) R(e)")
 
-  (expect (strip (_rollupEx "R[a]" "R[d]"))
-          "R[a] R[b] R[c]")
+  (expect (strip (_rollupEx "R(a)" "R(d)"))
+          "R(a) R(b) R(c)")
 
-  (set-native "_R[d]_needs" "R[x]")
-  (set-native "R[x].needs" "")
+  (set-native "_R(d)_needs" "R(x)")
+  (set-native "R(x).needs" "")
 
-  (expect (strip (_rollupEx "R[a]" "R[d]"))
-          "R[a] R[b] R[c] R[x]")
+  (expect (strip (_rollupEx "R(a)" "R(d)"))
+          "R(a) R(b) R(c) R(x)")
   nil)
 
 
@@ -204,26 +204,26 @@
 (define (_showDefs id prop)
   &native
   (_showDefs2 id
-              (scopes (word 1 (subst "[" " " id)))
+              (scopes (word 1 (subst "(" " " id)))
               (.. "." prop)))
 
 (export (native-name _showDefs) nil)
 
 (begin
-  (set-native-fn "SD[a].foo" "{inherit}")
+  (set-native-fn "SD(a).foo" "{inherit}")
   (set-native    "SD.inherit" "SDP")
   (set-native-fn "SDP.inherit" "SDPP")
   (set-native-fn "SDP.inherit" "SDPP")
   (set-native    "SDPP.foo" "b")
 
-  (expect (_showDefs "SD[a]" "foo")
-          (.. "   SD[a].foo = {inherit}\n"
+  (expect (_showDefs "SD(a)" "foo")
+          (.. "   SD(a).foo = {inherit}\n"
               "\n"
               "...wherein {inherit} references:\n"
               "\n"
               "   SDPP.foo := b"))
 
-  (expect (_showDefs "UNDEF[a]" "foo")
+  (expect (_showDefs "UNDEF(a)" "foo")
           (.. "... no definition in scope!"))
 
   nil)

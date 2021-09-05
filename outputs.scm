@@ -11,7 +11,7 @@
 ;; The chief requirement for output file names is that conflicts must be
 ;; avoided.  Avoiding conflicts is complicated by the inference feature, which
 ;; creates multiple ways of expressing the same thing.  For example,
-;; `LinkC[foo.c]` vs. `LinkC[CC[foo.c]]` produce equivalent results,
+;; `LinkC(foo.c)` vs. `LinkC(CC(foo.c))` produce equivalent results,
 ;; but they are different instance names, and as such must have different
 ;; output file names.
 ;;
@@ -24,30 +24,30 @@
 ;; {out} property) into the output location as follows:
 ;;
 ;;     Encode ".."  and "."  path elements and leading "/" for safety and to
-;;     avoid aliasing -- e.g., the instance names `C[f]` and `C[./f]` need
+;;     avoid aliasing -- e.g., the instance names `C(f)` and `C(./f)` need
 ;;     different output files.  When {outExt} does not include `%`, we
 ;;     incorporate the input file extension into the output directory.
 ;;
 ;;     Instance Name          outDir                   outName
 ;;     --------------------   ----------------------   -------------
-;;     CLASS[DIRS/NAME.EXT]   OUTDIR/CLASS.EXT/DIRS/   NAME{outExt}
-;;     CC[f.c]                .out/CC.c/               f.o
-;;     CC[d/f.cpp]            .out/CC.cpp/d/           f.o
-;;     CC[.././f.c]           .out/CC.c/_../_./        f.o
-;;     CC[/d/f.c]             .out/CC.c/_root_/d/      f.o
+;;     CLASS(DIRS/NAME.EXT)   OUTDIR/CLASS.EXT/DIRS/   NAME{outExt}
+;;     CC(f.c)                .out/CC.c/               f.o
+;;     CC(d/f.cpp)            .out/CC.cpp/d/           f.o
+;;     CC(.././f.c)           .out/CC.c/_../_./        f.o
+;;     CC(/d/f.c)             .out/CC.c/_root_/d/      f.o
 ;;
-;;     Differentiate CLASS[FILE] from CLASS[ID] (where ID.out = FILE) by
+;;     Differentiate CLASS(FILE) from CLASS(ID) (where ID.out = FILE) by
 ;;     appending `_` to the class directory.  For readability, collapse
 ;;     "CLASS.EXT_/OUTDIR/..." to "CLASS.EXT_...":
 ;;
 ;;     Instance Name          outDir                   outName
 ;;     ---------------------  ----------------------   -------
-;;     LinkC[CC[f.c]]         .out/LinkC.o_CC.c/       f
-;;     LinkC[f.c]             .out/LinkC.c/            f       [*]
+;;     LinkC(CC(f.c))         .out/LinkC.o_CC.c/       f
+;;     LinkC(f.c)             .out/LinkC.c/            f       (*)
 ;;
 ;;     [*] Note on handling inference: We compute .outDir based on the named
 ;;         FILE (f.c) , not on the inferred `.out/CC.c/f.o`.
-;;         Otherwise, the result would collide with LinkC[CC[f.c]].
+;;         Otherwise, the result would collide with LinkC(CC(f.c)).
 ;;
 ;; When the argument is an indirection, or is otherwise not a target ID used
 ;; in {in}, we use it as the basis for the file name.  Any "@" or "C@"
@@ -55,9 +55,9 @@
 ;;
 ;;     Instance Name          outDir                   outName
 ;;     --------------------   ----------------------   -----------
-;;     LinkC[@VAR]            .out/LinkC_@/            VAR{outExt}
-;;     LinkC[C2@VAR]          .out/LinkC_C2@/          VAR{outExt}
-;;     Write[x/y/z]           .out/Write/x/y/          z{outExt}
+;;     LinkC(@VAR)            .out/LinkC_@/            VAR{outExt}
+;;     LinkC(C2@VAR)          .out/LinkC_C2@/          VAR{outExt}
+;;     Write(x/y/z)           .out/Write/x/y/          z{outExt}
 ;;
 ;; When the argument is complex (with named values or comma-delimited
 ;; values) we apply the above logic to the *first* value in the argument,
@@ -71,8 +71,8 @@
 ;;
 ;;     Instance Name           outDir                          outName
 ;;     ---------------------   -----------------------------   ------------
-;;     CLASS[D/NAME.EXT,...]   OUTDIR/CLASS.EXT__{encArg}/D/   NAME{outExt}
-;;     P[d/a.c,x.c,opt=3]      .out/P.c__@1,x.c,opt@E3/d/      a
+;;     CLASS(D/NAME.EXT,...)   OUTDIR/CLASS.EXT__{encArg}/D/   NAME{outExt}
+;;     P(d/a.c,x.c,opt=3)      .out/P.c__@1,x.c,opt@E3/d/      a
 ;;
 ;;
 ;; Output file names should avoid Make and shell special characters, so that
@@ -83,10 +83,10 @@
 ;;
 ;; File:   _ - + { } / ^ . ~
 ;; Class:  _ - + { } / ^   ~ !
-;; Value:  _ - + { } / ^ . ~ ! @   = [ ] <
-;; Arg:    _ - + { } / ^ . ~ ! @ , = [ ] <
-;; ~Make:                  ~       = [ ] < > * ? # $ % ; \ :
-;; ~Bash:                  ~ !       [ ] < > * ? # $ % ; \   | & ( ) ` ' "
+;; Value:  _ - + { } / ^ . ~ ! @ = ( ) < >
+;; Arg:    _ - + { } / ^ . ~ ! @ = ( ) < > ,
+;; ~Make:                  ~     =     < >   [ ] * ? # $ % ; \ :
+;; ~Bash:                  ~ !     ( ) < >   [ ] * ? # $ % ; \   | & ` ' "
 ;;
 
 
@@ -98,13 +98,14 @@
 
   (subst "@" "@_"
          "|" "@1"
-         "[" "@+"
-         "]" "@-"
+         "(" "@+"
+         ")" "@-"
          "=" "@E"
          "!" "@B"
          "~" "@T"
          "/" "@D"
          "<" "@l"
+         ">" "@r"
          str))
 
 (export (native-name _fsenc) 1)
@@ -169,9 +170,9 @@
 ;; arg = file == in[1]
 (expect (_outBS "C" "d/f.c" ".o" "d/f.c")  "C.c/d/f.c")
 ;; arg = ID == in[1]
-(expect (_outBS "P" "C[d/f.c]" nil ".out/C/f.o")  "P.o_C/f.o")
+(expect (_outBS "P" "C(d/f.c)" nil ".out/C/f.o")  "P.o_C/f.o")
 ;; arg != in[1]
-(expect (_outBS "P" "C[d/f.c]" nil nil)  "P/C@+d/f.c@-")
+(expect (_outBS "P" "C(d/f.c)" nil nil)  "P/C@+d/f.c@-")
 
 
 ;; _outBasis for complex arguments, or non-input argument
@@ -214,21 +215,21 @@
     { C: ".o", P: "", PX: "" })
 
   (define test-files
-    { "C[a.c]": ".out/C.c/a.o",
-      "File[d/a.c]": "d/a.c",
-      "C[d/a.c]": ".out/C.c/d/a.o",
+    { "C(a.c)": ".out/C.c/a.o",
+      "File(d/a.c)": "d/a.c",
+      "C(d/a.c)": ".out/C.c/d/a.o",
       })
 
   (define (get-test-file class arg1)
     (cond ((filter "%X" class) nil)
           ((findstring "@" arg1) nil)    ;; indirections are not IDs
-          ((filter "%]" arg1) (or (dict-get arg1 test-files)
+          ((filter "%)" arg1) (or (dict-get arg1 test-files)
                                   (error (.. "Unknown ID: " arg1))))
           (else arg1)))
 
   (define `(t1 id out)
-    (define class (word 1 (subst "[" " " id)))
-    (define arg (patsubst (.. class "[%]") "%" id))
+    (define class (word 1 (subst "(" " " id)))
+    (define arg (patsubst (.. class "(%)") "%" id))
     (define arg1 (word 1 (_hashGet (_argHash arg))))
     (define `outExt (dict-get class class-exts "%"))
     (define `file (get-test-file class arg1))
@@ -236,39 +237,39 @@
     (expect (_outBasis class arg outExt file arg1)
             out))
 
-  ;; C[FILE] (used as an input ID)
-  (t1 "C[a.c]"          "C.c/a.c")
-  (t1 "C[d/a.c]"        "C.c/d/a.c")
-  (t1 "D[d/a.c]"        "D/d/a.c")
-  (t1 "C[/.././a]"      "C/_root_/_../_./a")
-  (t1 "C@![a.c]"        "C@_@B/a.c")
+  ;; C(FILE) (used as an input ID)
+  (t1 "C(a.c)"          "C.c/a.c")
+  (t1 "C(d/a.c)"        "C.c/d/a.c")
+  (t1 "D(d/a.c)"        "D/d/a.c")
+  (t1 "C(/.././a)"      "C/_root_/_../_./a")
+  (t1 "C@!(a.c)"        "C@_@B/a.c")
 
-  ;; C[INSTANCE] (used as an input ID)
-  (t1 "P[C[a.c]]"       "P.o_C.c/a.o")
-  (t1 "P[C[d/a.c]]"     "P.o_C.c/d/a.o")
-  (t1 "P[File[d/a.c]]"  "P.c_/d/a.c") ;; .out = d/a.c
+  ;; C(INSTANCE) (used as an input ID)
+  (t1 "P(C(a.c))"       "P.o_C.c/a.o")
+  (t1 "P(C(d/a.c))"     "P.o_C.c/d/a.o")
+  (t1 "P(File(d/a.c))"  "P.c_/d/a.c") ;; .out = d/a.c
 
-  ;; C[SIMPLE] (NOT an input ID)
-  (t1 "X[C[A]]"       "X/C@+A@-")
+  ;; C(SIMPLE) (NOT an input ID)
+  (t1 "X(C(A))"       "X/C@+A@-")
 
-  ;; C[@VAR] (NOT an input ID)
-  (t1 "C[@var]"         "C_@/var")
+  ;; C(@VAR) (NOT an input ID)
+  (t1 "C(@var)"         "C_@/var")
 
-  ;; C[CLS@VAR] (NOT an input ID)
-  (t1 "C[D@var]"        "C_D@/var")
-  (t1 "C[D@E@var]"      "C_D@_E@/var")
-  (t1 "C[D@E@d/var]"    "C_D@_E@/d/var")
+  ;; C(CLS@VAR) (NOT an input ID)
+  (t1 "C(D@var)"        "C_D@/var")
+  (t1 "C(D@E@var)"      "C_D@_E@/var")
+  (t1 "C(D@E@d/var)"    "C_D@_E@/d/var")
 
   ;; Complex (arg1 is an input ID)
-  (t1 "P[a,b]"          "P_@1,b/a")
-  (t1 "P[d/a.c,o=3]"    "P_@1,o@E3.c/d/a.c")
-  (t1 "Q[d/a.c,o=3]"    "Q_@1,o@E3/d/a.c")
-  (t1 "P[C[d/a.c],o=3]" "P_@1,o@E3.o_C.c/d/a.o")
-  (t1 "P[@v,o=3]"       "P_@1,o@E3_@/v")
-  (t1 "P[C@v,o=3]"      "P_@1,o@E3_C@/v")
+  (t1 "P(a,b)"          "P_@1,b/a")
+  (t1 "P(d/a.c,o=3)"    "P_@1,o@E3.c/d/a.c")
+  (t1 "Q(d/a.c,o=3)"    "Q_@1,o@E3/d/a.c")
+  (t1 "P(C(d/a.c),o=3)" "P_@1,o@E3.o_C.c/d/a.o")
+  (t1 "P(@v,o=3)"       "P_@1,o@E3_@/v")
+  (t1 "P(C@v,o=3)"      "P_@1,o@E3_C@/v")
 
   ;; Complex (arg1 is NOT an input ID)
-  (t1 "PX[C[a.c],b]"    "PX_@1,b/C@+a.c@-")
-  (t1 "P[x=1,y=2]"      "P_x@E1,y@E2/out")  ;; no unnamed arg
+  (t1 "PX(C(a.c),b)"    "PX_@1,b/C@+a.c@-")
+  (t1 "P(x=1,y=2)"      "P_x@E1,y@E2/out")  ;; no unnamed arg
 
   nil)

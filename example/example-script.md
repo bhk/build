@@ -24,14 +24,14 @@ The salient feature of Minion is instances.  An instance is a description of
 a build step.  Instances can be provided as goals or as inputs to other
 build steps.
 
-An instance is written `CLASS[ARGUMENT]`.  `ARGUMENT` typically is the name
+An instance is written `CLASS(ARGUMENT)`.  `ARGUMENT` typically is the name
 of an input to the build step.  `CLASS` is the name of a class that is
 defined by Minion or your Makefile.  To get started, let's use some classes
 built into Minion:
 
-    $ make CC[hello.c]
-    $ make LinkC[CC[hello.c]]
-    $ make Run[LinkC[CC[hello.c]]]
+    $ make 'CC(hello.c)'
+    $ make 'LinkC(CC(hello.c))'
+    $ make 'Run(LinkC(CC(hello.c)))'
 
 
 ## Inference
@@ -40,10 +40,10 @@ Some classes have the ability to *infer* intermediate build steps, based on
 the file extension.  For example, if we provide a ".c" file directly to
 `LinkC`, it knows how to generate the intermediate artifacts.
 
-    $ make LinkC[hello.c]
+    $ make 'LinkC(hello.c)'
 
 This command linked the program, but did not rebuild `hello.o`.  This is
-because we have already built the inferred dependency, `CC[hello.c]`.  Doing
+because we have already built the inferred dependency, `CC(hello.c)`.  Doing
 nothing, whenever possible, is what a build system is all about.
 
 We can demonstrate that everything will get re-built, if necessary, by
@@ -51,12 +51,12 @@ re-issuing this command after invoking `make clean`.  The `clean` target is
 defined by Minion, and it removes the "output directory", which, by default,
 contains all generated artifacts.
 
-    $ make clean; make LinkC[hello.c]
+    $ make clean; make 'LinkC(hello.c)'
 
 Likewise, `Run` can also infer a `LinkC` instance (which in turn will infer
 a `CC` instance):
 
-    $ make clean; make Run[hello.c]
+    $ make clean; make 'Run(hello.c)'
 
 
 ## Phony Targets
@@ -68,20 +68,20 @@ for side effects only, are called phony targets.  They are always executed
 whenever they are named as a goal, or as a prerequisite of a target named as
 a goal, and so on.
 
-    $ make Run[hello.c]
+    $ make 'Run(hello.c)'
 
 A class named `Exec` also runs a program, but it captures its output in a
 file, so its targets are *not* phony.
 
-    $ make Exec[hello.c]
+    $ make 'Exec(hello.c)'
 
 Using `Exec` is a way to run unit tests.  The existence of the output file
 is evidence that the unit test passed (the program exited without an error
 code).  If we want to view the output, we can use `Print`, a class that
 generates a phony target that writes its input to `stdout`:
 
-    $ make Print[hello.c]
-    $ make Print[Exec[hello.c]]
+    $ make 'Print(hello.c)'
+    $ make 'Print(Exec(hello.c))'
 
 
 ## Help
@@ -91,8 +91,8 @@ of the other goals on the command line, instead of building them.  This
 gives us visibility into how things are being interpreted, and how they map
 to underlying Make primitives.
 
-    $ make help Run[hello.c]
-    $ make help Exec[hello.c]
+    $ make help 'Run(hello.c)'
+    $ make help 'Exec(hello.c)'
 
 
 ## Indirections
@@ -105,14 +105,14 @@ There are two forms of indirections.  The first is called a simple
 indirection, and it represents all of the targets identified in the
 variable.
 
-    $ make Tar[@sources] sources='hello.c binsort.c'
+    $ make 'Tar(@sources)' sources='hello.c binsort.c'
 
 The other form is called a mapped indirection.  This constructs an instance
 for each target identified in the variable.
 
     $ make help Run@sources sources='hello.c binsort.c'
     $ make Run@sources sources='hello.c binsort.c'
-    $ make Tar[CC@sources] sources='hello.c binsort.c'
+    $ make 'Tar(CC@sources)' sources='hello.c binsort.c'
 
 
 ## Aliases
@@ -124,11 +124,11 @@ command, like `make` or `make deploy`.  Minion provides aliases for this
 purpose.  An alias is a name that identifies a phony target instead of an
 actual file.
 
-To define an alias, define a variable named `Alias[NAME].in` to specify a
+To define an alias, define a variable named `Alias(NAME).in` to specify a
 list of targets to be built when NAME is given as a goal, *or* define
-`Alias[NAME].command` to specify a command to be executed when NAME is given
+`Alias(NAME).command` to specify a command to be executed when NAME is given
 as a goal.  Or define both.  Then, when Minion sees `NAME` listed on the
-command line, it will know it should build the corresponding `Alias[NAME]`
+command line, it will know it should build the corresponding `Alias(NAME)`
 instance.
 
 This next Makefile defines alias goals for "default" and "deploy":
@@ -147,9 +147,9 @@ One last note about aliases: alias names are just for the Make command line.
 Within a Minion makefile, when specifying targets we use only instances,
 source file names, or targets of Make rules.  So if you want to refer to one
 alias as a dependency of another alias, use its instance name:
-`Alias[NAME]`.  For example:
+`Alias(NAME)`.  For example:
 
-    Alias[default].in = Alias[exes] Alias[tests]
+    Alias(default).in = Alias(exes) Alias(tests)
 
 
 ## Properties and Customization
@@ -158,7 +158,7 @@ A build system should make it easy to customize how build results are
 generated, and to define entirely new, unanticipated build steps.  Let's
 show a couple of examples, and then dive into how and why they work.
 
-    $ make CC[hello.c].flags=-Os
+    $ make 'CC(hello.c).flags=-Os'
 
 Observe how this affected the `gcc` command line.  [Also, as a side note,
 note that Minion knew to re-compile the object file, even when no input
@@ -181,7 +181,7 @@ term "instance"), but in Minion there is no mutable state.
 The `command` property gives the command that will be executed to build an
 output file.  We can ask Minion to describe that property:
 
-    $ make help CC[hello.c].command
+    $ make help 'CC(hello.c).command'
 
 This shows us the computed value, the definition, which is attached to a
 base class called `_Compile`, and the classes from which this instance
@@ -197,7 +197,7 @@ and implied dependencies.  It refers to a property named `flags` for
 command-line options that address other concerns.
 
 Our previous two examples, above, provided overriding definitions for
-`flags`.  Setting `CC[hello.c].flags=-Os` defined an instance-specific
+`flags`.  Setting `CC(hello.c).flags=-Os` defined an instance-specific
 property, so it only affected the command line for one object file.  Setting
 `CC.flags` provided a definition inherited by all `CC` instances (unless
 they have their own instance-specific definitions).
@@ -227,7 +227,7 @@ from which `CLASS` inherits.  (It resembles a property definition, but
 `Sizes` inherits from `Phony`, which is much more generic than `CC`, so its
 subclasses have to define the `command` property in its entirety.
 
-    $ make Sizes[CC[hello.c],CCg[hello.c]]
+    $ make 'Sizes(CC(hello.c),CCg(hello.c))'
 
 The `CCg.flags` definition references `{inherit}`.  This is does not refer
 to a property named "inherit"; it has a special function, and that is to
@@ -237,7 +237,7 @@ definition that was invoked via `{inherit}` may itself use `{inherit}`,
 which will then continue up the inheritance chain, looking for the
 next-lower-precedence definition.  Perhaps the following will illustrate:
 
-    $ make help CCg[hello.c].flags CC.flags='-Wall {inherit}'
+    $ make help 'CCg(hello.c).flags' CC.flags='-Wall {inherit}'
 
 
 ## Variants
@@ -278,11 +278,11 @@ and group property definitions into classes whose names incorporate `$V`.
     CC-small.flags = -Os
 
     $ cp Makefile4 Makefile
-    $ make V=debug help CC[hello.c].flags
-    $ make V=fast help CC[hello.c].flags
+    $ make V=debug help 'CC(hello.c).flags'
+    $ make V=fast help 'CC(hello.c).flags'
 
 Finally, we want to be able to build multiple variants with a single
-invocation.  Minion provides a built-in class, `Variants[TARGET]`, that
+invocation.  Minion provides a built-in class, `Variants(TARGET)`, that
 builds a number of variants of the target `TARGET`.  The `all` property
 gives the list of variants, so assigning `Variants.all` will establish a
 default set of variants for all instances of `Variants`.

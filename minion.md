@@ -17,7 +17,7 @@ If you pass arguments on the command line, Minion will treat the arguments
 as a set of targets and build them.  Each argument may be one of the
 following:
 
-  * A *instance*, such as `CC[foo.c]`
+  * A *instance*, such as `CC(foo.c)`
   * An *indirection*, such as `@var` or `CC@var`
   * An ordinary Make target name
   * An *alias*
@@ -29,8 +29,8 @@ will output a description of the arguments, rather than build them.
 
 Aliases are names that may be used on the command line as goals.
 
-If your makefile defines a variable named `Alias[NAME].in` or
-`Alias[NAME].command`, then `NAME` is a valid *alias*.  The value of the
+If your makefile defines a variable named `Alias(NAME).in` or
+`Alias(NAME).command`, then `NAME` is a valid *alias*.  The value of the
 `.in` variable, if defined, lists all the targets that the alias will cause
 to be built.  It can contain instances, indirections, or ordinary target
 names.  The value of the `.command` variable, if defined, is a shell command
@@ -57,16 +57,16 @@ or more target IDs (instances or ordinary target names).
 
 A mapped indirection applies the CLASS constructor individually to the
 targets resulting from the expansion of `@VAR`.  For example, if `@var`
-expands to `a.c b.c`, then `CC@var` will expand to `CC[a.c] CC[b.c]`.
+expands to `a.c b.c`, then `CC@var` will expand to `CC(a.c) CC(b.c)`.
 
 Mapped indirections can also use a "chained" syntax.  Using the same example
-`var` as above, `C1@C2@var`, would yield `C1[C2[a.c]] C1[C2[b.c]]`.
+`var` as above, `C1@C2@var`, would yield `C1(C2(a.c)) C1(C2(b.c))`.
 
-`CLASS` and `VAR` may not contain `[` or `]`, and the indirection must be an
+`CLASS` and `VAR` may not contain `(` or `)`, and the indirection must be an
 entire word that matches one of the above two forms.  For example,
-`CC[@sources]` is a target ID, *not* an indirection, and will not be altered
+`CC(@sources)` is a target ID, *not* an indirection, and will not be altered
 during the expansion step.  Its argument, on the other hand, *is* an
-indirection, and it will be expanded when the `CC[@sources]` instance's
+indirection, and it will be expanded when the `CC(@sources)` instance's
 inputs are evaluated.
 
 ## Instances
@@ -74,7 +74,7 @@ inputs are evaluated.
 A "instance" is an expression that describes how to produce an artifact from
 other artifacts, structured as:
 
-    `CLASS[ARG]`
+    `CLASS(ARG)`
 
 Neither `CLASS` nor `ARG` may be empty.  (Complete [syntax](#Syntax) details
 are given below.)
@@ -112,7 +112,7 @@ property values are evaluated *at most* once per instance (due to
 memoization).
 
 Instance-specific properties can be defined, using variables named
-`CLASS[ARG].PROPERTY`.  When present, these take precedence over a
+`CLASS(ARG).PROPERTY`.  When present, these take precedence over a
 corresponding `CLASS.PROPERTY` definition.  These can occur with any class
 in the inheritance chain of an instance.
 
@@ -168,8 +168,8 @@ be excluded from the cache file and instead be generated each time you
 invoke make.  For example:
 
     ...
-    minion_cache = Alias[default]
-    minion_cache_exclude = LinkC[@prog]
+    minion_cache = Alias(default)
+    minion_cache_exclude = LinkC(@prog)
     ...
     prog = $(wildcard *.c)
     ...
@@ -272,7 +272,7 @@ output file location to be specified by an argument with the name `out`:
 
     _Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
 
-For example, `Copy[CC[foo.c],out=deploy/foo.o]` will place its result in
+For example, `Copy(CC(foo.c),out=deploy/foo.o)` will place its result in
 "deploy/foo.o".
 
 ### `{up}`
@@ -329,7 +329,7 @@ Make will interpret it as a variable assignment, not a goal.
 
 Rule inference is performed on input files.  For example, inference allows a
 ".c" file to be supplied where a ".o" file is expected, as in
-`LinkC[hello.c]`.  Each class can define its own inference rules by
+`LinkC(hello.c)`.  Each class can define its own inference rules by
 overriding the `inferClasses` property.  It consists of a list of entries of
 the form `CLASS.EXT`, each indicating that `CLASS` should be applied to a
 input file ending in `.EXT`.
@@ -359,10 +359,10 @@ when the variable name is used.  For example:
 
     Instance name     `nameBasis`
     --------------    -------------------------------
-    Class[FILE]       FILE
-    Class[C[A]]       $(call get,out,C[A])
-    Class[@VAR]       VAR
-    Class[C@VAR]      VAR
+    Class(FILE)       FILE
+    Class(C(A))       $(call get,out,C(A))
+    Class(@VAR)       VAR
+    Class(C@VAR)      VAR
 
 ### Validity Values
 
@@ -414,32 +414,32 @@ implementation detail; refer to prototype.scm for details.
 Assume a Makefile contains the following:
 
 
-    Alias[default].in = @results
-    Alias[deploy].in = Deploy[@results]
+    Alias(default).in = @results
+    Alias(deploy).in = Deploy(@results)
 
-    results = LinkC[@objects]
+    results = LinkC(@objects)
     objects = baz.o CC@sources
     sources = foo.c bar.c
 
     include minion.mk
 
 Typing `make` or `make default` will build `@results`, and typing `make
-deploy` will build `Deploy[@results]`.
+deploy` will build `Deploy(@results)`.
 
 There is a single `LinkC` instance, and its argument is `@objects`.
 The program's `in` property defaults to its argument's unnamed values:
 
-    LinkC[@objects].in --> "@objects"
+    LinkC(@objects).in --> "@objects"
 
 The `inIDs` property gives the result of expanding indirections:
 
-    LinkC[@objects].inIDs
-       --> "baz.o CC[foo.c] CC[bar.c]"
+    LinkC(@objects).inIDs
+       --> "baz.o CC(foo.c) CC(bar.c)"
 
 The `prereqs` property resolves these target IDs to their corresponding
 outputs:
 
-    LinkC[@objects].prereqs
+    LinkC(@objects).prereqs
        --> "baz.o .out/CC.c/foo.o .out/CC.c/bar.o"
 
 ## Exported Definitions
@@ -493,7 +493,7 @@ within recursive property definitions.
   whose name matches `K`.  `K` is a variable that defaults to the empty
   string, which identifies unnamed values, and can be bound to other values
   using `foreach`.  For example, during evaluation of a property of
-  `Class[a,b,x=1,x=2]`:
+  `Class(a,b,x=1,x=2)`:
 
       $(_args) => "a b"
       $(foreach K,x,$(_args)) => "1 2"
@@ -515,7 +515,7 @@ names in commands.
 The following BNF summarizes:
 
     Name     := NameChar+
-    Instance := Class '[' Argument ']'
+    Instance := Class '(' Argument ')'
     Class    := ClassChar+
     Argument := ArgEntry ( ',' ArgEntry )*
     ArgEntry := ( Name `=` )? Value
@@ -524,15 +524,15 @@ The following BNF summarizes:
 
 These definitions rely on the following character classes:
 
-    NameChar:   A-Z a-z 0-9 @ _ - + / ^ ~ { } .
-    ClassChar:  A-Z a-z 0-9 @ _ - + / ^ ~ { }
-    PropChar:   A-Z a-z 0-9 @ _ - + / ^ ~       <
+    ClassChar:  A-Z a-z 0-9 _ - + / ^ ~ { }
+    NameChar:   A-Z a-z 0-9 _ - + / ^ ~ { } .
+    PropChar:   A-Z a-z 0-9 _ - + / ^ ~       @ < >
 
 Note that arguments must contain at least one value, and each argument value
 must contain at least one character.  Argument values may contain other
-instances embedded within them, which means they can contain `[` and `]`,
+instances embedded within them, which means they can contain `(` and `)`,
 characters, but only in balanced pairs, as well as `,` and `=`, but only
-within nested brackets.
+within nested parentheses.
 
 In general, instances will contain special shell characters, so they may
 have to be quoted when being passed on the command line.  Additionally, `=`

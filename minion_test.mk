@@ -65,15 +65,15 @@ $(call _expectEQ,$(error0),$(value _error))
 
 # Reference Expansion
 
-ev1 = o1 *ev2 o4
+ev1 = o1 @ev2 o4
 ev2 = o2 o3
 ev3 = #empty
 # simple reference
-$(call _expectEQ,$(call _expand,a *ev1 b),a o1 o2 o3 o4 b)
-# map reference: C*V
-$(call _expectEQ,$(call _expand,a C*ev1 D*ev3 b),a C[o1] C[o2] C[o3] C[o4]  b)
-# chained map reference: C*D*V
-$(call _expectEQ,$(call _expand,C*D*ev2),C[D[o2]] C[D[o3]])
+$(call _expectEQ,$(call _expand,a @ev1 b),a o1 o2 o3 o4 b)
+# map reference: C@V
+$(call _expectEQ,$(call _expand,a C@ev1 D@ev3 b),a C[o1] C[o2] C[o3] C[o4]  b)
+# chained map reference: C@D@V
+$(call _expectEQ,$(call _expand,C@D@ev2),C[D[o2]] C[D[o3]])
 
 
 # get
@@ -113,7 +113,7 @@ Alias[alias3].command = y3
 
 _aliases := alias1 alias2
 $(call _expectEQ,$(call _goalID,alias1),Alias[alias1])
-$(call _expectEQ,$(call _goalID,*asdf),Goal[*asdf])
+$(call _expectEQ,$(call _goalID,@asdf),Goal[@asdf])
 $(call _expectEQ,$(call _goalID,as[df]),Goal[as[df]])
 $(call _expectEQ,$(call _goalID,asdf),)
 
@@ -161,10 +161,10 @@ $(call _expectEQ,$(call _getID.P,C[c[j].y].x),<c[j].y>)
 $(call _expectEQ,$(call _goalType,C[I].P),Property)
 $(call _expectEQ,$(call _goalType,C[I]),Instance)
 $(call _expectEQ,$(call _goalType,C[c[I].p]),Instance)
-$(call _expectEQ,$(call _goalType,*Var),Indirect)
-$(call _expectEQ,$(call _goalType,C*Var),Indirect)
-$(call _expectEQ,$(call _goalType,C[*Var]),Instance)
-$(call _expectEQ,$(call _goalType,C[c[*var]]),Instance)
+$(call _expectEQ,$(call _goalType,@Var),Indirect)
+$(call _expectEQ,$(call _goalType,C@Var),Indirect)
+$(call _expectEQ,$(call _goalType,C[@Var]),Instance)
+$(call _expectEQ,$(call _goalType,C[c[@var]]),Instance)
 $(call _expectEQ,$(call _goalType,alias1),Alias)
 $(call _expectEQ,$(call _goalType,alias2),Alias)
 $(call _expectEQ,$(call _goalType,abc),Other)
@@ -209,7 +209,7 @@ $(call expectError,during evaluation of:$(\n)EC.args =)
 # file
 $(call _expectEQ,$(call _outBasis,C,a.c,,a.c,a.c),C.c/a.c)
 # indirection
-$(call _expectEQ,$(call _outBasis,P,C*D*d/v,,,C*D*d/v),P_C@_D@/d/v)
+$(call _expectEQ,$(call _outBasis,P,C@D@d/v,,,C@D@d/v),P_C@_D@/d/v)
 # complex
 $(call _expectEQ,\
   $(call _outBasis,P,C[d/a.c]$;o=3,%,.out/C.c/d/a.o,C[d/a.c]),\
@@ -227,10 +227,10 @@ $(call _expectEQ,$(call get,outDir,P[a.o]),.out/P/)
 $(call _expectEQ,$(call get,out,P[a.o]),.out/P/a.o.p)
 
 p1 = a.c
-$(call _expectEQ,$(call get,out,LinkC[*p1]),.out/LinkC_@/p1)
+$(call _expectEQ,$(call get,out,LinkC[@p1]),.out/LinkC_@/p1)
 
-$(call _expectEQ,$(call get,out,Tar[*p1]),.out/Tar_@/p1.tar)
-$(call _expectEQ,$(call get,out,Zip[*p1]),.out/Zip_@/p1.zip)
+$(call _expectEQ,$(call get,out,Tar[@p1]),.out/Tar_@/p1.tar)
+$(call _expectEQ,$(call get,out,Zip[@p1]),.out/Zip_@/p1.zip)
 
 # Inference
 

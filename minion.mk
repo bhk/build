@@ -231,8 +231,8 @@ Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.vvFile = # too costly; defeats the purpose
 Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$C[$A])))
-Makefile.excludeIDs = $(filter %],$(call _expand,*$A_exclude))
-Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,*$A)))
+Makefile.excludeIDs = $(filter %],$(call _expand,@$A_exclude))
+Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$A)))
 define Makefile.deferredCommand
 $(call _recipeLines,
 @rm -f {@}
@@ -479,29 +479,26 @@ _escArg = $(subst $[,$$[,$(subst $],$$],$(subst $;,$$;,$(subst $$,$$$$,$1))))
 # Report an error (called by object system)
 _error = $(error $1)
 
-# See prototype.scm for sources for the following:
+# SCAM source exports:
 
-# base
+# base.scm
 
 _isInstance = $(filter %],$1)
-_isIndirect = $(findstring *,$(filter-out %],$1))
+_isIndirect = $(findstring @,$(filter-out %],$1))
 _isAlias = $(filter s% r%,$(flavor Alias[$1].in) $(flavor Alias[$1].command))
 _goalID = $(if $(_isAlias),Alias[$1],$(if $(or $(_isInstance),$(_isIndirect)),Goal[$1]))
-_ivar = $(lastword $(subst *, ,$1))
-_ipat = $(if $(filter *%,$1),%,$(subst $(\s),,$(filter %[ %% ],$(subst *,[ ,$1) % $(subst *, ] ,$1))))
-_expandX = $(foreach w,$1,$(or $(filter %],$w),$(if $(findstring *,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
-_expand = $(if $(findstring *,$1),$(call _expandX,$1),$1)
+_ivar = $(lastword $(subst @, ,$1))
+_ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %[ %% ],$(subst @,[ ,$1) % $(subst @, ] ,$1))))
+_expandX = $(foreach w,$1,$(or $(filter %],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
+_expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
 _set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
 _once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
-
-# argument parsing
-
 _argGroup = $(if $(findstring :[,$(subst ],[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) :],]: ,$(patsubst :[%,:[% ,$(subst :], :],$(subst :[, :[,$1)))),$(if $(filter %:,$w),$(subst :,,$w),$w))),$1)),$1)
 _argHash2 = $(subst :,,$(foreach w,$(subst :$;, ,$(call _argGroup,$(subst =,:=,$(subst $;,:$;,$(subst ],:],$(subst [,:[,$1)))))),$(if $(findstring :=,$w),,=)$w))
 _argHash = $(if $(or $(findstring [,$1),$(findstring ],$1),$(findstring =,$1)),$(_argHash2),=$(subst $;, =,$1))
 _hashGet = $(patsubst $2=%,%,$(filter $2=%,$1))
 
-# object system
+# objects.scm
 
 _getE1 = $(call _error,Reference to undefined property '$(word 2,$(subst .,. ,$1))' for $C[$A]$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(patsubst &%,%,$(patsubst ^%,%,$4)),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(word 2,$(subst .,. ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
 _chain = $1 $(foreach w,$($1.inherit),$(call _chain,$w))
@@ -512,7 +509,7 @@ _! = $(call $(if $(filter u%,$(flavor $C[$A].$1)),$(if $(value &$C.$1),&$C.$1,$(
 _getE0 = $(call _error,Mal-formed instance name '$A'; $(if $(subst [,,$(filter %[,$(word 1,$(subst [,[ ,$A)))),empty ARG,$(if $(filter [%,$A),empty CLASS,missing '[')) in CLASS[ARG])
 get = $(foreach A,$2,$(if $(filter %],$A),$(foreach C,$(or $(subst [,,$(filter %[,$(word 1,$(subst [,[ ,$A)))),$(_getE0)),$(foreach A,$(or $(subst &$C[,,&$(patsubst %],%,$A)),$(_getE0)),$(call .,$1))),$(foreach C,File,$(or $(File.$1),$(call .,$1)))))
 
-# tools
+# tools.scm
 
 _pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
 _pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
@@ -524,9 +521,9 @@ _showVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1))
 _showDefs2 = $(if $1,$(if $(filter u%,$(flavor $1$3)),$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3),$(call _showVar,$1$3,   )$(if $(and $(filter r%,$(flavor $1$3)),$(findstring {inherit},$(value $1$3))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3))),... no definition in scope!)
 _showDefs = $(call _showDefs2,$1,$(or $(&|$(word 1,$(subst [, ,$1))),$(call _set,&|$(word 1,$(subst [, ,$1)),$(call _chain,$(word 1,$(subst [, ,$1))))),.$2)
 
-# output file defaults
+# outputs.scm
 
-_fsenc = $(subst *,@_,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@0,$1))))))))))
+_fsenc = $(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst =,@E,$(subst ],@-,$(subst [,@+,$(subst |,@1,$(subst @,@_,$1)))))))))
 _outBX = $(subst @D,/,$(subst $(\s),,$(patsubst /%@_,_%@,$(addprefix /,$(subst @_,@_ ,$(_fsenc))))))
 _outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
 _outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
@@ -547,7 +544,7 @@ $(word 1,$(MAKEFILE_LIST)) usage:
    make clean               `$(call get,command,Alias[clean])`
 
 Goals can be ordinary Make targets defined by your Makefile,
-instances (`Class[Arg]`), variable indirections (`*var`), or
+instances (`Class[Arg]`), variable indirections (`@var`), or
 aliases defined by your Makefile.
 
 endef

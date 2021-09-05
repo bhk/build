@@ -105,14 +105,14 @@ There are two forms of indirections.  The first is called a simple
 indirection, and it represents all of the targets identified in the
 variable.
 
-    $ make Tar[*sources] sources='hello.c binsort.c'
+    $ make Tar[@sources] sources='hello.c binsort.c'
 
 The other form is called a mapped indirection.  This constructs an instance
 for each target identified in the variable.
 
-    $ make help Run*sources sources='hello.c binsort.c'
-    $ make Run*sources sources='hello.c binsort.c'
-    $ make Tar[CC*sources] sources='hello.c binsort.c'
+    $ make help Run@sources sources='hello.c binsort.c'
+    $ make Run@sources sources='hello.c binsort.c'
+    $ make Tar[CC@sources] sources='hello.c binsort.c'
 
 
 ## Aliases

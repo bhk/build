@@ -50,13 +50,13 @@
 ;;         Otherwise, the result would collide with LinkC[CC[f.c]].
 ;;
 ;; When the argument is an indirection, or is otherwise not a target ID used
-;; in {in}, we use it as the basis for the file name.  Any "*" or "C*"
+;; in {in}, we use it as the basis for the file name.  Any "@" or "C@"
 ;; prefixes are merged into the class directory:
 ;;
 ;;     Instance Name          outDir                   outName
 ;;     --------------------   ----------------------   -----------
-;;     LinkC[*VAR]            .out/LinkC_@/            VAR{outExt}
-;;     LinkC[C2*VAR]          .out/LinkC_C2@/          VAR{outExt}
+;;     LinkC[@VAR]            .out/LinkC_@/            VAR{outExt}
+;;     LinkC[C2@VAR]          .out/LinkC_C2@/          VAR{outExt}
 ;;     Write[x/y/z]           .out/Write/x/y/          z{outExt}
 ;;
 ;; When the argument is complex (with named values or comma-delimited
@@ -81,12 +81,12 @@
 ;; names, arguments, ordinary (source file) target IDs, and comma-delimited
 ;; argument values, alongside those unsafe in Bash and Make:
 ;;
-;; File:   @ _ - + { } / ^ . ~
-;; Class:  @ _ - + { } / ^   ~ !
-;; Value:  @ _ - + { } / ^ . ~ !   = * [ ]
-;; Arg:    @ _ - + { } / ^ . ~ ! , = * [ ] <
-;; ~Make:                    ~     = * [ ] < > ? # $ % ; \ :
-;; ~Bash:                    ~ !     * [ ] < > ? # $ % ; \   | & ( ) ` ' "
+;; File:   _ - + { } / ^ . ~
+;; Class:  _ - + { } / ^   ~ !
+;; Value:  _ - + { } / ^ . ~ ! @   = [ ] <
+;; Arg:    _ - + { } / ^ . ~ ! @ , = [ ] <
+;; ~Make:                  ~       = [ ] < > * ? # $ % ; \ :
+;; ~Bash:                  ~ !       [ ] < > * ? # $ % ; \   | & ( ) ` ' "
 ;;
 
 
@@ -96,7 +96,7 @@
 (define (_fsenc str)
   &native
 
-  (subst "@" "@0"
+  (subst "@" "@_"
          "|" "@1"
          "[" "@+"
          "]" "@-"
@@ -105,7 +105,6 @@
          "~" "@T"
          "/" "@D"
          "<" "@l"
-         "*" "@_"  ;;  ..._/.out/... -->  ..._...
          str))
 
 (export (native-name _fsenc) 1)
@@ -138,9 +137,9 @@
   (define `b (patsubst "/%@_" "_%@" a))
   (subst " " "" "@D" "/" b))
 
-(expect (_outBX "*var") "_@/var")
-(expect (_outBX "*d/f") "_@/d/f")
-(expect (_outBX "C*var") "_C@/var")
+(expect (_outBX "@var") "_@/var")
+(expect (_outBX "@d/f") "_@/d/f")
+(expect (_outBX "C@var") "_C@/var")
 (expect (_outBX "abc") "/abc")
 
 
@@ -166,7 +165,7 @@
           (_outBX arg))))
 
 ;; arg = indirection (file must be nil because arg1 is not a target ID)
-(expect (_outBS "C" "*var" nil nil) "C_@/var")
+(expect (_outBS "C" "@var" nil nil) "C_@/var")
 ;; arg = file == in[1]
 (expect (_outBS "C" "d/f.c" ".o" "d/f.c")  "C.c/d/f.c")
 ;; arg = ID == in[1]
@@ -222,7 +221,7 @@
 
   (define (get-test-file class arg1)
     (cond ((filter "%X" class) nil)
-          ((findstring "*" arg1) nil)    ;; indirections are not IDs
+          ((findstring "@" arg1) nil)    ;; indirections are not IDs
           ((filter "%]" arg1) (or (dict-get arg1 test-files)
                                   (error (.. "Unknown ID: " arg1))))
           (else arg1)))
@@ -242,7 +241,7 @@
   (t1 "C[d/a.c]"        "C.c/d/a.c")
   (t1 "D[d/a.c]"        "D/d/a.c")
   (t1 "C[/.././a]"      "C/_root_/_../_./a")
-  (t1 "C@![a.c]"        "C@0@B/a.c")
+  (t1 "C@![a.c]"        "C@_@B/a.c")
 
   ;; C[INSTANCE] (used as an input ID)
   (t1 "P[C[a.c]]"       "P.o_C.c/a.o")
@@ -252,21 +251,21 @@
   ;; C[SIMPLE] (NOT an input ID)
   (t1 "X[C[A]]"       "X/C@+A@-")
 
-  ;; C[*VAR] (NOT an input ID)
-  (t1 "C[*var]"         "C_@/var")
+  ;; C[@VAR] (NOT an input ID)
+  (t1 "C[@var]"         "C_@/var")
 
-  ;; C[CLS*VAR] (NOT an input ID)
-  (t1 "C[D*var]"        "C_D@/var")
-  (t1 "C[D*E*var]"      "C_D@_E@/var")
-  (t1 "C[D@E*d/var]"    "C_D@0E@/d/var")
+  ;; C[CLS@VAR] (NOT an input ID)
+  (t1 "C[D@var]"        "C_D@/var")
+  (t1 "C[D@E@var]"      "C_D@_E@/var")
+  (t1 "C[D@E@d/var]"    "C_D@_E@/d/var")
 
   ;; Complex (arg1 is an input ID)
   (t1 "P[a,b]"          "P_@1,b/a")
   (t1 "P[d/a.c,o=3]"    "P_@1,o@E3.c/d/a.c")
   (t1 "Q[d/a.c,o=3]"    "Q_@1,o@E3/d/a.c")
   (t1 "P[C[d/a.c],o=3]" "P_@1,o@E3.o_C.c/d/a.o")
-  (t1 "P[*v,o=3]"       "P_@1,o@E3_@/v")
-  (t1 "P[C*v,o=3]"      "P_@1,o@E3_C@/v")
+  (t1 "P[@v,o=3]"       "P_@1,o@E3_@/v")
+  (t1 "P[C@v,o=3]"      "P_@1,o@E3_C@/v")
 
   ;; Complex (arg1 is NOT an input ID)
   (t1 "PX[C[a.c],b]"    "PX_@1,b/C@+a.c@-")

@@ -204,8 +204,8 @@ indirection, and it represents all of the targets identified in the
 variable.
 
 ```console
-$ make Tar[*sources] sources='hello.c binsort.c'
-#-> Tar[*sources]
+$ make Tar[@sources] sources='hello.c binsort.c'
+#-> Tar[@sources]
 tar -cvf .out/Tar_@/sources.tar hello.c binsort.c
 ```
 
@@ -213,8 +213,8 @@ The other form is called a mapped indirection.  This constructs an instance
 for each target identified in the variable.
 
 ```console
-$ make help Run*sources sources='hello.c binsort.c'
-"Run*sources" is an indirection on the following variable:
+$ make help Run@sources sources='hello.c binsort.c'
+"Run@sources" is an indirection on the following variable:
 
    sources = hello.c binsort.c
 
@@ -223,7 +223,7 @@ It expands to the following targets:
    Run[binsort.c]
 ```
 ```console
-$ make Run*sources sources='hello.c binsort.c'
+$ make Run@sources sources='hello.c binsort.c'
 ./.out/LinkC.c/hello 
 Hello world.
 #-> CC[binsort.c]
@@ -237,8 +237,8 @@ srch(12) = 9
 srch(0) = 9
 ```
 ```console
-$ make Tar[CC*sources] sources='hello.c binsort.c'
-#-> Tar[CC*sources]
+$ make Tar[CC@sources] sources='hello.c binsort.c'
+#-> Tar[CC@sources]
 tar -cvf .out/Tar_CC@/sources.tar .out/CC.c/hello.o .out/CC.c/binsort.o
 ```
 
@@ -268,8 +268,8 @@ $ cp Makefile2 Makefile
 $ cat Makefile
 sources = hello.c binsort.c
 
-Alias[default].in = Exec*sources
-Alias[deploy].in = Copy*LinkC*sources
+Alias[default].in = Exec@sources
+Alias[deploy].in = Copy@LinkC@sources
 
 include ../minion.mk
 ```
@@ -332,8 +332,6 @@ $ make CC.flags=-Os
 gcc -c -o .out/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/CC.c/binsort.o.d
 #-> LinkC[binsort.c]
 gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
-#-> Exec[binsort.c]
-( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
 ```
 
 So what's going on here?

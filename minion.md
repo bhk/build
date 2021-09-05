@@ -18,7 +18,7 @@ as a set of targets and build them.  Each argument may be one of the
 following:
 
   * A *instance*, such as `CC[foo.c]`
-  * An *indirection*, such as `*var` or `CC*var`
+  * An *indirection*, such as `@var` or `CC@var`
   * An ordinary Make target name
   * An *alias*
 
@@ -47,8 +47,8 @@ reference.
 
 There are two forms of indirections:
 
- - `*VAR`      : a simple indirection
- - `CLASS*VAR` : a mapped indirection
+ - `@VAR`      : a simple indirection
+ - `CLASS@VAR` : a mapped indirection
 
 A simple indirection expands to the value of the variable `VAR`.  Other
 indirections may appear within the value of the variable, in which case they
@@ -56,17 +56,17 @@ are recursively processed during expansion.  The result of expansion is zero
 or more target IDs (instances or ordinary target names).
 
 A mapped indirection applies the CLASS constructor individually to the
-targets resulting from the expansion of `*VAR`.  For example, if `*var`
-expands to `a.c b.c`, then `CC*var` will expand to `CC[a.c] CC[b.c]`.
+targets resulting from the expansion of `@VAR`.  For example, if `@var`
+expands to `a.c b.c`, then `CC@var` will expand to `CC[a.c] CC[b.c]`.
 
 Mapped indirections can also use a "chained" syntax.  Using the same example
-`var` as above, `C1*C2*var`, would yield `C1[C2[a.c]] C1[C2[b.c]]`.
+`var` as above, `C1@C2@var`, would yield `C1[C2[a.c]] C1[C2[b.c]]`.
 
 `CLASS` and `VAR` may not contain `[` or `]`, and the indirection must be an
 entire word that matches one of the above two forms.  For example,
-`CC[*sources]` is a target ID, *not* an indirection, and will not be altered
+`CC[@sources]` is a target ID, *not* an indirection, and will not be altered
 during the expansion step.  Its argument, on the other hand, *is* an
-indirection, and it will be expanded when the `CC[*sources]` instance's
+indirection, and it will be expanded when the `CC[@sources]` instance's
 inputs are evaluated.
 
 ## Instances
@@ -169,7 +169,7 @@ invoke make.  For example:
 
     ...
     minion_cache = Alias[default]
-    minion_cache_exclude = LinkC[*prog]
+    minion_cache_exclude = LinkC[@prog]
     ...
     prog = $(wildcard *.c)
     ...
@@ -361,8 +361,8 @@ when the variable name is used.  For example:
     --------------    -------------------------------
     Class[FILE]       FILE
     Class[C[A]]       $(call get,out,C[A])
-    Class[*VAR]       VAR
-    Class[C*VAR]      VAR
+    Class[@VAR]       VAR
+    Class[C@VAR]      VAR
 
 ### Validity Values
 
@@ -414,32 +414,32 @@ implementation detail; refer to prototype.scm for details.
 Assume a Makefile contains the following:
 
 
-    Alias[default].in = *results
-    Alias[deploy].in = Deploy[*results]
+    Alias[default].in = @results
+    Alias[deploy].in = Deploy[@results]
 
-    results = LinkC[*objects]
-    objects = baz.o CC*sources
+    results = LinkC[@objects]
+    objects = baz.o CC@sources
     sources = foo.c bar.c
 
     include minion.mk
 
-Typing `make` or `make default` will build `*results`, and typing `make
-deploy` will build `Deploy[*results]`.
+Typing `make` or `make default` will build `@results`, and typing `make
+deploy` will build `Deploy[@results]`.
 
-There is a single `LinkC` instance, and its argument is `*objects`.
+There is a single `LinkC` instance, and its argument is `@objects`.
 The program's `in` property defaults to its argument's unnamed values:
 
-    LinkC[*objects].in --> "*objects"
+    LinkC[@objects].in --> "@objects"
 
 The `inIDs` property gives the result of expanding indirections:
 
-    LinkC[*objects].inIDs
+    LinkC[@objects].inIDs
        --> "baz.o CC[foo.c] CC[bar.c]"
 
 The `prereqs` property resolves these target IDs to their corresponding
 outputs:
 
-    LinkC[*objects].prereqs
+    LinkC[@objects].prereqs
        --> "baz.o .out/CC.c/foo.o .out/CC.c/bar.o"
 
 ## Exported Definitions

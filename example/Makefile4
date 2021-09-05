@@ -1,6 +1,6 @@
 Variants.all = debug fast small
 
-Alias[sizes].in = Sizes[LinkC*sources]
+Alias[sizes].in = Sizes[LinkC@sources]
 Alias[all-sizes].in = Variants[Alias[sizes]]
 Alias[default].in = Alias[sizes]
 

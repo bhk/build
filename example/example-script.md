@@ -24,10 +24,10 @@ The salient feature of Minion is instances.  An instance is a description of
 a build step.  Instances can be provided as goals or as inputs to other
 build steps.
 
-An instance is written `CLASS(ARGUMENT)`.  `ARGUMENT` typically is the name
-of an input to the build step.  `CLASS` is the name of a class that is
-defined by Minion or your Makefile.  To get started, let's use some classes
-built into Minion:
+An instance is written `CLASS(ARGS)`.  `ARGS` is a comma-delimited list of
+arguments, each of which is typically the name of an input to the build
+step.  `CLASS` is the name of a class that is defined by Minion or your
+Makefile.  To get started, let's use some classes built into Minion:
 
     $ make 'CC(hello.c)'
     $ make 'LinkC(CC(hello.c))'

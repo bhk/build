@@ -74,9 +74,9 @@ inputs are evaluated.
 A "instance" is an expression that describes how to produce an artifact from
 other artifacts, structured as:
 
-    `CLASS(ARG)`
+    `CLASS(ARGS)`
 
-Neither `CLASS` nor `ARG` may be empty.  (Complete [syntax](#Syntax) details
+Neither `CLASS` nor `ARGS` may be empty.  (Complete [syntax](#Syntax) details
 are given below.)
 
 Property definitions may be associated with the class by defining a Make
@@ -90,7 +90,7 @@ Expressions of the form `{...}` expand to the value of the property named by
 `...` (for the current instance).  The string `{inherit}` expands to the
 inherited value of the current property of the current instance.  To include
 an actual `{` or `}` character, use `$(\L)` or `$(\R)`.  Finally,`$C` and
-`$A` expand to the class name and argument string of the current instance.
+`$A` expand to the class name and argument list of the current instance.
 
 For example, the following user-defined class extends the `CC` class to
 pass and additional flag to the compiler:
@@ -112,7 +112,7 @@ property values are evaluated *at most* once per instance (due to
 memoization).
 
 Instance-specific properties can be defined, using variables named
-`CLASS(ARG).PROPERTY`.  When present, these take precedence over a
+`CLASS(ARGS).PROPERTY`.  When present, these take precedence over a
 corresponding `CLASS.PROPERTY` definition.  These can occur with any class
 in the inheritance chain of an instance.
 
@@ -127,7 +127,7 @@ of "creating" or "destroying" instances.  We cannot say whether an instance
 "exists" or not ... but we can talk about whether it is *mentioned* or not.
 Think of a class as a function -- somewhat elaborate and multi-facted, but
 ultimately a function that yields a set of property definitions.  An
-instance identifies the function (class) and its input (argument).
+instance identifies the function (class) and its inputs (argument list).
 
 ## Cached Rules
 
@@ -202,10 +202,10 @@ handles a number of low-level responsibilities, including the following:
  * An output file name and location is computed.  (See [Outputs](#outputs),
    below).
 
- * [Argument values](#argument-values) are parsed.
+ * [Argument lists](#argument-lists) are parsed.
 
- * Inputs are obtained from the unnamed values in the argument.  Being a
-   target list, it may contain indirections.
+ * Inputs are obtained from the unnamed arguments.  Being a target list,
+   `in` may contain indirections.
 
  * The build command is escaped for Make syntax to avoid unintended
    evaluation, and the output file's directory is created prior to execution
@@ -260,11 +260,11 @@ Typically, an instance can be thought of as a function that accepts one or
 more input files and generates one output file, but there are exceptions to
 this rule.  In those cases, the class may override `{in}` and/or `{out}`.
 
-The `Mkdir` class has no inputs, and uses the argument name to specify the
+The `Mkdir` class has no inputs, and uses its first argument to specify the
 output.  It inherits from `_Mkdir`:
 
     _Mkdir.in =
-    _Mkdir.out = $A
+    _Mkdir.out = $(_arg1)
 
 The `Copy` class exists to deploy files to a specific, well-known location,
 rather than an automatically-generated unique location, so it allows the
@@ -320,10 +320,10 @@ solve this by declaring object files to have order-only dependencies on the
 entire set of generated headers.
 
 
-## Argument Values
+## Argument Lists
 
-Arguments may contain multiple comma-delimited values, each with an optional
-`NAME:` prefix.
+Argument lists may contain multiple comma-delimited values, each with an
+optional `NAME:` prefix.
 
 Rule inference is performed on input files.  For example, inference allows a
 ".c" file to be supplied where a ".o" file is expected, as in
@@ -351,9 +351,9 @@ Derived classes typically override just the `outExt` property, which is used
 in constructing the output file name.  Within `outExt`, `%` represents the
 input file extension.
 
-The `nameBasis` property is based on the first unnamed argument value.  It
-is the name of the file it denotes, except in the case of an indirection,
-when the variable name is used.  For example:
+The `nameBasis` property is based on the first unnamed argument.  It is the
+name of the file it denotes, except in the case of an indirection, when the
+variable name is used.  For example:
 
     Instance name     `nameBasis`
     --------------    -------------------------------
@@ -424,8 +424,8 @@ Assume a Makefile contains the following:
 Typing `make` or `make default` will build `@results`, and typing `make
 deploy` will build `Deploy(@results)`.
 
-There is a single `LinkC` instance, and its argument is `@objects`.
-The program's `in` property defaults to its argument's unnamed values:
+There is a single `LinkC` instance, and its argument is `@objects`.  The
+program's `in` property defaults to its unnamed arguments:
 
     LinkC(@objects).in --> "@objects"
 
@@ -487,10 +487,10 @@ within recursive property definitions.
 
 * `$(_args)`
 
-  Return all comma-delimited argument values (for the current instance)
-  whose name matches `K`.  `K` is a variable that defaults to the empty
-  string, which identifies unnamed values, and can be bound to other values
-  using `foreach`.  For example, during evaluation of a property of
+  Return all named arguments (for the current instance) whose name matches
+  `K`.  `K` is a variable that defaults to the empty string, which
+  identifies unnamed arguments, and can be bound to other values using
+  `foreach`.  For example, during evaluation of a property of
   `Class(a,b,x:1,x:2)`:
 
       $(_args) => "a b"
@@ -513,10 +513,10 @@ names in commands.
 The following BNF summarizes:
 
     Name     := NameChar+
-    Instance := Class '(' Argument ')'
+    Instance := Class '(' ArgList ')'
     Class    := ClassChar+
-    Argument := ArgEntry ( ',' ArgEntry )*
-    ArgEntry := ( Name `:` )? Value
+    ArgList  := Arg ( ',' Arg )*
+    Arg      := ( Name `:` )? Value
     Value    := ( Instance | Name | Property )+
     Property := PropChar+
 
@@ -526,8 +526,8 @@ These definitions rely on the following character classes:
     NameChar:   A-Z a-z 0-9 _ - + / ^ ~ { } .
     PropChar:   A-Z a-z 0-9 _ - + / ^ ~       @ < >
 
-Note that arguments must contain at least one value, and each argument value
-must contain at least one character.  Argument values may contain other
+Note that argument list must contain at least one argument, and each
+argument must contain at least one character.  Arguments may contain other
 instances embedded within them, which means they can contain `(` and `)`,
 characters, but only in balanced pairs, as well as `,` and `:`, but only
 within nested parentheses.

@@ -232,12 +232,12 @@
 
   (define `reason
     (if (extractClass)
-        "empty ARG"
+        "empty ARGS"
         (if (filter "(%" id)
             "empty CLASS"
             "missing '('")))
 
-  (_error (.. "Mal-formed instance name '" id "'; " reason " in CLASS(ARG)")))
+  (_error (.. "Mal-formed instance name '" id "'; " reason " in CLASS(ARGS)")))
 
 (export (native-name _getE0) 1)
 
@@ -358,13 +358,13 @@
     (expect 1 (see str *last-error*)))
 
   (expect (get "p" "(a)") nil)
-  (error-contains "'(a)'; empty CLASS in CLASS(ARG)")
+  (error-contains "'(a)'; empty CLASS in CLASS(ARGS)")
 
   (expect (get "p" "Ca)") nil)
-  (error-contains "'Ca)'; missing '(' in CLASS(ARG)")
+  (error-contains "'Ca)'; missing '(' in CLASS(ARGS)")
 
   (expect (get "p" "C()") nil)
-  (error-contains "'C()'; empty ARG in CLASS(ARG)")
+  (error-contains "'C()'; empty ARGS in CLASS(ARGS)")
 
   (expect (get "asdf" "C(a)") nil)
   (error-contains "undefined")

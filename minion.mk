@@ -48,7 +48,7 @@ File.rule =
 File.needs =
 
 
-# Builder(ARG):  Base class for builders.
+# Builder(ARGS):  Base class for builders.
 
 # Shorthand properties
 Builder.@ = {out}
@@ -339,7 +339,7 @@ _Copy.command = cp {<} {@}
 #
 _Mkdir.inherit = Builder
 _Mkdir.in =
-_Mkdir.out = $A
+_Mkdir.out = $(_arg1)
 _Mkdir.mkdirs =
 _Mkdir.command = mkdir -p {@}
 
@@ -348,7 +348,7 @@ _Mkdir.command = mkdir -p {@}
 #
 _Touch.inherit = Builder
 _Touch.in =
-_Touch.out = $A
+_Touch.out = $(_arg1)
 _Touch.command = touch {@}
 
 
@@ -356,7 +356,7 @@ _Touch.command = touch {@}
 #
 _Remove.inherit = Phony
 _Remove.in =
-_Remove.command = rm -f $A
+_Remove.command = rm -f $(_arg1)
 
 
 # _Print(INPUT) : Write artifact to stdout.
@@ -503,7 +503,7 @@ _& = $(filter %,$(foreach w,$(or $(&|$C),$(call _set,&|$C,$(call _chain,$C))),$(
 _cp = $(or $(foreach w,$(word 1,$2),$(eval $1 = $$(or )$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(if $(filter r%,$(flavor $w)),$(subst },$(if ,,,^$w$]),$(subst {,$(if ,,$$$[call .,),$(if $(findstring {inherit},$(value $w)),$(subst {inherit},$$(call $(if $(value $3),$3,$(call _cp,$3,$(wordlist 2,99999999,$2),_$3,^$1))),$(value $w)),$(value $w)))),$(subst $$,$$$$,$(value $w))))))$1),$(_getE1),$1)
 _! = $(call $(if $(filter u%,$(flavor $C($A).$1)),$(if $(value &$C.$1),&$C.$1,$(call _cp,&$C.$1,$(_&),_&$C.$1,$2)),$(call _cp,&!.$1,$C($A).$1 $(_&),&$C.$1,$2)))
 . = $(if $(filter s%,$(flavor ~$C[$A].$1)),$(~$C[$A].$1),$(call _set,~$C[$A].$1,$(call _!,$1,$2)))
-_getE0 = $(call _error,Mal-formed instance name '$A'; $(if $(subst $[,,$(filter %$[,$(word 1,$(subst $[,$[ ,$A)))),empty ARG,$(if $(filter $[%,$A),empty CLASS,missing '$[')) in CLASS(ARG))
+_getE0 = $(call _error,Mal-formed instance name '$A'; $(if $(subst $[,,$(filter %$[,$(word 1,$(subst $[,$[ ,$A)))),empty ARGS,$(if $(filter $[%,$A),empty CLASS,missing '$[')) in CLASS(ARGS))
 get = $(foreach A,$2,$(if $(filter %$],$A),$(foreach C,$(or $(subst $[,,$(filter %$[,$(word 1,$(subst $[,$[ ,$A)))),$(_getE0)),$(foreach A,$(or $(subst &$C$[,,&$(patsubst %$],%,$A)),$(_getE0)),$(call .,$1))),$(foreach C,File,$(or $(File.$1),$(call .,$1)))))
 
 # tools.scm

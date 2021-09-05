@@ -29,10 +29,10 @@ The salient feature of Minion is instances.  An instance is a description of
 a build step.  Instances can be provided as goals or as inputs to other
 build steps.
 
-An instance is written `CLASS(ARGUMENT)`.  `ARGUMENT` typically is the name
-of an input to the build step.  `CLASS` is the name of a class that is
-defined by Minion or your Makefile.  To get started, let's use some classes
-built into Minion:
+An instance is written `CLASS(ARGS)`.  `ARGS` is a comma-delimited list of
+arguments, each of which is typically the name of an input to the build
+step.  `CLASS` is the name of a class that is defined by Minion or your
+Makefile.  To get started, let's use some classes built into Minion:
 
 ```console
 $ make 'CC(hello.c)'
@@ -332,6 +332,8 @@ $ make CC.flags=-Os
 gcc -c -o .out/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/CC.c/binsort.o.d
 #-> LinkC(binsort.c)
 gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
+#-> Exec(binsort.c)
+( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
 ```
 
 So what's going on here?

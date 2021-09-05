@@ -40,11 +40,11 @@
 ;; Exported symbols
 ;;--------------------------------
 
-;; Discriminate instances -- CLASS(ARG) -- from other target list entries or
+;; Discriminate instances -- CLASS(ARGS) -- from other target list entries or
 ;; goals.  We assume ID is either a valid target (instance, make target),
 ;; alias, or indirection.
 ;;
-;; Return truth if ID is an instance:  CLASS(ARG)
+;; Return truth if ID is an instance:  CLASS(ARGS)
 (define (_isInstance id)
   &public
   &native

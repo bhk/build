@@ -150,6 +150,13 @@
 
 ;; Return non-nil if VAR has been assigned a value.
 ;;
+(define `(defined? var)
+  &public
+  ;; "recursive" or "simple" (not "undefined")
+  (findstring "s" (native-flavor var)))
+
+;; Return non-nil if VAR has not been assigned a value.
+;;
 (define `(undefined? var)
   &public
   (filter "u%" (native-flavor var)))
@@ -176,7 +183,6 @@
 
 (export (native-name _set) 1)
 
-
 (begin
   (define `(test value)
     (_set "tmp_set_test" value)
@@ -184,29 +190,34 @@
   (test "a\\b#c\\#\\\\$v\nz"))
 
 
-;; Assign a recursive variable, given the code to be evaluated.  The
-;; resulting value will differ, but the result of its evaluation should be
-;; the same as that of VALUE.
+;; Assign a recursive variable NAME, and return NAME.  The resulting
+;; (native-value NAME) may not match VALUE, but (native-var NAME) should be
+;; equal to VALUE.
 ;;
-(define `(_setfn name value)
+(define (_fset name value)
   &public
   &native
-  (native-eval (.. name " = $(or )" (subst "\n" "$(\\n)" "#" "$(\\H)" value))))
-
+  (define `protect
+    (if (filter "1" (word 1 (.. 1 value 1)))
+        "$(or )"))
+  (native-eval (.. name " = "
+                   protect (subst "\n" "$(\\n)" "#" "$(\\H)" value)))
+  name)
 
 (begin
   (define `(test var-name)
     (define `out (.. "~" var-name))
-    (_setfn out (native-value var-name))
+    (_fset out (native-value var-name))
     (expect (native-var var-name) (native-var out)))
 
   (native-eval "define TX\n   abc   \n\n\nendef\n")
   (test "TX")
   (native-eval "TX = a\\\\\\\\c\\#c")
   (test "TX")
-  (native-eval "TX = echo '#-> x'")
+  (native-eval "TX = echo '\\#-> x'")
   (test "TX"))
 
+(export (native-name _fset) 1)
 
 ;; Return value of VAR, evaluating it only the first time.
 ;;
@@ -334,3 +345,31 @@
 
 (expect (_hashGet ":a :b x:y" "") "a b")
 (expect (_hashGet ":a :b x:y" "x") "y")
+
+
+;; Describe the definition of variable NAME; prefix all lines with PREFIX
+;;
+(define (_describeVar name ?prefix)
+  &public
+  &native
+  (.. prefix
+      (if (recursive? name)
+          (if (findstring "\n" (native-value name))
+              (subst "\n" (.. "\n" prefix)
+                     (.. "define " name "\n" (native-value name) "\nendef"))
+              (.. name " = " (native-value name)))
+          (.. name " := " (subst "\n" "$(\\n)" (native-var name))))))
+
+(export (native-name _describeVar) nil)
+
+(begin
+  (set-native "sv-s" "a\nb")
+  (set-native-fn "sv-r1" "a b")
+  (set-native-fn "sv-r2" "a\nb")
+
+  (expect (_describeVar "sv-s" "P: ")  "P: sv-s := a$(\\n)b")
+  (expect (_describeVar "sv-r1" "P: ")  "P: sv-r1 = a b")
+  (expect (_describeVar "sv-r2" "P: ")  (.. "P: define sv-r2\n"
+                                            "P: a\n"
+                                            "P: b\n"
+                                            "P: endef")))

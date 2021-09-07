@@ -456,9 +456,6 @@ _qv = $(if $(findstring $(\n),$1),$(subst $(\n),$(\n)  | ,$(\n)$1),'$1')
 _? = $(call __?,$$(call $1,$2,$3,$4,$5),$(call $1,$2,$3,$4,$5))
 __? = $(info $1 -> $2)$2
 
-# $(call _isDefined,VAR): return VAR if it is the name of an assigned variable
-_isDefined = $(if $(filter u%,$(flavor $1)),,$1)
-
 # $(call _expectEQ,A,B): error (with diagnostics) if A is not the same as B
 _expectEQ = $(if $(call _eq?,$1,$2),,$(error Values differ:$(\n)A: $(_qv)$(\n)B: $(call _qv,$2)$(\n)))
 
@@ -475,9 +472,6 @@ _evalIDs = $(foreach i,$(call _rollupEx,$(sort $(_isInstance)),$2),$(call _eval,
 # Escape an instance argument as a Make function argument
 _escArg = $(subst $[,$$[,$(subst $],$$],$(subst $;,$$;,$(subst $$,$$$$,$1))))
 
-# Report an error (called by object system)
-_error = $(error $1)
-
 # SCAM source exports:
 
 # base.scm
@@ -491,22 +485,29 @@ _ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1)
 _expandX = $(foreach w,$1,$(or $(filter %$],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
 _expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
 _set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
+_fset = $(and $(eval $1 = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))1,$1)
 _once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
 _argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)
 _argHash2 = $(subst `,,$(foreach w,$(subst $(if ,,`,), ,$(call _argGroup,$(subst :,`:,$(subst $;,$(if ,,`,),$(subst $],`$],$(subst $[,`$[,$1)))))),$(if $(findstring `:,$w),,:)$w))
 _argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(_argHash2),:$(subst $;, :,$1))
 _hashGet = $(patsubst $2:%,%,$(filter $2:%,$1))
+_describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
 
 # objects.scm
 
-_getE1 = $(call _error,Reference to undefined property '$(word 2,$(subst .,. ,$1))' for $C($A)$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $4,$(foreach w,$(if $(filter ^&!.%,$4),$(patsubst ^&!.%,$C($A).%,$4),$(patsubst &%,%,$(patsubst ^%,%,$4))),$(if $(filter ^&%,$4), from {inherit} in,$(if $(filter ^%,$4), from {$(word 2,$(subst .,. ,$1))} in,during evaluation of)):$(\n)$w = $(value $w))))$(\n))
-_chain = $1 $(foreach w,$($1.inherit),$(call _chain,$w))
-_& = $(filter %,$(foreach w,$(or $(&|$C),$(call _set,&|$C,$(call _chain,$C))),$(if $(filter u%,$(flavor $w.$1)),,$w.$1)))
-_cp = $(or $(foreach w,$(word 1,$2),$(eval $1 = $$(or )$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(if $(filter r%,$(flavor $w)),$(subst },$(if ,,,^$w$]),$(subst {,$(if ,,$$$[call .,),$(if $(findstring {inherit},$(value $w)),$(subst {inherit},$$(call $(if $(value $3),$3,$(call _cp,$3,$(wordlist 2,99999999,$2),_$3,^$1))),$(value $w)),$(value $w)))),$(subst $$,$$$$,$(value $w))))))$1),$(_getE1),$1)
-_! = $(call $(if $(filter u%,$(flavor $C($A).$1)),$(if $(value &$C.$1),&$C.$1,$(call _cp,&$C.$1,$(_&),_&$C.$1,$2)),$(call _cp,&!.$1,$C($A).$1 $(_&),&$C.$1,$2)))
-. = $(if $(filter s%,$(flavor ~$C[$A].$1)),$(~$C[$A].$1),$(call _set,~$C[$A].$1,$(call _!,$1,$2)))
-_getE0 = $(call _error,Mal-formed instance name '$A'; $(if $(subst $[,,$(filter %$[,$(word 1,$(subst $[,$[ ,$A)))),empty ARGS,$(if $(filter $[%,$A),empty CLASS,missing '$[')) in CLASS(ARGS))
-get = $(foreach A,$2,$(if $(filter %$],$A),$(foreach C,$(or $(subst $[,,$(filter %$[,$(word 1,$(subst $[,$[ ,$A)))),$(_getE0)),$(foreach A,$(or $(subst &$C$[,,&$(patsubst %$],%,$A)),$(_getE0)),$(call .,$1))),$(foreach C,File,$(or $(File.$1),$(call .,$1)))))
+_error = $(error $1)
+_idC = $(if $(findstring $[,$1),$(word 1,$(subst $[, ,$1)))
+_pup = $(filter-out &%,$($(word 1,$1).inherit) &$1)
+_walk = $(if $1,$(if $(findstring s,$(flavor $(word 1,$1).$2)),$1,$(call _walk,$(_pup),$2)))
+_E1 = $(call _error,Undefined property '$2' for $I was referenced$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $3,$(if $(filter ^%,$3), from {inherit} in,$(if $(filter &&%,$3), from {$2} in, during evaluation of)):$(\n)$(call _describeVar,$(if $(filter &%,$3),$(foreach w,$(lastword $(subst ., ,$3)),$(word 1,$(call _walk,$(word 1,$(subst &, ,$(subst ., ,$3))),$w)).$w),$(if $(filter ^%,$3),$(subst ^,,$(word 1,$3)).$2,$3)))))$(\n))
+_cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$I.$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$($w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$C,$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
+.& = $(if $(findstring s,$(flavor $I.$1)),$(call _cx,$I,$1,$2,1),$(if $(findstring s,$(flavor &$C.$1)),&$C.$1,$(call _fset,&$C.$1,$(value $(call _cx,$(call _walk,$C,$1),$1,$2)))))
+. = $(if $(filter s%,$(flavor ~$I.$1)),$(value ~$I.$1),$(call _set,~$I.$1,$(call $(.&))))
+_E0 = $(call _error,Mal-formed instance name '$I'; $(if $(filter $[%,$I),empty CLASS,$(if $(findstring $[,$I),missing '$]',unbalanced '$]')) in CLASS(ARGS))
+A = $(patsubst $C(%),%,$I)
+get = $(foreach I,$2,$(if $(findstring $[,$I),$(foreach C,$(or $(subst |,,$(word 1,$(subst $[, | ,$(filter %$],$I)))),$(_E0)),$(call .,$1)),$(if $(findstring $],$I),$(_E0),$(foreach C,File,$(or $(File.$1),$(call .,$1))))))
+_describeProp = $(if $1,$(if $(filter u%,$(flavor $(word 1,$1).$2)),$(call _describeProp,$(or $(_idC),$(_pup)),$2),$(call _describeVar,$(word 1,$1).$2,   )$(if $(and $(filter r%,$(flavor $(word 1,$1).$2)),$(findstring {inherit},$(value $(word 1,$1).$2))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _describeProp,$(or $(_idC),$(_pup)),$2))),Error: no definition found!)
+_chain = $(if $1,$(call _chain,$(_pup),$2 $(word 1,$1)),$(filter %,$2))
 
 # tools.scm
 
@@ -516,9 +517,6 @@ _inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %$],$(pa
 _depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %$],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
 _rollup = $(sort $(foreach w,$(filter %$],$1),$w $(call _depsOf,$w)))
 _rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %$],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
-_showVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
-_showDefs2 = $(if $1,$(if $(filter u%,$(flavor $1$3)),$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3),$(call _showVar,$1$3,   )$(if $(and $(filter r%,$(flavor $1$3)),$(findstring {inherit},$(value $1$3))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _showDefs2,$(word 1,$2),$(wordlist 2,99999999,$2),$3))),... no definition in scope!)
-_showDefs = $(call _showDefs2,$1,$(or $(&|$(word 1,$(subst $[, ,$1))),$(call _set,&|$(word 1,$(subst $[, ,$1)),$(call _chain,$(word 1,$(subst $[, ,$1))))),.$2)
 
 # outputs.scm
 
@@ -555,7 +553,7 @@ _getID.P = $(foreach p,$(or $(lastword $(subst $].,$] ,$1)),$(error Empty proper
 _isProp = $(filter $].%,$(lastword $(subst $], $],$1)))
 
 # instance, indirection, alias, other
-_goalType = $(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,$(if $(_isProp),Property,Other))))
+_goalType = $(if $(_isProp),Property,$(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,Other))))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
 
@@ -574,7 +572,7 @@ endef
 define _helpIndirect
 "$1" is an indirection on the following variable:
 
-$(call _showVar,$(_ivar),   )
+$(call _describeVar,$(_ivar),   )
 
 It expands to the following targets: $(call _fmtList,$(call _expand,$1))
 endef
@@ -583,7 +581,7 @@ endef
 define _helpAlias
 Target "$1" is an alias defined by:
 $(foreach v,$(filter Alias($1).%,$(.VARIABLES)),
-$(call _showVar,$v,   )
+$(call _describeVar,$v,   )
 )
 $(call _helpDeps,Alias($1))
 
@@ -592,11 +590,11 @@ endef
 
 
 define _helpProperty
-$(foreach p,$(or $(lastword $(subst $].,$] ,$1)),$(error Empty property name in $1)),$(foreach id,$(patsubst %$].$p,%$],$1),$(info $(id) inherits from: $(call _chain,$(word 1,$(subst $[, ,$(id))))
+$(foreach p,$(or $(lastword $(subst $].,$] ,$1)),$(error Empty property name in $1)),$(foreach id,$(patsubst %$].$p,%$],$1),$(info $(id) inherits from: $(call _chain,$(call _idC,$(id)))
 
 $1 is defined by:
 
-$(call _showDefs,$(id),$p))
+$(call _describeProp,$(id),$p))
 Its value is: $(call _qv,$(call get,$p,$(id)))
 ))
 endef

@@ -111,7 +111,9 @@
   (define `escaped
     (subst "\n" "$(\\n)" "#" "\\#" minionized))
 
-  (print fn-name " = " escaped))
+  (if (filter "s%" (native-flavor fn-name))
+      (print fn-name " := " (native-var fn-name))
+      (print fn-name " = " escaped)))
 
 
 (define (show-exports)

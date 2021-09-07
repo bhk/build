@@ -301,7 +301,7 @@ To summarize the key concepts in Minion:
 
  - *Instances* are function-like descriptions of build products.  They can
    be given as targets, and named as inputs to other instances.  They
-   consist of a *class* name and an *argument*.
+   take the form `CLASS(ARGUMENTS)`.
 
  - *Indirections* are ways to reference Make variables that hold lists of
    other targets.  They can be used as arguments to instances, or in the

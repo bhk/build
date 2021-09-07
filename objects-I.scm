@@ -9,13 +9,6 @@
 (export-comment " objects.scm")
 
 
-;; Dynamic state during property evaluation enables `.`, `C`, and `A`:
-;;   I = current instance, bound with `foreach`
-;;   C = current class, bound with `foreach`
-;;   A = function of I and C (but accessed as a variable)
-(declare I &native)
-(declare C &native)
-
 ;; Display an error and halt.  We call this function, instead of `error`, so
 ;; that is can be dynamically interecpted for testing purposes.
 ;;
@@ -35,6 +28,33 @@
       (word 1 (subst "(" " " id))))
 
 (export (native-name _idC) 1)
+
+
+;; Dynamic state during property evaluation enables `.`, `C`, `A`, and
+;; `super`:
+;;    C = C
+;;    A = A
+;;
+(declare I &native)
+(declare C &native)
+(declare A &native)
+
+(set-native-fn "C" (lambda () (word 1 (subst "(" " " I))))
+(set-native-fn "A" (lambda () (patsubst (.. C "(%)") "%" I)))
+
+(export "C" nil)
+(export "A" nil)
+
+;; Override I (and C and A) for testing
+(define `(for-instance id expr)
+  (let-global ((I id))
+    expr))
+
+(for-instance
+ "c(a)"
+ (begin
+   (expect C "c")
+   (expect A "a")))
 
 
 ;; Return next level "up" in inheritance.  PARENTS = list of classes from
@@ -69,7 +89,7 @@
 ;;   ^PARENTS => {inherit} in property definition (source) VAR
 ;;   OTHER => $(call .,PROP,OTHER)  ($0 of calling context)
 ;;
-(define `(e1-msg who prop class id)
+(define `(e1-msg who prop class arg)
   ;; Recover a source variable from a compiled variable &OBJ or &&OBJ.
   ;; Compilations may be stored in two locations: &PARENTS.P and &C.P
   (define `src-var
@@ -98,7 +118,7 @@
      (who
       (.. who-desc ":\n" (_describeVar src-var)))))
 
-  (.. "Undefined property '" prop "' for " id
+  (.. "Undefined property '" prop "' for " class "(" arg ")"
       " was referenced" cause "\n"))
 
 
@@ -106,7 +126,7 @@
 ;;
 (define (_E1 _ p who)
   &native
-  (_error (e1-msg who p C I)))
+  (_error (e1-msg who p C A)))
 
 (export (native-name _E1) 1)
 
@@ -161,11 +181,12 @@
 ;;
 (define (.& p who)
   &native
-  (define `I.P (.. I "." p))
+  (define `id I)
+  (define `id.P (.. id "." p))
   (define `&C.P (.. "&" C "." p))
 
-  (if (defined? I.P)
-      (_cx I p who 1)
+  (if (defined? id.P)
+      (_cx id p who 1)
       (if (defined? &C.P)
           &C.P
           (_fset &C.P (native-value (_cx (_walk C p) p who))))))
@@ -189,16 +210,22 @@
   &native
   (if (simple? (cap-memo p))
       (native-value (cap-memo p))
-      (_set (cap-memo p) (native-call (.& p who)))))
+      (foreach (C (word 1 (subst "(" " " I)))
+        (_set (cap-memo p) (native-call (.& p who))))))
 
 (export (native-name .) nil)
 
 
-;; Extract the class name from I, where I contains at least one "(".  Return
-;; nil if I begins with "(" or does not end with ")".
+;; Extract class name from ID stored in variable `A`.  Return nil if
+;; class does not contain "(" or begins with "(".
 ;;
 (define `(extractClass)
-  (subst "|" "" (word 1 (subst "(" " | " (filter "%)" I)))))
+  (subst "(" "" (filter "%(" (word 1 (subst "(" "( " A)))))
+
+;; Extract argument from ID stored in variable `A`, given class name `C`.
+;;
+(define `(extractArg)
+  (subst (.. "&" C "(") nil (.. "&" (patsubst "%)" "%" A))))
 
 
 ;; Report error: mal-formed instance name
@@ -206,25 +233,34 @@
 (define (_E0)
   &native
   ;; When called from `get`, A holds the instance name
-  (define `reason
-    (if (filter "(%" I)
-        "empty CLASS"
-        (if (findstring "(" I)
-            "missing ')'"
-            "unbalanced ')'")))
+  (define `id A)
 
-  (_error (.. "Mal-formed instance name '" I "'; " reason " in CLASS(ARGS)")))
+  (define `reason
+    (if (extractClass)
+        "empty ARGS"
+        (if (filter "(%" id)
+            "empty CLASS"
+            "missing '('")))
+
+  (_error (.. "Mal-formed instance name '" id "'; " reason " in CLASS(ARGS)")))
 
 (export (native-name _E0) 1)
 
 
-(define (A)
-  &native
-  (patsubst (.. C "(%)") "%" I))
-
-(declare A &native)
-(export (native-name A) nil)
-
+;; (define (get p ids)
+;;   &public
+;;   &native
+;;   (foreach (A ids)
+;;     (if (filter "%)" A)
+;;         ;; instance
+;;         (foreach (C (or (extractClass) (_E0)))
+;;           (foreach (A (or (extractArg) (_E0)))
+;;             (. p)))
+;;         ;; file
+;;         (foreach (C "File")
+;;           (or (native-var (.. "File." p))
+;;               ;; error case...
+;;               (. p))))))
 
 (define (get p ids)
   &public
@@ -232,24 +268,18 @@
 
   (foreach (I ids)
     (if (findstring "(" I)
-        ;; instance
-        ;;    Save 5%:
-        ;;    (if (simple? (cap-memo p))
-        ;;        (native-value (cap-memo p))
-        ;;        (foreach (C (or (extractClass) (_E0)))
-        ;;          (_set (cap-memo p) (native-call (.& p nil)))))
-        (foreach (C (or (extractClass) (_E0)))
-          (. p))
+        (if (simple? (cap-memo p))
+            (native-value (cap-memo p))
+            (. p))
         ;; file
-        (if (findstring ")" I)
-            (_E0)
-            (foreach (C "File")
-              (or (native-var (.. "File." p))
-                  ;; error case...
-                  (. p)))))))
+        (or (native-var (.. "File." p))
+            ;; error case...
+            (foreach (I (.. "File(" I ")"))
+              (. p))))))
 
-;; Override automatic variable names to I and C for dynamic binding
-(export (native-name get) nil "I C")
+;; Override automatic variable names so they will be visible to otheeginr
+;; functions as $C and $A.
+(export (native-name get) nil "I I")
 
 ;;--------------------------------
 ;; describeDefn
@@ -336,10 +366,11 @@
 (expect 1 (see "from {inherit} in:\nA.x =" (e1-msg "^A B" "x" "C" "a")))
 (expect 1 (see "during evaluation of:\n_cx =" (e1-msg "_cx" "x" "C" "a")))
 
-(let-global ((I "C(a)")
-             (C "C"))
+(for-instance
+ "C(a)"
+ (begin
 
-  ;; .&
+   ;; .&
 
   (define `(test.& prop name-out value-out)
     (expect (.& prop nil) name-out)
@@ -359,14 +390,15 @@
   (expect (. "x") "<A.x:C>")
   (expect (native-var (cap-memo "x")) "<A.x:C>")
   (expect (. "x") "<A.x:C>")  ;; again (after caching)
-  (let-global ((I "C(X(f))"))
-    (expect (. "s" nil) "<C(X(f)).s>"))           ;; challenging $A?
+  (for-instance
+   "C(X(f))"
+   (expect (. "s" nil) "<C(X(f)).s>"))           ;; challenging $A?
 
-  nil)
+  nil))
 
-(set-native-fn "File.id" "$C($A)")
+(set-native-fn "File.id" "A=$A")
 (expect (get "x" "C(a)") "<A.x:C>")
-(expect (get "id" "f") "File(f)")
+(expect (get "id" "f") "A=f")
 
 ;; caching of &C.P
 
@@ -389,14 +421,14 @@
     (expect expr value)
     (error-contains error-content)))
 
-(expect-error (get "p" "(a)") nil
-               "'(a)'; empty CLASS in CLASS(ARGS)")
+;;(expect-error (get "p" "(a)") nil
+;;               "'(a)'; empty CLASS in CLASS(ARGS)")
 
-(expect-error (get "p" "C(a") nil
-              "'C(a'; missing ')' in CLASS(ARGS)")
+;;(expect-error (get "p" "Ca)") nil
+;;              "'Ca)'; missing '(' in CLASS(ARGS)")
 
-(expect-error (get "p" "Ca)") nil
-              "'Ca)'; unbalanced ')' in CLASS(ARGS)")
+;;(expect-error (get "p" "C()") nil
+;;              "'C()'; empty ARGS in CLASS(ARGS)")
 
 (expect-error (get "asdf" "C(a)") nil
               "Undefined")

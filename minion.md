@@ -14,16 +14,15 @@ target named `default`, which your makefile may define using an *alias*
 (described below) or an ordinary Make rule.
 
 If you pass arguments on the command line, Minion will treat the arguments
-as a set of targets and build them.  Each argument may be one of the
-following:
+as a set of goals and build them.  Each goal may be one of the following:
 
   * A *instance*, such as `CC(foo.c)`
   * An *indirection*, such as `@var` or `CC@var`
   * An ordinary Make target name
   * An *alias*
 
-If you invoke make with `help` as one of the command line arguments, Minion
-will output a description of the arguments, rather than build them.
+If you invoke make with `help` as one of the goals, Minion will output a
+description of the other goals, rather than build them.
 
 ## Aliases
 
@@ -40,10 +39,9 @@ to be executed when the alias is named as a goal.
 
 An "indirection" is a word that names a variable that contains target
 descriptions.  Indirections may appear in contexts that expect multiple
-target names, namely, the command line arguments passed to make, and the
-`in` property of a build product.  In these contexts, an "expansion" step is
-performed, in which indirections are replaced with the targets they
-reference.
+target names, for example, the Make command line, and the `in` property of a
+build product.  In these contexts, an "expansion" step is performed, in
+which indirections are replaced with the targets they reference.
 
 There are two forms of indirections:
 
@@ -76,8 +74,8 @@ other artifacts, structured as:
 
     `CLASS(ARGS)`
 
-Neither `CLASS` nor `ARGS` may be empty.  (Complete [syntax](#Syntax) details
-are given below.)
+`CLASS` may not be empty.  (Complete [syntax](#Syntax) details are given
+below.)
 
 Property definitions may be associated with the class by defining a Make
 variable named `CLASS.PROPERTY`.  Property definitions may use "simple"
@@ -515,7 +513,7 @@ The following BNF summarizes:
     Name     := NameChar+
     Instance := Class '(' ArgList ')'
     Class    := ClassChar+
-    ArgList  := Arg ( ',' Arg )*
+    ArgList  := ( Arg ( ',' Arg )* )?
     Arg      := ( Name `:` )? Value
     Value    := ( Instance | Name | Property )+
     Property := PropChar+
@@ -526,11 +524,11 @@ These definitions rely on the following character classes:
     NameChar:   A-Z a-z 0-9 _ - + / ^ ~ { } .
     PropChar:   A-Z a-z 0-9 _ - + / ^ ~       @ < >
 
-Note that argument list must contain at least one argument, and each
-argument must contain at least one character.  Arguments may contain other
-instances embedded within them, which means they can contain `(` and `)`,
-characters, but only in balanced pairs, as well as `,` and `:`, but only
-within nested parentheses.
+Note that argument list contains zero or more arguments, and each argument
+must contain at least one character.  Arguments may contain other instances
+embedded within them, which means they can contain `(` and `)`, characters,
+but only in balanced pairs, as well as `,` and `:`, but only within nested
+parentheses.
 
 In general, instances will contain special shell characters, so they may
 have to be quoted when being passed on the command line.

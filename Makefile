@@ -2,6 +2,8 @@ all: test example.md
 
 test: .out/test
 
+scam: ; scam prototype.scm
+
 .out/test: Makefile *.mk
 	make -f minion_test.mk
 	mkdir -p .out

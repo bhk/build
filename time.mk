@@ -1,0 +1,32 @@
+# time.mk: A large fictional project for timing rule generation.
+
+Alias(default).command = time $(MAKE) -f $(word 1,$(MAKEFILE_LIST)) work
+Alias(work).in = Work(Alias(all))
+
+Alias(all).in = Alias(tests) Alias(progs)
+Alias(tests).in = ExecTest@LinkTest@CC@files
+Alias(progs).in = LinkC@files
+
+# Work[IN] : Compute rules for rollups, but do not evaluate them.
+#
+Work.inherit = Builder
+Work.in =
+Work.rollups = $(call _rollup,$A)
+Work.rules = $(foreach i,{rollups},$(words $(call get,rule,$i)))
+Work.command = @echo '$(words {rules}) rules computed'
+
+
+x10 = $(foreach x,$1,$x0 $x1 $x2 $x3 $x4 $x5 $x6 $x7 $x8 $x9)
+files = $(addsuffix .c,$(call x10,$(call x10,foo bar baz)))
+
+LinkTest.inherit = LinkC
+LinkTest.in = {inherit} {libSrcs}
+LinkTest.libFlags = -lboost
+LinkTest.libSrcs = a.c b.c d.c e.c f.c g.h
+
+ExecTest.inherit = Exec
+
+CC++.optFlags = -Os
+CC++.warnFlags = -W -Wall
+
+include minion$(OLD).mk

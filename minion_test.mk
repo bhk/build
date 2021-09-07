@@ -86,6 +86,11 @@ TB.inherit = TA
 TB(a).s := <B(a).s:$$A;{}>
 TB(a).r  = <B(a).r:$C;{inherit};{p}>
 
+# file ID
+$(call _expectEQ,\
+  $(call get,out,filename),\
+  filename)
+
 # instance-defined, simple variable
 $(call _expectEQ,\
   $(call get,s,TB(a)),\
@@ -172,12 +177,12 @@ $(call _expectEQ,$(call _goalType,abc),Other)
 
 # _once
 
-A = 1
-o1_compute = $(A)
+O1 = 1
+o1_compute = $(O1)
 o1 = $(call _once,o1_compute)
 
 $(call _expectEQ,$(o1),1)
-A = 2
+O1 = 2
 $(call _expectEQ,$(o1),1)
 
 

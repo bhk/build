@@ -2,6 +2,7 @@
 ;; prototype.scm:  SCAM prototypes of functions for Minion
 ;;----------------------------------------------------------------
 
+(require "io")
 (require "export.scm")
 
 (require "base.scm")
@@ -9,6 +10,15 @@
 (require "tools.scm")
 (require "outputs.scm")
 
-(export-text "ifndef minion_start
-  $(end)
-endif")
+(define `tail "
+ifndef minion_start
+  $(minion_end)
+endif
+")
+
+(define (main argv)
+  (define `o (first argv))
+  (define `output (.. (get-exports) "\n" tail))
+  (if o
+      (write-file o output)
+      (print output)))

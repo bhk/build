@@ -569,9 +569,9 @@ $(_forceTarget):
 endef
 
 
-# This will be the default target when `$(end)` is omitted (and
+# This will be the default target when `$(minion_end)` is omitted (and
 # no goal is named on the command line)
-_error_default: ; $(error Makefile used minion_start but did not call `$$(end)`)
+_error_default: ; $(error Makefile used minion_start but did not call `$$(minion_end)`)
 
 # Using "$*" in the following pattern rule we can capture the entirety of
 # the goal, including embedded spaces.
@@ -581,7 +581,7 @@ _OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 
 Alias(clean).command ?= $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
 
-end = $(eval $(value _epilogue))
+minion_end = $(eval $(value _epilogue))
 
 define _epilogue
   # Check OUTDIR
@@ -675,6 +675,5 @@ _outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(O
 _outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
 
 ifndef minion_start
-  $(end)
+  $(minion_end)
 endif
-

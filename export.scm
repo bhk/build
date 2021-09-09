@@ -94,33 +94,37 @@
 
 ;; Output a SCAM function as Make code, renaming automatic vars.
 ;;
-(define (show-export fn-name)
+(define (get-export fn-name)
   &public
 
   (define `minionized
-    (subst "$  " "$(\\s)"     ;; SCAM runtime -> Minion make
-           "$ \t" "$(\\t)"    ;; SCAM runtime -> Minion make
+    (subst "$  " "$(\\s)"     ;; SCAM runtime -> Minionese
+           "$ \t" "$(\\t)"    ;; SCAM runtime -> Minionese
            "$ " ""            ;; not needed to avoid keywords in "=" defns
-           "$(if ,,,)" "$;"   ;; SCAM runtime -> Minion make
-           "$(if ,,:,)" ":$;" ;; SCAM runtime -> Minion make
+           "$(if ,,,)" "$;"   ;; SCAM runtime -> Minionese
+           "$(if ,,:,)" ":$;" ;; SCAM runtime -> Minionese
            "$(&)" "$&"        ;; smaller, isn't it?
-           "$`" "$$"          ;; SCAM runtime -> Minion make
+           "$`" "$$"          ;; SCAM runtime -> Minionese
            (native-value fn-name)))
 
   (define `escaped
     (subst "\n" "$(\\n)" "#" "\\#" minionized))
 
   (if (filter "s%" (native-flavor fn-name))
-      (print fn-name " := " (native-var fn-name))
-      (print fn-name " = " escaped)))
+      (.. fn-name " := " (native-var fn-name))
+      (.. fn-name " = " escaped)))
 
+(define (get-exports)
+  &public
+  (foreach (e *exports* "\n")
+    (if (filter "=%" e)
+        (.. "\n" (first (patsubst "=%" "%" e)) "\n")
+        (get-export (first e)))))
+
+(define (show-export fn-name)
+  &public
+  (print (get-export fn-name)))
 
 (define (show-exports)
   &public
-
-  (foreach (e *exports*)
-    (if (filter "=%" e)
-        (print "\n" (first (patsubst "=%" "%" e)) "\n")
-        (show-export (first e)))))
-
-(at-exit show-exports)
+  (print (get-exports)))

@@ -22,9 +22,9 @@ example.md: $(EO) ; cp $< $@
 
 $(MO): *.scm minion.mk Makefile
 	mkdir -p $(@D)
-	sed '1,/SCAM/!d' minion.mk > $@.tmp
-	scam minion.scm >> $@.tmp
-	mv $@.tmp $@
+	sed '1,/SCAM/!d' minion.mk > $@.1
+	scam minion.scm $@.2
+	cat $@.1 $@.2 > $@
 
 $(EO): minion.mk example/*
 	mkdir -p $(@D)

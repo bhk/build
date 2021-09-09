@@ -82,10 +82,10 @@ $(call _expectEQ,$(call _expand,C@D@ev2),C(D(o2)) C(D(o3)))
 # Test only for coverage; more granular tests are in *.scm.
 
 TA.p  = <A.p>
-TA.r  = <A.r:$A;{s}>
+TA.r  = <A.r:$(_argText);{s}>
 TB.inherit = TA
-TB(a).s := <B(a).s:$$A;{}>
-TB(a).r  = <B(a).r:$C;{inherit};{p}>
+TB(a).s := <B(a).s:$$(_argText);{}>
+TB(a).r  = <B(a).r:$(_class);{inherit};{p}>
 
 # file ID
 $(call _expectEQ,\
@@ -95,19 +95,19 @@ $(call _expectEQ,\
 # instance-defined, simple variable
 $(call _expectEQ,\
   $(call get,s,TB(a)),\
-  <B(a).s:$$A;{}>)
+  <B(a).s:$$(_argText);{}>)
 
 # cached access
 $(call _expectEQ,\
   $(call get,s,TB(a)),\
-  <B(a).s:$$A;{}>)
+  <B(a).s:$$(_argText);{}>)
 
 # instance-defined, recursive variable
 # + {inherit}, {prop}
 # + class-defined simple & recursive variables
 $(call _expectEQ,\
   $(call get,r,TB(a)),\
-  <B(a).r:TB;<A.r:a;<B(a).s:$$A;{}>>;<A.p>>)
+  <B(a).r:TB;<A.r:a;<B(a).s:$$(_argText);{}>>;<A.p>>)
 
 
 # _goalID
@@ -157,8 +157,8 @@ $(call _expectEQ,\
 # Help
 
 C.inherit = Builder
-C.x = <$A>
-C.x.y = :$A:
+C.x = <$(_argText)>
+C.x.y = :$(_argText):
 
 $(call _expectEQ,$(call _getID.P,C(i).x),<i>)
 $(call _expectEQ,$(call _getID.P,C(i).x.y),:i:)
@@ -197,17 +197,11 @@ $(call _expectEQ,$(call _argHash,a$]),:a<]>)
 
 Foo.inherit = Builder
 Foo.args = $(_args)
-Foo.argX = $(foreach K,X,$(_args))
+Foo.argX = $(call _namedArgs,X)
 
-$(call _expectEQ,$(call get,argHash,Foo(C(A)$;B$;X:Y)),:C(A) :B X:Y)
+$(call _expectEQ,$(call _argHash,C(A)$;B$;X:Y),:C(A) :B X:Y)
 $(call _expectEQ,$(call get,args,Foo(C(A)$;B$;X:Y)),C(A) B)
 $(call _expectEQ,$(call get,argX,Foo(C(A)$;B$;X:Y)),Y)
-
-EC.inherit = #
-EC.args = $(_args)
-
-$(call $(trapEQ),$(call get,args,EC(a)),)
-$(call expectError,during evaluation of:$(\n)EC.args =)
 
 
 # _outBasis
@@ -241,7 +235,7 @@ $(call _expectEQ,$(call get,out,Zip(@p1)),.out/Zip_@/p1.zip)
 # Inference
 
 Dup.inherit = Builder
-Dup.out = dup/$A
+Dup.out = dup/$(_argText)
 
 C.outExt = .o
 
@@ -282,7 +276,7 @@ $(call _expectEQ,1,$(call vvOK?, \# \ \\ $$a $(\t)$(\n) x ))
 # _defer
 
 Defer.inherit = Builder
-Defer.command = true $(call _defer,$$($A))
+Defer.command = true $(call _defer,$$($(_argText)))
 Defer.vvFile =
 
 define DeferRule

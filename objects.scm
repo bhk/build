@@ -10,11 +10,10 @@
 
 
 ;; Dynamic state during property evaluation enables `.`, `C`, and `A`:
-;;   I = current instance, bound with `foreach`
-;;   C = current class, bound with `foreach`
-;;   A = function of I and C (but accessed as a variable)
-(declare I &native)
-(declare C &native)
+;;   _self = current instance, bound with `foreach`
+;;   _class = current class, bound with `foreach`
+(declare _self &native)
+(declare _class &native)
 
 ;; Display an error and halt.  We call this function, instead of `error`, so
 ;; that is can be dynamically interecpted for testing purposes.
@@ -106,7 +105,7 @@
 ;;
 (define (_E1 _ p who)
   &native
-  (_error (e1-msg who p C I)))
+  (_error (e1-msg who p _class _self)))
 
 (export (native-name _E1) 1)
 
@@ -116,7 +115,7 @@
 ;; (), because a literal ")" causes problems with native-var.
 ;;
 (define `(cap-memo p)
-  (.. "~" I "." p))
+  (.. "~" _self "." p))
 
 
 ;; Compile a definition of P in the scope defined by PARENTS; return the
@@ -132,7 +131,7 @@
   (define `memo-var (.. "&" parents "." p))
   (define `out-var (if is-cap (subst ")" "]" (cap-memo p)) memo-var))
   (define `inherit-var
-    (_cx (_walk (if is-cap C (_pup parents)) p)
+    (_cx (_walk (if is-cap _class (_pup parents)) p)
          p
          (.. "^" parents)))
 
@@ -161,19 +160,19 @@
 ;;
 (define (.& p who)
   &native
-  (define `I.P (.. I "." p))
-  (define `&C.P (.. "&" C "." p))
+  (define `I.P (.. _self "." p))
+  (define `&C.P (.. "&" _class "." p))
 
   (if (defined? I.P)
-      (_cx I p who 1)
+      (_cx _self p who 1)
       (if (defined? &C.P)
           &C.P
-          (_fset &C.P (native-value (_cx (_walk C p) p who))))))
+          (_fset &C.P (native-value (_cx (_walk _class p) p who))))))
 
 (export (native-name .&) 1)
 
 
-;; Evaluate property P for current instance (given by dynamic C and A)
+;; Evaluate property P for current instance (given by dynamic _class and A)
 ;; and cache the result.
 ;;
 ;; WHO = requesting variable
@@ -188,7 +187,7 @@
 (define (. p ?who)
   &native
   (if (simple? (cap-memo p))
-      (native-value (cap-memo p))
+      (native-var (cap-memo p))
       (_set (cap-memo p) (native-call (.& p who)))))
 
 (export (native-name .) nil)
@@ -198,32 +197,23 @@
 ;; nil if I begins with "(" or does not end with ")".
 ;;
 (define `(extractClass)
-  (subst "|" "" (word 1 (subst "(" " | " (filter "%)" I)))))
+  (subst "|" "" (word 1 (subst "(" " | " (filter "%)" _self)))))
 
 
 ;; Report error: mal-formed instance name
 ;;
 (define (_E0)
   &native
-  ;; When called from `get`, A holds the instance name
   (define `reason
-    (if (filter "(%" I)
+    (if (filter "(%" _self)
         "empty CLASS"
-        (if (findstring "(" I)
+        (if (findstring "(" _self)
             "missing ')'"
             "unbalanced ')'")))
 
-  (_error (.. "Mal-formed instance name '" I "'; " reason)))
+  (_error (.. "Mal-formed instance name '" _self "'; " reason)))
 
 (export (native-name _E0) 1)
-
-
-(define (A)
-  &native
-  (patsubst (.. C "(%)") "%" I))
-
-(declare A &native)
-(export (native-name A) nil)
 
 
 ;; Return the class of an ID: CLASS for CLASS(ARGS), "File" for others.
@@ -248,13 +238,46 @@
 (define (get p ids)
   &public
   &native
-  (foreach (I ids)
-    (foreach (C (idClass I))
+  (foreach (_self ids)
+    (foreach (_class (idClass _self))
       (. p))))
 
 
-;; Override automatic variable names to I and C for dynamic binding
-(export (native-name get) nil "I C")
+;; Override automatic variable names to _self and _class for dynamic binding
+(export (native-name get) nil "_self _class")
+
+(define `argText
+  &public
+  (patsubst (.. _class "(%)") "%" _self))
+
+(define (_argText)
+  &native
+  argText)
+(declare _argText &native) ;; re-define so it can be referenced as a variable
+(export (native-name _argText) nil)
+
+(define (_args)
+  &native
+  (_hashGet (_argHash argText)))
+(declare _args &native)
+(export (native-name _args) nil)
+
+(define (_arg1)
+  &native
+  (word 1 _args))
+(declare _arg1 &native)
+(export (native-name _arg1) nil)
+
+(define (_namedArgs key)
+  &native
+  (_hashGet (_argHash argText) key))
+(export (native-name _namedArgs) 1)
+
+(define (_namedArg1 key)
+  &native
+  (word 1 (_namedArgs key)))
+(export (native-name _namedArg1) 1)
+
 
 ;;--------------------------------
 ;; describeDefn
@@ -308,7 +331,7 @@
 (set-native-fn "B2.inherit" "A")
 (set-native-fn "C.inherit" "B1 B2")
 
-(set-native-fn "A.x" "<A.x:$C>")
+(set-native-fn "A.x" "<A.x:$(_class)>")
 (set-native-fn "A.y" "<A.y>")
 (set-native    "A.i" " (A.i) ")
 (set-native-fn "B1.y" "<B1.y>")
@@ -316,9 +339,9 @@
 (set-native-fn "B2.y" "<B2.y>")
 (set-native-fn "C.z" "<C.z>")
 (set-native-fn "C.i" "<C.i:{inherit}>")        ;; recursive w/ {inherit}
-(set-native    "C(a).s" "<C(a).s:$C($A){x}>")  ;; simple
+(set-native    "C(a).s" "<C(a).s:$(_class)($(_argText)){x}>")  ;; simple
 (set-native    "C(X(f)).s" "<C(X(f)).s>")      ;; simple
-(set-native-fn "C(a).r" "<C(a).r:$C($A)>")     ;; recursive
+(set-native-fn "C(a).r" "<C(a).r:$(_class)($(_argText))>")     ;; recursive
 (set-native-fn "C(a).p" "<C(a).p:{x}>")        ;; recursive w/ prop
 (set-native-fn "C(a).i" "<C(a).i:{inherit}>")  ;; recursive w/ {inherit}
 
@@ -341,8 +364,8 @@
 (expect 1 (see "from {inherit} in:\nA.x =" (e1-msg "^A B" "x" "C" "a")))
 (expect 1 (see "during evaluation of:\n_cx =" (e1-msg "_cx" "x" "C" "a")))
 
-(let-global ((I "C(a)")
-             (C "C"))
+(let-global ((_self "C(a)")
+             (_class "C"))
 
   ;; .&
 
@@ -354,7 +377,7 @@
   (test.& "z" "&C.z" "<C.z>")
   (test.& "y" "&C.y" "<B1.y>")
   (test.& "y2" "&C.y2" "<B1.y2>")
-  (test.& "s" "~C(a].s" "<C(a).s:$C($A){x}>")     ;; simple CAP
+  (test.& "s" "~C(a].s" "<C(a).s:$(_class)($(_argText)){x}>")     ;; simple CAP
   (test.& "r" "~C(a].r" "<C(a).r:C(a)>")          ;; recursive CAP
   (test.& "p" "~C(a].p" "<C(a).p:<A.x:C>>")       ;; recursive CAP + {prop}
   (test.& "i" "~C(a].i" "<C(a).i:<C.i: (A.i) >>") ;; recursive CAP + {inh}
@@ -364,18 +387,18 @@
   (expect (. "x") "<A.x:C>")
   (expect (native-var (cap-memo "x")) "<A.x:C>")
   (expect (. "x") "<A.x:C>")  ;; again (after caching)
-  (let-global ((I "C(X(f))"))
-    (expect (. "s" nil) "<C(X(f)).s>"))           ;; challenging $A?
+  (let-global ((_self "C(X(f))"))
+    (expect (. "s" nil) "<C(X(f)).s>"))           ;; challenging ARG?
 
   nil)
 
-(set-native-fn "File.id" "$C($A)")
+(set-native-fn "File.id" "$(_class)($(_argText))")
 (expect (get "x" "C(a)") "<A.x:C>")
 (expect (get "id" "f") "File(f)")
 
 ;; caching of &C.P
 
-(expect "<A.x:$C>" (native-value "&C.x"))   ;; assert: memo var was set
+(expect "<A.x:$(_class)>" (native-value "&C.x"))   ;; assert: memo var was set
 (set-native-fn "&C.x" "NEW")
 (expect (get "x" "C(b)") "NEW")             ;; assert: uses memo
 

@@ -10,7 +10,7 @@ Alias(progs).in = LinkC@files
 #
 Work.inherit = Builder
 Work.in =
-Work.rollups = $(call _rollup,$A)
+Work.rollups = $(call _rollup,$(_args))
 Work.rules = $(foreach i,{rollups},$(words $(call get,rule,$i)))
 Work.command = @echo '$(words {rules}) rules computed'
 

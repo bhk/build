@@ -87,8 +87,9 @@ must use `$(...)`, not `${...}`, for Make variables and functions.
 Expressions of the form `{...}` expand to the value of the property named by
 `...` (for the current instance).  The string `{inherit}` expands to the
 inherited value of the current property of the current instance.  To include
-an actual `{` or `}` character, use `$(\L)` or `$(\R)`.  Finally,`$C` and
-`$A` expand to the class name and argument list of the current instance.
+an actual `{` or `}` character, use `$(\L)` or `$(\R)`.  Finally, the
+variables `$(_self)`, `$(_class)`, `$(_args)` (described below) can be used
+to obtain the name of the current instance, its class, and its arguments.
 
 For example, the following user-defined class extends the `CC` class to
 pass and additional flag to the compiler:
@@ -200,8 +201,6 @@ handles a number of low-level responsibilities, including the following:
  * An output file name and location is computed.  (See [Outputs](#outputs),
    below).
 
- * [Argument lists](#argument-lists) are parsed.
-
  * Inputs are obtained from the unnamed arguments.  Being a target list,
    `in` may contain indirections.
 
@@ -268,7 +267,7 @@ The `Copy` class exists to deploy files to a specific, well-known location,
 rather than an automatically-generated unique location, so it allows the
 output file location to be specified by an argument with the name `out`:
 
-    _Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
+    _Copy.out = $(or $(call _namedArg1,out),{inherit})
 
 For example, `Copy(CC(foo.c),out=deploy/foo.o)` will place its result in
 "deploy/foo.o".
@@ -482,20 +481,41 @@ within recursive property definitions.
 
   Return the value of VAR, evaluating it at most once.
 
+* `$(_self)`
+
+  Return the name of the current instance.
+
+* `$(_class)`
+
+  Return the class of the current instance.
+
+* `$(_argText)`
+
+  Return the portion of the current instance name that describes the
+  argument list.
+
+  For example, in `Class(a,b,x:1,x:2)`, `$(_argText)` returns "a,b,x:1,x:2".
+
 * `$(_args)`
 
-  Return all named arguments (for the current instance) whose name matches
-  `K`.  `K` is a variable that defaults to the empty string, which
-  identifies unnamed arguments, and can be bound to other values using
-  `foreach`.  For example, during evaluation of a property of
-  `Class(a,b,x:1,x:2)`:
+  Return all unnamed arguments for the current instance.
 
-      $(_args) => "a b"
-      $(foreach K,x,$(_args)) => "1 2"
+  For example, in `Class(a,b,x:1,x:2)`, `$(_args)` returns "a b".
 
 * `$(_arg1)`
 
   Same as `$(word 1,$(_args))`.
+
+* `$(call _namedArgs,NAME)`
+
+  Return all arguments associated with NAME for the current instance.
+
+  For example, in `Class(a,b,x:1,x:2)`, `$(call _namedArgs,x)` returns "1 2".
+
+* `$(call _namedArg1,NAME)`
+
+  Same as `$(word 1,$(call _namedArgs,NAME))`.
+
 
 ## Syntax
 

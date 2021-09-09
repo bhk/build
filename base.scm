@@ -172,22 +172,29 @@
 
 ;; Set variable named KEY to VALUE; return VALUE.
 ;;
-;; We assume KEY does not contain ":", "=", "$", or whitespace.
+;; We assume KEY does not contain any characters illegal in Minion IDs.
+;; Note: If a variable name includes `:` and `=` (not a legal ID char) then
+;; `native-var` cannot be used to obtain its value, but native-value can.
+;;
 (define (_set key value)
   &public
   &native
-  (define `(escape str)
-    "$(or )" (subst "$" "$$" "\n" "$(\\n)" "#" "$(\\H)" str))
-  (.. (native-eval (.. key " := " (escape value)))
+  ;; Encode "$" (not a legal ID char) to avoid fatal errors.
+  (define `ekey (subst "$" "$$" ":" "$(or :)" key))
+  (define `evalue (subst "$" "$$" "\n" "$(\\n)" value))
+
+  (.. (native-eval (subst "#" "$(\\H)"
+                          (.. ekey ":=$(or )" evalue)))
       value))
 
 (export (native-name _set) 1)
 
 (begin
-  (define `(test value)
-    (_set "tmp_set_test" value)
-    (expect (native-var "tmp_set_test") value))
-  (test "a\\b#c\\#\\\\$v\nz"))
+  (define `(test key value)
+    (_set key value)
+    (expect (native-var key) value))
+  (test "temp_set_test" "a\\b#c\\#\\\\$v\nz")
+  (test "temp_$: a b" "a\\b#c\\#\\\\$v\nz"))
 
 
 ;; Assign a recursive variable NAME, and return NAME.  The resulting
@@ -223,7 +230,7 @@
 ;;
 (define (_once var)
   &native
-  (define `cacheVar (.. "_|" var))
+  (define `cacheVar (.. "_o~" var))
 
   (if (undefined? cacheVar)
       (_set cacheVar (native-var var))
@@ -315,10 +322,12 @@
 (define (_argHash arg)
   &public
   &native
+  (define `memo-var (.. "_h~" arg))
 
   (if (or (findstring "(" arg) (findstring ")" arg) (findstring ":" arg))
-      (_argHash2 arg)
-      ;; common, fast cast
+      (or (native-var memo-var)
+          (_set memo-var (_argHash2 arg)))
+      ;; common, fast case
       (.. ":" (subst "," " :" arg))))
 
 (export (native-name _argHash) 1)

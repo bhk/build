@@ -43,7 +43,7 @@ Write.inherit ?= _Write
 # expected.  Property evaluation logic short-cuts the handling of File
 # instances, so inheritance is not available.
 #
-File.out = $A
+File.out = $(_self)
 File.rule =
 File.needs =
 
@@ -54,8 +54,6 @@ File.needs =
 Builder.@ = {out}
 Builder.< = $(firstword {^})
 Builder.^ = {inFiles}
-
-Builder.argHash = $(call _argHash,$A,_argError)
 
 # `needs` should include all explicit dependencies and any instances
 # required to build auto-generated implicit dependencies (which should be
@@ -106,12 +104,12 @@ Builder.out = {outDir}{outName}
 Builder.outDir = $(dir {outBasis})
 Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(VARDIR)$(call _outBasis,$C,$A,{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
+Builder.outBasis = $(VARDIR)$(call _outBasis,$(_class),$(_argText),{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
 # Message to be displayed when/if the command executes (empty => nothing displayed)
-Builder.message = \#-> $C($A)
+Builder.message = \#-> $(_self)
 
 Builder.mkdirs = $(sort $(dir {@} {vvFile}))
 
@@ -186,7 +184,7 @@ _Phony.vvFile = # always runs => no point in validating
 #     {command} and/or {in} are supplied by the user makefile.
 #
 Alias.inherit = Phony
-Alias.out = $(subst :,\:,$A)
+Alias.out = $(subst :,\:,$(_argText))
 Alias.in =
 
 
@@ -195,27 +193,27 @@ Alias.in =
 #    and its {in} is the named instance or indirection.
 #
 Goal.inherit = Alias
-Goal.in = $A
+Goal.in = $(_argText)
 
 
 # HelpGoal(TARGETNAME) : Generate a rule that invokes `_help!`
 #
 HelpGoal.inherit = Alias
-HelpGoal.command = @true$(call _defer,$$(call _help!,$(call _escArg,$A)))
+HelpGoal.command = @true$(call _defer,$$(call _help!,$(call _escArg,$(_argText))))
 
 
 # Variants(TARGETNAME) : Build {all} variants of TARGETNAME.  Each variant
 #    is defined in a separate rule so they can all proceed concurrently.
 #
 Variants.inherit = Phony
-Variants.in = $(foreach v,{all},Variant($A,V:$v))
+Variants.in = $(foreach v,{all},Variant($(_argText),V:$v))
 
 
 # Variant(TARGETNAME,V:VARIANT) : Build VARIANT of TARGETNAME.
 #
 Variant.inherit = Phony
 Variant.in =
-Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(call _shellQuote,$(subst =,:,$(_arg1))) V=$(call _shellQuote,$(foreach K,V,$(_arg1)))
+Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(call _shellQuote,$(subst =,:,$(_arg1))) V=$(call _shellQuote,$(call _namedArg1,V))
 
 
 # Makefile(VAR) : Generate a makefile that includes rules for IDs in $(VAR)
@@ -227,9 +225,9 @@ Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(
 Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.vvFile = # too costly; defeats the purpose
-Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$C($A))))
-Makefile.excludeIDs = $(filter %$],$(call _expand,@$A_exclude))
-Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$A)))
+Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$(_self))))
+Makefile.excludeIDs = $(filter %$],$(call _expand,@$(_argText)_exclude))
+Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$(_argText))))
 define Makefile.deferredCommand
 $(call _recipeLines,
 @rm -f {@}
@@ -248,7 +246,7 @@ endef
 UseCache.inherit =
 UseCache.out = 
 UseCache.rule = -include {^}
-UseCache.needs = Makefile($A)
+UseCache.needs = Makefile($(_argText))
 UseCache.^ = $(call get,out,{needs})
 
 
@@ -328,11 +326,11 @@ _Run.command = {exec}
 # _Copy(INPUT,out:OUT)
 #
 #   Copy an artifact.  If OUT is not provided, the file is copied to a
-#   directory named $(VARDIR)$C.
+#   directory named $(VARDIR)$(_class).
 #
 _Copy.inherit = Builder
-_Copy.out = $(or $(foreach K,out,$(_arg1)),{inherit})
-_Copy.outDir = $(VARDIR)$C/
+_Copy.out = $(or $(call _namedArg1,out),{inherit})
+_Copy.outDir = $(VARDIR)$(_class)/
 _Copy.command = cp {<} {@}
 
 
@@ -395,8 +393,8 @@ _Zip.command = zip {@} {^}
 #   appropriate name, or override its `in` property to specify the zip file.
 #
 _Unzip.inherit = Builder
-_Unzip.command = unzip -p {<} $A > {@} || rm {@}
-_Unzip.in = $C.zip
+_Unzip.command = unzip -p {<} $(_argText) > {@} || rm {@}
+_Unzip.in = $(_class).zip
 
 
 # _Write(VAR)
@@ -405,7 +403,7 @@ _Unzip.in = $C.zip
 #   Write the value of a variable to a file.
 #
 _Write.inherit = Builder
-_Write.out = $(or $(foreach K,out,$(_arg1)),$(VARDIR)$C/$(notdir $(_arg1)))
+_Write.out = $(or $(call _namedArg1,out),$(VARDIR)$(_class)/$(notdir $(_arg1)))
 _Write.command = @$(call _printf,{data}) > {@}
 _Write.data = $($(_arg1))
 _Write.in =
@@ -443,11 +441,6 @@ _eq? = $(findstring $(subst x$1,1,x$2),1)
 _shellQuote = '$(subst ','\'',$1)'#'  (comment to fix font coloring)
 _printfEsc = $(subst $(\n),\n,$(subst $(\t),\t,$(subst \,\\,$1)))
 _printf = printf "%b" $(call _shellQuote,$(_printfEsc))
-
-K :=
-_who = $0
-_args = $(call _hashGet,$(call .,argHash,$(_who)),$K)
-_arg1 = $(word 1,$(_args))
 
 # Quote a (possibly multi-line) $1
 _qv = $(if $(findstring $(\n),$1),$(subst $(\n),$(\n)  | ,$(\n)$1),'$1')
@@ -632,13 +625,13 @@ _ivar = $(lastword $(subst @, ,$1))
 _ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1) % $(subst @, $] ,$1))))
 _expandX = $(foreach w,$1,$(or $(filter %$],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
 _expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
-_set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
+_set = $(eval $(subst \#,$$(\H),$(subst :,$$(or :),$(subst $$,$$$$,$1)):=$$(or )$(subst $(\n),$$(\n),$(subst $$,$$$$,$2))))$2
 _fset = $(and $(eval $1 = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))1,$1)
-_once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
+_once = $(if $(filter u%,$(flavor _o~$1)),$(call _set,_o~$1,$($1)),$(_o~$1))
 _argError = $(error Argument '$(subst `,,$1)' is mal-formed:$(\n)   $(subst `,,$(subst `$], *$]* ,$(subst `$[, *$[*,$1)))$(\n)$(if $(C),during evaluation of $(C)($(A))))
 _argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)
 _argHash2 = $(subst `,,$(foreach w,$(subst $(if ,,`,), ,$(call _argGroup,$(subst :,`:,$(subst $;,$(if ,,`,),$(subst $],`$],$(subst $[,`$[,$1)))))),$(if $(findstring `:,$w),,:)$w))
-_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(_argHash2),:$(subst $;, :,$1))
+_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(or $(_h~$1),$(call _set,_h~$1,$(_argHash2))),:$(subst $;, :,$1))
 _hashGet = $(patsubst $2:%,%,$(filter $2:%,$1))
 _describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
 
@@ -648,13 +641,17 @@ _error = $(error $1)
 _idC = $(if $(findstring $[,$1),$(word 1,$(subst $[, ,$1)))
 _pup = $(filter-out &%,$($(word 1,$1).inherit) &$1)
 _walk = $(if $1,$(if $(findstring s,$(flavor $(word 1,$1).$2)),$1,$(call _walk,$(_pup),$2)))
-_E1 = $(call _error,Undefined property '$2' for $I was referenced$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $3,$(if $(filter ^%,$3), from {inherit} in,$(if $(filter &&%,$3), from {$2} in, during evaluation of)):$(\n)$(call _describeVar,$(if $(filter &%,$3),$(foreach w,$(lastword $(subst ., ,$3)),$(word 1,$(call _walk,$(word 1,$(subst &, ,$(subst ., ,$3))),$w)).$w),$(if $(filter ^%,$3),$(subst ^,,$(word 1,$3)).$2,$3)))))$(\n))
-_cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$I.$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$($w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$C,$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
-.& = $(if $(findstring s,$(flavor $I.$1)),$(call _cx,$I,$1,$2,1),$(if $(findstring s,$(flavor &$C.$1)),&$C.$1,$(call _fset,&$C.$1,$(value $(call _cx,$(call _walk,$C,$1),$1,$2)))))
-. = $(if $(filter s%,$(flavor ~$I.$1)),$(value ~$I.$1),$(call _set,~$I.$1,$(call $(.&))))
-_E0 = $(call _error,Mal-formed instance name '$I'; $(if $(filter $[%,$I),empty CLASS,$(if $(findstring $[,$I),missing '$]',unbalanced '$]')))
-A = $(patsubst $C(%),%,$I)
-get = $(foreach I,$2,$(foreach C,$(or $(if $(findstring $[,$I),$(filter-out |%,$(subst $[, |,$(filter %$],$I))),$(if $(findstring $],$I),,File)),$(_E0)),$(call .,$1)))
+_E1 = $(call _error,Undefined property '$2' for $(_self) was referenced$(if $(filter u%,$(flavor $(_class).inherit)),;$(\n)$(_class) is not a valid class name ($(_class).inherit is not defined),$(if $3,$(if $(filter ^%,$3), from {inherit} in,$(if $(filter &&%,$3), from {$2} in, during evaluation of)):$(\n)$(call _describeVar,$(if $(filter &%,$3),$(foreach w,$(lastword $(subst ., ,$3)),$(word 1,$(call _walk,$(word 1,$(subst &, ,$(subst ., ,$3))),$w)).$w),$(if $(filter ^%,$3),$(subst ^,,$(word 1,$3)).$2,$3)))))$(\n))
+_cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$(_self).$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$($w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$(_class),$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
+.& = $(if $(findstring s,$(flavor $(_self).$1)),$(call _cx,$(_self),$1,$2,1),$(if $(findstring s,$(flavor &$(_class).$1)),&$(_class).$1,$(call _fset,&$(_class).$1,$(value $(call _cx,$(call _walk,$(_class),$1),$1,$2)))))
+. = $(if $(filter s%,$(flavor ~$(_self).$1)),$(~$(_self).$1),$(call _set,~$(_self).$1,$(call $(.&))))
+_E0 = $(call _error,Mal-formed instance name '$(_self)'; $(if $(filter $[%,$(_self)),empty CLASS,$(if $(findstring $[,$(_self)),missing '$]',unbalanced '$]')))
+get = $(foreach _self,$2,$(foreach _class,$(or $(if $(findstring $[,$(_self)),$(filter-out |%,$(subst $[, |,$(filter %$],$(_self)))),$(if $(findstring $],$(_self)),,File)),$(_E0)),$(call .,$1)))
+_argText = $(patsubst $(_class)(%),%,$(_self))
+_args = $(call _hashGet,$(call _argHash,$(patsubst $(_class)(%),%,$(_self))))
+_arg1 = $(word 1,$(_args))
+_namedArgs = $(call _hashGet,$(call _argHash,$(patsubst $(_class)(%),%,$(_self))),$1)
+_namedArg1 = $(word 1,$(_namedArgs))
 _describeProp = $(if $1,$(if $(filter u%,$(flavor $(word 1,$1).$2)),$(call _describeProp,$(or $(_idC),$(_pup)),$2),$(call _describeVar,$(word 1,$1).$2,   )$(if $(and $(filter r%,$(flavor $(word 1,$1).$2)),$(findstring {inherit},$(value $(word 1,$1).$2))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _describeProp,$(or $(_idC),$(_pup)),$2))),Error: no definition found!)
 _chain = $(if $1,$(call _chain,$(_pup),$2 $(word 1,$1)),$(filter %,$2))
 

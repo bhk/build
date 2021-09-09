@@ -7,7 +7,7 @@
 (require "base.scm")
 (require "objects.scm")
 
-(export-comment " tools.scm")
+(export-text "# tools.scm")
 
 ;;----------------------------------------------------------------
 ;; _inferPairs

@@ -1,7 +1,8 @@
 # minion_test.mk
 
 Alias(default).in = #nothing
-include minion.mk
+MINION ?= minion.mk
+include $(MINION)
 
 true = $(if $1,1)
 not = $(if $1,,1)
@@ -78,7 +79,7 @@ $(call _expectEQ,$(call _expand,C@D@ev2),C(D(o2)) C(D(o3)))
 
 # get
 #
-# Test only for coverage; more granular tests are in prototype.scm.
+# Test only for coverage; more granular tests are in *.scm.
 
 TA.p  = <A.p>
 TA.r  = <A.r:$A;{s}>
@@ -318,3 +319,4 @@ $(call _expectEQ,\
   $(call get,rule,Write(WVAR)),\
   $(value WWrule))
 
+$(info $(MINION) ok)

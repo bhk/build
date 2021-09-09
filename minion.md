@@ -402,8 +402,7 @@ Be aware of the following implications:
 An architectural pillar of Minion is that, generally, intermediate output
 file locations should not matter.  However, we do try to generate readable
 and navigable output diretories for the sake of those rare cases where a
-user does directly encounter them.  The precise structure is an
-implementation detail; refer to prototype.scm for details.
+user does directly encounter them.
 
 ## Example
 

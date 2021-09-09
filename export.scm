@@ -87,10 +87,9 @@
   (set *exports* (conj *exports* fn-name)))
 
 
-(define (export-comment text)
+(define (export-text text)
   &public
-
-  (set *exports* (conj *exports* (.. "#" text))))
+  (set *exports* (conj *exports* (.. "=" text))))
 
 
 ;; Output a SCAM function as Make code, renaming automatic vars.
@@ -119,9 +118,9 @@
 (define (show-exports)
   &public
 
-  (for (e *exports*)
-    (if (filter "#%" e)
-        (print "\n" e "\n")
-        (show-export e))))
+  (foreach (e *exports*)
+    (if (filter "=%" e)
+        (print "\n" (first (patsubst "=%" "%" e)) "\n")
+        (show-export (first e)))))
 
 (at-exit show-exports)

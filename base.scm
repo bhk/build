@@ -9,9 +9,9 @@
 ;; Symbols defined separately in minion.mk
 ;;--------------------------------
 
-(print "Defined in minion.mk: \\n \\H \\L \\R [ ] OUTDIR _isIndirect")
+;; Defined in minion.mk: \\n \\H \\L \\R [ ] OUTDIR
 
-(export-comment " base.scm")
+(export-text "# base.scm")
 
 (define OUTDIR
   &public
@@ -247,9 +247,14 @@
 
 (define (_argError arg)
   &native
-  (subst "`(" "<(>" "`)" "<)>" arg))
+  (error
+   (.. "Argument '" (subst "`" "" arg) "' is mal-formed:\n"
+       "   " (subst "`(" " *(*" "`)" " *)* " "`" "" arg) "\n"
+       (if (native-var "C")
+           (.. "during evaluation of "
+               (native-var "C") "(" (native-var "A") ")")))))
 
-(VF! (native-name _argError))
+(export (native-name _argError) 1)
 
 
 ;; Protect special characters that occur between balanced brackets.
@@ -318,6 +323,7 @@
 
 (export (native-name _argHash) 1)
 
+
 (expect (_argHash "a:b:c,d:e,f,g") "a:b:c d:e :f :g")
 (expect (_argHash "a") ":a")
 (expect (_argHash "a,b,c") ":a :b :c")
@@ -326,7 +332,9 @@
 (expect (_argHash "x:C(a)") "x:C(a)")
 (expect (_argHash "c(a,b:1!R()),d,x:y") ":c(a,b:1!R()) :d x:y")
 (expect (_argHash "c(a,b:1()),d,x:y")   ":c(a,b:1()) :d x:y")
-(expect (_argHash "c(a,b:1()),d,x:y)(") ":c(a,b:1()) :d x:y<)><(>")
+
+(let-global ((_argError (lambda (arg) (subst "`(" "<(>" "`)" "<)>" arg))))
+  (expect (_argHash "c(a,b:1()),d,x:y)(") ":c(a,b:1()) :d x:y<)><(>"))
 
 (expect (_argHash ",") ": :")
 (expect (_argHash ",a,b,") ": :a :b :")

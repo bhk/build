@@ -6,7 +6,7 @@
 (require "export.scm")
 (require "base.scm")
 
-(export-comment " objects.scm")
+(export-text "# objects.scm")
 
 
 ;; Dynamic state during property evaluation enables `.`, `C`, and `A`:

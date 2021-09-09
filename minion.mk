@@ -472,60 +472,6 @@ _evalIDs = $(foreach i,$(call _rollupEx,$(sort $(_isInstance)),$2),$(call _eval,
 # Escape an instance argument as a Make function argument
 _escArg = $(subst $[,$$[,$(subst $],$$],$(subst $;,$$;,$(subst $$,$$$$,$1))))
 
-# SCAM source exports:
-
-# base.scm
-
-_isInstance = $(filter %$],$1)
-_isIndirect = $(findstring @,$(filter-out %$],$1))
-_isAlias = $(filter s% r%,$(flavor Alias($1).in) $(flavor Alias($1).command))
-_goalID = $(if $(_isAlias),Alias($1),$(if $(or $(_isInstance),$(_isIndirect)),Goal($1)))
-_ivar = $(lastword $(subst @, ,$1))
-_ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1) % $(subst @, $] ,$1))))
-_expandX = $(foreach w,$1,$(or $(filter %$],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
-_expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
-_set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
-_fset = $(and $(eval $1 = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))1,$1)
-_once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
-_argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)
-_argHash2 = $(subst `,,$(foreach w,$(subst $(if ,,`,), ,$(call _argGroup,$(subst :,`:,$(subst $;,$(if ,,`,),$(subst $],`$],$(subst $[,`$[,$1)))))),$(if $(findstring `:,$w),,:)$w))
-_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(_argHash2),:$(subst $;, :,$1))
-_hashGet = $(patsubst $2:%,%,$(filter $2:%,$1))
-_describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
-
-# objects.scm
-
-_error = $(error $1)
-_idC = $(if $(findstring $[,$1),$(word 1,$(subst $[, ,$1)))
-_pup = $(filter-out &%,$($(word 1,$1).inherit) &$1)
-_walk = $(if $1,$(if $(findstring s,$(flavor $(word 1,$1).$2)),$1,$(call _walk,$(_pup),$2)))
-_E1 = $(call _error,Undefined property '$2' for $I was referenced$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $3,$(if $(filter ^%,$3), from {inherit} in,$(if $(filter &&%,$3), from {$2} in, during evaluation of)):$(\n)$(call _describeVar,$(if $(filter &%,$3),$(foreach w,$(lastword $(subst ., ,$3)),$(word 1,$(call _walk,$(word 1,$(subst &, ,$(subst ., ,$3))),$w)).$w),$(if $(filter ^%,$3),$(subst ^,,$(word 1,$3)).$2,$3)))))$(\n))
-_cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$I.$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$($w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$C,$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
-.& = $(if $(findstring s,$(flavor $I.$1)),$(call _cx,$I,$1,$2,1),$(if $(findstring s,$(flavor &$C.$1)),&$C.$1,$(call _fset,&$C.$1,$(value $(call _cx,$(call _walk,$C,$1),$1,$2)))))
-. = $(if $(filter s%,$(flavor ~$I.$1)),$(value ~$I.$1),$(call _set,~$I.$1,$(call $(.&))))
-_E0 = $(call _error,Mal-formed instance name '$I'; $(if $(filter $[%,$I),empty CLASS,$(if $(findstring $[,$I),missing '$]',unbalanced '$]')) in CLASS(ARGS))
-A = $(patsubst $C(%),%,$I)
-get = $(foreach I,$2,$(foreach C,$(or $(if $(findstring $[,$I),$(filter-out |%,$(subst $[, |,$(filter %$],$I))),$(if $(findstring $],$I),,File)),$(_E0)),$(call .,$1)))
-_describeProp = $(if $1,$(if $(filter u%,$(flavor $(word 1,$1).$2)),$(call _describeProp,$(or $(_idC),$(_pup)),$2),$(call _describeVar,$(word 1,$1).$2,   )$(if $(and $(filter r%,$(flavor $(word 1,$1).$2)),$(findstring {inherit},$(value $(word 1,$1).$2))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _describeProp,$(or $(_idC),$(_pup)),$2))),Error: no definition found!)
-_chain = $(if $1,$(call _chain,$(_pup),$2 $(word 1,$1)),$(filter %,$2))
-
-# tools.scm
-
-_pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
-_pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
-_inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %$],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%($(call _pairIDs,$w)),$2))),$x$$$(call get,out,$x)),$w)),$1)
-_depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %$],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
-_rollup = $(sort $(foreach w,$(filter %$],$1),$w $(call _depsOf,$w)))
-_rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %$],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
-
-# outputs.scm
-
-_fsenc = $(subst >,@r,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst :,@C,$(subst $],@-,$(subst $[,@+,$(subst |,@1,$(subst @,@_,$1))))))))))
-_outBX = $(subst @D,/,$(subst $(\s),,$(patsubst /%@_,_%@,$(addprefix /,$(subst @_,@_ ,$(_fsenc))))))
-_outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %$],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
-_outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
-
-
 #--------------------------------
 # Help system
 #--------------------------------
@@ -674,6 +620,61 @@ define _epilogue
 endef
 
 
+# SCAM source exports:
+
+# base.scm
+
+_isInstance = $(filter %$],$1)
+_isIndirect = $(findstring @,$(filter-out %$],$1))
+_isAlias = $(filter s% r%,$(flavor Alias($1).in) $(flavor Alias($1).command))
+_goalID = $(if $(_isAlias),Alias($1),$(if $(or $(_isInstance),$(_isIndirect)),Goal($1)))
+_ivar = $(lastword $(subst @, ,$1))
+_ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1) % $(subst @, $] ,$1))))
+_expandX = $(foreach w,$1,$(or $(filter %$],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
+_expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
+_set = $(eval $1 := $(and $$(or )1,$(subst \#,$$(\H),$(subst $(\n),$$(\n),$(subst $$,$$$$,$2)))))$2
+_fset = $(and $(eval $1 = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))1,$1)
+_once = $(if $(filter u%,$(flavor _|$1)),$(call _set,_|$1,$($1)),$(_|$1))
+_argError = $(error Argument '$(subst `,,$1)' is mal-formed:$(\n)   $(subst `,,$(subst `$], *$]* ,$(subst `$[, *$[*,$1)))$(\n)$(if $(C),during evaluation of $(C)($(A))))
+_argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)
+_argHash2 = $(subst `,,$(foreach w,$(subst $(if ,,`,), ,$(call _argGroup,$(subst :,`:,$(subst $;,$(if ,,`,),$(subst $],`$],$(subst $[,`$[,$1)))))),$(if $(findstring `:,$w),,:)$w))
+_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(_argHash2),:$(subst $;, :,$1))
+_hashGet = $(patsubst $2:%,%,$(filter $2:%,$1))
+_describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
+
+# objects.scm
+
+_error = $(error $1)
+_idC = $(if $(findstring $[,$1),$(word 1,$(subst $[, ,$1)))
+_pup = $(filter-out &%,$($(word 1,$1).inherit) &$1)
+_walk = $(if $1,$(if $(findstring s,$(flavor $(word 1,$1).$2)),$1,$(call _walk,$(_pup),$2)))
+_E1 = $(call _error,Undefined property '$2' for $I was referenced$(if $(filter u%,$(flavor $C.inherit)),;$(\n)$C is not a valid class name ($C.inherit is not defined),$(if $3,$(if $(filter ^%,$3), from {inherit} in,$(if $(filter &&%,$3), from {$2} in, during evaluation of)):$(\n)$(call _describeVar,$(if $(filter &%,$3),$(foreach w,$(lastword $(subst ., ,$3)),$(word 1,$(call _walk,$(word 1,$(subst &, ,$(subst ., ,$3))),$w)).$w),$(if $(filter ^%,$3),$(subst ^,,$(word 1,$3)).$2,$3)))))$(\n))
+_cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$I.$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$($w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$C,$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
+.& = $(if $(findstring s,$(flavor $I.$1)),$(call _cx,$I,$1,$2,1),$(if $(findstring s,$(flavor &$C.$1)),&$C.$1,$(call _fset,&$C.$1,$(value $(call _cx,$(call _walk,$C,$1),$1,$2)))))
+. = $(if $(filter s%,$(flavor ~$I.$1)),$(value ~$I.$1),$(call _set,~$I.$1,$(call $(.&))))
+_E0 = $(call _error,Mal-formed instance name '$I'; $(if $(filter $[%,$I),empty CLASS,$(if $(findstring $[,$I),missing '$]',unbalanced '$]')))
+A = $(patsubst $C(%),%,$I)
+get = $(foreach I,$2,$(foreach C,$(or $(if $(findstring $[,$I),$(filter-out |%,$(subst $[, |,$(filter %$],$I))),$(if $(findstring $],$I),,File)),$(_E0)),$(call .,$1)))
+_describeProp = $(if $1,$(if $(filter u%,$(flavor $(word 1,$1).$2)),$(call _describeProp,$(or $(_idC),$(_pup)),$2),$(call _describeVar,$(word 1,$1).$2,   )$(if $(and $(filter r%,$(flavor $(word 1,$1).$2)),$(findstring {inherit},$(value $(word 1,$1).$2))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _describeProp,$(or $(_idC),$(_pup)),$2))),Error: no definition found!)
+_chain = $(if $1,$(call _chain,$(_pup),$2 $(word 1,$1)),$(filter %,$2))
+
+# tools.scm
+
+_pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
+_pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
+_inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %$],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%($(call _pairIDs,$w)),$2))),$x$$$(call get,out,$x)),$w)),$1)
+_depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %$],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
+_rollup = $(sort $(foreach w,$(filter %$],$1),$w $(call _depsOf,$w)))
+_rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %$],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
+
+# outputs.scm
+
+_fsenc = $(subst >,@r,$(subst <,@l,$(subst /,@D,$(subst ~,@T,$(subst !,@B,$(subst :,@C,$(subst $],@-,$(subst $[,@+,$(subst |,@1,$(subst @,@_,$1))))))))))
+_outBX = $(subst @D,/,$(subst $(\s),,$(patsubst /%@_,_%@,$(addprefix /,$(subst @_,@_ ,$(_fsenc))))))
+_outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(OUTDIR)%,_%,$(if $(filter %$],$2),_)$(subst //,/_root_/,$(subst //,/,$(subst /../,/_../,$(subst /./,/_./,$(subst /_,/__,$(subst /,//,/$4))))))),$(call _outBX,$2))
+_outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
+
 ifndef minion_start
   $(end)
 endif
+

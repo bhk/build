@@ -602,4 +602,3 @@ To summarize the key concepts in Minion:
    variable name is structured `CLASSNAME.PROPERTYNAME`.  The definitions
    are in Make syntax, and can refer to other properties using `{NAME}`.
 
-

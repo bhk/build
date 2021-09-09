@@ -6,7 +6,7 @@
 ;; Output file defaults
 ;;----------------------------------------------------------------
 
-(export-comment " outputs.scm")
+(export-text "# outputs.scm")
 
 ;; The chief requirement for output file names is that conflicts must be
 ;; avoided.  Avoiding conflicts is complicated by the inference feature, which

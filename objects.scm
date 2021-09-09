@@ -213,7 +213,7 @@
             "missing ')'"
             "unbalanced ')'")))
 
-  (_error (.. "Mal-formed instance name '" I "'; " reason " in CLASS(ARGS)")))
+  (_error (.. "Mal-formed instance name '" I "'; " reason)))
 
 (export (native-name _E0) 1)
 
@@ -226,27 +226,32 @@
 (export (native-name A) nil)
 
 
+;; Return the class of an ID: CLASS for CLASS(ARGS), "File" for others.
+;; Report an error if the ID is mal-formed.
+;;
+(define `(idClass id)
+  (or (if (findstring "(" id)
+          (filter-out "|%" (subst "(" " |" (filter "%)" id)))
+          (if (findstring ")" id)
+              nil
+              "File"))
+      (_E0)))
+
+(let-global ((_error "-"))
+  (expect (idClass "f") "File")
+  (expect (idClass "C(a)") "C")
+  (expect (idClass "(a)") "-")
+  (expect (idClass "C(a") "-")
+  (expect (idClass "Ca)") "-")
+  (expect (idClass "C(a)b") "-"))
+
 (define (get p ids)
   &public
   &native
-
   (foreach (I ids)
-    (if (findstring "(" I)
-        ;; instance
-        ;;    Save 5%:
-        ;;    (if (simple? (cap-memo p))
-        ;;        (native-value (cap-memo p))
-        ;;        (foreach (C (or (extractClass) (_E0)))
-        ;;          (_set (cap-memo p) (native-call (.& p nil)))))
-        (foreach (C (or (extractClass) (_E0)))
-          (. p))
-        ;; file
-        (if (findstring ")" I)
-            (_E0)
-            (foreach (C "File")
-              (or (native-var (.. "File." p))
-                  ;; error case...
-                  (. p)))))))
+    (foreach (C (idClass I))
+      (. p))))
+
 
 ;; Override automatic variable names to I and C for dynamic binding
 (export (native-name get) nil "I C")
@@ -390,13 +395,13 @@
     (error-contains error-content)))
 
 (expect-error (get "p" "(a)") nil
-               "'(a)'; empty CLASS in CLASS(ARGS)")
+               "'(a)'; empty CLASS")
 
 (expect-error (get "p" "C(a") nil
-              "'C(a'; missing ')' in CLASS(ARGS)")
+              "'C(a'; missing ')'")
 
 (expect-error (get "p" "Ca)") nil
-              "'Ca)'; unbalanced ')' in CLASS(ARGS)")
+              "'Ca)'; unbalanced ')'")
 
 (expect-error (get "asdf" "C(a)") nil
               "Undefined")

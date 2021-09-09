@@ -4,6 +4,8 @@ test: .out/test
 
 scam: ; scam prototype.scm
 
+time: ; time make -R -f time.mk
+
 .out/test: Makefile *.mk
 	make -f minion_test.mk
 	mkdir -p .out

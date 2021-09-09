@@ -505,7 +505,7 @@ _cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$I.
 . = $(if $(filter s%,$(flavor ~$I.$1)),$(value ~$I.$1),$(call _set,~$I.$1,$(call $(.&))))
 _E0 = $(call _error,Mal-formed instance name '$I'; $(if $(filter $[%,$I),empty CLASS,$(if $(findstring $[,$I),missing '$]',unbalanced '$]')) in CLASS(ARGS))
 A = $(patsubst $C(%),%,$I)
-get = $(foreach I,$2,$(if $(findstring $[,$I),$(foreach C,$(or $(subst |,,$(word 1,$(subst $[, | ,$(filter %$],$I)))),$(_E0)),$(call .,$1)),$(if $(findstring $],$I),$(_E0),$(foreach C,File,$(or $(File.$1),$(call .,$1))))))
+get = $(foreach I,$2,$(foreach C,$(or $(if $(findstring $[,$I),$(filter-out |%,$(subst $[, |,$(filter %$],$I))),$(if $(findstring $],$I),,File)),$(_E0)),$(call .,$1)))
 _describeProp = $(if $1,$(if $(filter u%,$(flavor $(word 1,$1).$2)),$(call _describeProp,$(or $(_idC),$(_pup)),$2),$(call _describeVar,$(word 1,$1).$2,   )$(if $(and $(filter r%,$(flavor $(word 1,$1).$2)),$(findstring {inherit},$(value $(word 1,$1).$2))),$(\n)$(\n)...wherein {inherit} references:$(\n)$(\n)$(call _describeProp,$(or $(_idC),$(_pup)),$2))),Error: no definition found!)
 _chain = $(if $1,$(call _chain,$(_pup),$2 $(word 1,$1)),$(filter %,$2))
 

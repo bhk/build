@@ -349,7 +349,7 @@ output file.  We can ask Minion to describe that property:
 
 ```console
 $ make help 'CC(hello.c).command'
-CC(hello.c) inherits from: CC _CC Compile _Compile Builder 
+CC(hello.c) inherits from: CC _CC Compile _Compile Builder
 
 CC(hello.c).command is defined by:
 
@@ -434,7 +434,7 @@ next-lower-precedence definition.  Perhaps the following will illustrate:
 
 ```console
 $ make help 'CCg(hello.c).flags' CC.flags='-Wall {inherit}'
-CCg(hello.c) inherits from: CCg CC _CC Compile _Compile Builder 
+CCg(hello.c) inherits from: CCg CC _CC Compile _Compile Builder
 
 CCg(hello.c).flags is defined by:
 
@@ -495,7 +495,7 @@ $ cp Makefile4 Makefile
 ```
 ```console
 $ make V=debug help 'CC(hello.c).flags'
-CC(hello.c) inherits from: CC CC-debug  _CC Compile _Compile Builder 
+CC(hello.c) inherits from: CC CC-debug _CC Compile _Compile Builder
 
 CC(hello.c).flags is defined by:
 
@@ -506,7 +506,7 @@ Its value is: '-g'
 ```
 ```console
 $ make V=fast help 'CC(hello.c).flags'
-CC(hello.c) inherits from: CC CC-fast  _CC Compile _Compile Builder 
+CC(hello.c) inherits from: CC CC-fast _CC Compile _Compile Builder
 
 CC(hello.c).flags is defined by:
 
@@ -586,7 +586,7 @@ To summarize the key concepts in Minion:
 
  - *Instances* are function-like descriptions of build products.  They can
    be given as targets, and named as inputs to other instances.  They
-   consist of a *class* name and an *argument*.
+   take the form `CLASS(ARGUMENTS)`.
 
  - *Indirections* are ways to reference Make variables that hold lists of
    other targets.  They can be used as arguments to instances, or in the

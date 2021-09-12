@@ -1,8 +1,5 @@
 # minion.mk
 
-# Disable implicit rules for better performance.
-MAKEFLAGS := r $(MAKEFLAGS)
-
 # User Classes
 #
 # The following classes may be overridden by user makefiles.  Minion
@@ -459,8 +456,8 @@ _log = $(if $(filter $(minion_debug),$1),$(info $1: $(call _qv,$2)))
 # $(call _eval,NAME,VALUE): Log + eval VALUE
 _eval = $(_log)$(eval $2)
 
-# $(call _evalIDs,IDs,EXCLUDES) : Evaluate rules of IDs and their transitive dependencies
-_evalIDs = $(foreach i,$(call _rollupEx,$(sort $(_isInstance)),$2),$(call _eval,eval-$i,$(call get,rule,$i)))
+# $(call _evalRules,IDs,EXCLUDES) : Evaluate rules of IDs and their transitive dependencies
+_evalRules = $(foreach i,$(call _rollupEx,$(sort $(_isInstance)),$2),$(call _eval,eval-$i,$(call get,rule,$i)))
 
 # Escape an instance argument as a Make function argument
 _escArg = $(subst $[,$$[,$(subst $],$$],$(subst $;,$$;,$(subst $$,$$$$,$1))))
@@ -566,10 +563,6 @@ endef
 # no goal is named on the command line)
 _error_default: ; $(error Makefile used minion_start but did not call `$$(minion_end)`)
 
-# Using "$*" in the following pattern rule we can capture the entirety of
-# the goal, including embedded spaces.
-$$%: ; @#$(info $$$* = $(call _qv,$(call or,$$$*)))
-
 _OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 
 Alias(clean).command ?= $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
@@ -587,29 +580,46 @@ define _epilogue
     .DEFAULT_GOAL = default
     _goalIDs := $(call _goalID,default)
   else ifneq "" "$(filter $$%,$(MAKECMDGOALS))"
-    # Don't try to interpret goals when a '$...' target is given
+    # "$*" captures the entirety of the goal, including embedded spaces.
+    $$%: ; @#$(info $$$* = $(call _qv,$(call or,$$$*)))
+    %: ; @echo 'Cannot build "$*" alongside $$(...)' && false
   else ifneq "" "$(filter help,$(MAKECMDGOALS))"
-    # When `help` is given on the command line, we treat all other goals as
-    # things to describe, not build.  Note Make quirk: "$(...(...)...)"
-    # terminates "$(" at the first ")"!
     _goalIDs := $(MAKECMDGOALS:%=HelpGoal$[%$])
   else
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
   endif
 
-  ifdef minion_cache
-    # Use cache only if some of the goals have dependencies.  This avoids
-    # using the cache for `help ...` (which would lead to conflicting rules)
-    # and for `clean` and similar user-defined targets.
-    ifneq "" "$(strip $(call get,needs,$(_goalIDs)))"
-      $(call _evalIDs,UseCache(minion_cache))
-      # _cachedIDs is unset => Make will restart, so skip all rule computation.
-      _cachedIDs ?= %
-    endif
+  ifeq "" "$(strip $(call get,needs,$(_goalIDs)))"
+    # Trivial goals do not benefit from a cache or sub-make.  Importantly,
+    # avoid a sub-make when handling '$(...)', and avoid the cache when
+    # handling `help` (targets may conflict with cache file) or `clean` (so
+    # we can recover from broken cache file).
+    _strategy = trivial
+  else ifeq "0" "$(MAKELEVEL)$(findstring r,$(word 1,$(MFLAGS)))"
+    # Invoking make with -r can greatly improve rule processing speed.  Use
+    # a single sub-make instance for safe concurrency.  Don't use -R because
+    # that could lead to inconsistency between initial & sub makes.
+    _strategy = submake
+    _goalIDs :=
+    %: sub ; @true
+    .PHONY: sub
+    sub: ; $(if $(filter $(minion_debug),goals),,@)+$(MAKE) -R\
+      -f $(word 1,$(MAKEFILE_LIST))\
+      $(foreach g,$(MAKECMDGOALS),$(call _shellQuote,$g))
+  else ifdef minion_cache
+    # Include cache file
+    _strategy = cache
+    $(call _evalRules,UseCache(minion_cache))
+    # If _cachedIDs is unset, the cache must not exist and Make will
+    # restart, so skip rule computation.
+    _cachedIDs ?= %
+  else
+    _strategy = normal
   endif
 
+  $(call _log,goals,$(_strategy): $(_goalIDs))
+  $(call _evalRules,$(_goalIDs),$(_cachedIDs))
   $(eval $(_globalRules))
-  $(call _evalIDs,$(_goalIDs),$(_cachedIDs))
 endef
 
 

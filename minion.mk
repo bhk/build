@@ -5,8 +5,9 @@
 # The following classes may be overridden by user makefiles.  Minion
 # attaches no property definitions to them; it just provides a default
 # inheritance.  For all other classes defined by Minion, user makefiles
-# cannot override `inherit` or property definitions, and instead should
-# customize by defining their own sub-classes.
+# cannot override `inherit` or property definitions (except in a couple of
+# cases where Builder uses "?=") and instead should customize by defining
+# their own sub-classes.
 
 Phony.inherit ?= _Phony
 Compile.inherit ?= _Compile
@@ -89,7 +90,7 @@ Builder.oo =
 Builder.ooIDs = $(call _expand,{oo})
 
 # `inferClasses` a list of words in the format "CLASS.EXT", implying
-# that each input filename ending in ".EXT" should be replaced wth
+# that each input filename ending in ".EXT" should be replaced with
 # "CLASS(FILE.EXT)".  This is used to, for example, convert ".c" files
 # to ".o" when they are provided as inputs to a LinkC instance.
 Builder.inferClasses =
@@ -101,12 +102,14 @@ Builder.out = {outDir}{outName}
 Builder.outDir = $(dir {outBasis})
 Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(VARDIR)$(call _outBasis,$(_class),$(_argText),{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
+Builder.outBasis = $(VOUTDIR)$(call _outBasis,$(_class),$(_argText),{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
-# Message to be displayed when/if the command executes (empty => nothing displayed)
-Builder.message = \#-> $(_self)
+# Message to be displayed when/if the command executes.  By default, Minion
+# clases display this for non-phony rules.  The user can assign this
+# variable an empty value to prevent these messages.
+Builder.message ?= \#-> $(_self)
 
 Builder.mkdirs = $(sort $(dir {@} {vvFile}))
 
@@ -114,7 +117,7 @@ Builder.mkdirs = $(sort $(dir {@} {vvFile}))
 #
 # If {vvFile} is non-empty, the rule will compare {vvValue} will to the
 # value it had when the target file was last updated.  If they do not match,
-# the tareget file will be treated as stale.
+# the target file will be treated as stale.
 #
 Builder.vvFile ?= {outBasis}.vv
 Builder.vvValue = $(call _vvEnc,{command},{@})
@@ -136,8 +139,8 @@ _vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\n),!n,$
 
 # $(call _defer,MAKESRC) : Encode MAKESRC for inclusion in a recipe so that
 # it will be expanded when and if the recipe is executed.  Otherwise, all
-# "$" characters will will be escaped to avoid expansion by Make. For
-# example: $(call _defer,$$(info X=$$X))
+# "$" characters will be escaped to avoid expansion by Make. For example:
+# $(call _defer,$$(info X=$$X))
 _defer = $(subst $$,$$\$(\t),$1)
 
 # Remove empty lines, prefix remaining lines with \t
@@ -322,11 +325,11 @@ _Run.command = {exec}
 # _Copy(INPUT,out:OUT)
 #
 #   Copy an artifact.  If OUT is not provided, the file is copied to a
-#   directory named $(VARDIR)$(_class).
+#   directory named $(VOUTDIR)$(_class).
 #
 _Copy.inherit = Builder
 _Copy.out = $(or $(call _namedArg1,out),{inherit})
-_Copy.outDir = $(VARDIR)$(_class)/
+_Copy.outDir = $(VOUTDIR)$(_class)/
 _Copy.command = cp {<} {@}
 
 
@@ -384,7 +387,7 @@ _Zip.command = zip {@} {^}
 
 # _Unzip(OUT) : Extract from a zip file
 #
-#   The argument is the name of the file to extract from ther ZIP file.  The
+#   The argument is the name of the file to extract from the ZIP file.  The
 #   ZIP file name is based on the class name.  Declare a subclass with the
 #   appropriate name, or override its `in` property to specify the zip file.
 #
@@ -399,7 +402,7 @@ _Unzip.in = $(_class).zip
 #   Write the value of a variable to a file.
 #
 _Write.inherit = Builder
-_Write.out = $(or $(call _namedArg1,out),$(VARDIR)$(_class)/$(notdir $(_arg1)))
+_Write.out = $(or $(call _namedArg1,out),$(VOUTDIR)$(_class)/$(notdir $(_arg1)))
 _Write.command = @$(call _printf,{data}) > {@}
 _Write.data = $($(_arg1))
 _Write.in =
@@ -416,15 +419,15 @@ V ?= $(word 1,$(Variants.all))
 OUTDIR ?= .out/
 
 # Build products for the current V are placed here
-VARDIR ?= $(OUTDIR)$(if $V,$V/)
+VOUTDIR ?= $(OUTDIR)$(if $V,$V/)
 
 # Character constants
 
 \s := $(if ,, )
 \t := $(if ,,	)
 \H := \#
-\L := {
-\R := }
+[[ := {
+]] := }
 [ := (
 ] := )
 ; := ,
@@ -444,9 +447,6 @@ _qv = $(if $(findstring $(\n),$1),$(subst $(\n),$(\n)  | ,$(\n)$1),'$1')
 # $(call _?,FN,ARGS..): same as $(call FN,ARGS..), but logs args & result.
 _? = $(call __?,$$(call $1,$2,$3,$4,$5),$(call $1,$2,$3,$4,$5))
 __? = $(info $1 -> $2)$2
-
-# $(call _expectEQ,A,B): error (with diagnostics) if A is not the same as B
-_expectEQ = $(if $(call _eq?,$1,$2),,$(error Values differ:$(\n)A: $(_qv)$(\n)B: $(call _qv,$2)$(\n)))
 
 # $(call _log,NAME,VALUE): Output "NAME: VALUE" when NAME matches the
 #   pattern in `$(minion_debug)`.

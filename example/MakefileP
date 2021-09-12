@@ -1,0 +1,19 @@
+C1(a).x = Xa
+
+C1.value = {x} {y} {z}
+C1.x = X1
+C1.y = Y1
+C1.z = Z1
+
+C2.inherit = C1
+C2.z = C2
+
+C3.inherit = C2
+C3.y = Y3
+C3(b).z = {inherit}b
+
+Extra.z = ZZZ
+
+C4.inherit = Extra C3
+
+include ../minion.mk

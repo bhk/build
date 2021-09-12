@@ -7,13 +7,22 @@ include $(MINION)
 true = $(if $1,1)
 not = $(if $1,,1)
 
+# $(call _expectEQ,A,B): error (with diagnostics) if A is not the same as B
+_expectEQ = $(if $(call _eq?,$1,$2),,$(error Values differ:$(\n)A: $(_qv)$(\n)B: $(call _qv,$2)$(\n)))
+
+
 # _eq?
 
-$(call _expectEQ,$(call _eq?,1,),)
-$(call _expectEQ,$(call _eq?,,1),)
-$(call _expectEQ,$(call _eq?,1,2),)
-$(call _expectEQ,$(call _eq?,1,11),)
-$(call _expectEQ,$(call _eq?,1,1),1)
+$(if $(call _eq?,1,),$(error eq))
+$(if $(call _eq?,,1),$(error eq))
+$(if $(call _eq?,1,2),$(error eq))
+$(if $(call _eq?,1,11),$(error eq))
+$(if $(call _eq?,1,1),,$(error eq))
+
+
+# constants
+
+$(call _expectEQ,$(\s)$(\t)$(\H)$([[)$(]])$[$;$], 	#{}(,))
 
 
 # _shellQuote

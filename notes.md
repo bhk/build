@@ -2,54 +2,29 @@
 
 ## Todo
 
-* Use sub-make if "-r" is not given (and MAKELEVEL == 0)
-
-  # during reading phase MAKEFLAGS seems to have a single word (no "-")
-  # -R puts "-r" in MAKEFLAGS
-  # --> MAKEFLAGS includes "var=value"
-  ifeq "0" "$(MAKELEVEL)$(findstring r,$(MAKEFLAGS))"
-
-  ** cgi/Makefile uses $(info ...) [prints twice on restart; 3X w/ submake?]
-  ** Allow Makefiles to defeat sub-make?
-  ** Allow makefiles to provide args for sub-make:
-       -r vs. -R?  -k? -j N
-
-* Consider how best to support "-j ..."
-
-  export MAKEJ=... in .bashrc (system-dependent)
-  MAKEFLAGS := $(MAKEJ) $(MAKEFLAGS)   in cgi/makefile
-
-* Quiet mode
-
-* Walk-Through
-
-  - discuss ordinary make goals
-
-* Arg syntax?
-
-  {NAME:N} or {NAME:*}  --  {:1}, {:2}, {:*}, {out:1}
+ * Check validity of indirections in _expand
+   Variable is definecd & class names valid
+   $(call _expand,C(A).@) ->  ""  (no error!)
 
 ## Design Notes
-
 
 ### Special characters in filenames
 
 We could support filenames that contain spaces and other characters that are
 usually difficult to handle in Make.  It would look like this:
 
-Target lists -- indirection variable contents, argument values, and {in} --
-could contain quoted substrings, and _expand would convert them an internal
-word-encoded form ("!" -> "!1", " " -> "!0", "\t" -> "!+", ...).
+Target lists could contain quoted substrings, and _expand would convert them
+an internal word-encoded form ("!" -> "!1", " " -> "!0", "\t" -> "!+", ...).
 
      sources = "f $1!00" f!00 bar
      $(call _expand,*sources)  -->  f!01!S!100 f!0o bar
      ${^}                      -->  "f \$1!00" "f 0" bar
 
-Shorthand properties, {@}, {^} and {<}, encode their values for inclusion on
-shell command lines.  Presence of "! means that quoting is necessary; other
-file names are used unquoted.  Where file names are provided to Make (in
-rules), Minion would encode the names properly for Make.  E.g.: $(call
-_mkEnc,{out} : {prereqs} ...)
+The shorthand properties, {@}, {^} and {<}, would encode their values for
+inclusion on shell command lines.  Presence of "!" means that quoting is
+necessary; other file names remain unquoted.  Where file names are provided
+to Make (in rules), Minion would encode the names properly for Make.  E.g.:
+$(call _mkEnc,{out} : {prereqs} ...)
 
 Syntax would be amended:
    Name := ( NameChar | '"' QChar+ '"' )+
@@ -62,12 +37,16 @@ In Make targets & pre-requisistes, we must backslash-escape:
 
 In Make v3.81, wildcard character escaping does not work.
 
-For command-line goals, allow quoting *as in* target lists:
-    `make 'Program("hello world.c")'`
-
-Calls to `$(wildcard ...)` will still be problematic.
-
 Problems:
+
+ * Other Make limitations
+
+    `$(wildcard ...)` won't work.
+
+    Using `dir`, `basename`, etc., on {@} et al will not work reliably.
+    However, they can be used with {out}, {inFiles}, etc., since they are
+    word-encoded; the user would have to explicitly shell-encode the
+    results.
 
  * Assigning instance properties
 
@@ -76,14 +55,14 @@ Problems:
        ...
      endef
 
- * Pretty-printing instance names requires parsing...
+ * Pretty-printing instance names
 
      C!lA!r          --> "C(A)"
      P(C!ra!0b.c!r)  --> P("C(a b.c)")
      P(C(a!0b.c))    --> P(C("a b.c"))
      C(x!cy,a!Cz)    --> C("x,y","a=z")
 
- * Expressing goals on the command line:
+ * Command-line goal processing
 
      $ make 'CC("a b.c")'  # 1 arg, 1 goal, 2 words in MAKECMDGOALS
 
@@ -128,11 +107,13 @@ Maybe a custom class, like `Query(C(A).P)`, is a better solution.
 
 ### Aliases in Target Lists
 
-Currently "target lists" can include indirections, instances, and "plain"
-targets (source file names, or names of phony targets define by a legacy
-Make rule), while "IDs" consist only of instances and plain targets.
-Neither may contain a bare alias name (e.g. "default", rather than
-"Alias(default)"); these appear only in goals.  To summarize:
+Currently "IDs" consist only of instances and "plain" targets (source file
+names, or names of phony targets defined by a legacy Make rule).  A "target
+list" may contain IDs and indirections (which expand to IDs).  Neither may
+contain a bare alias name (e.g. "default", rather than "Alias(default)").
+Alias names appear only in goals.
+
+To summarize:
 
    goals, cache         PLAIN | C(A) | *VAR | ALIAS   (user-facing)
    in, up, oo           PLAIN | C(A) | *VAR           (user-facing)
@@ -153,13 +134,13 @@ and on occasions when order must be preserved, so performance is a
 concern.  Some benchmarking in a large project is in order.  Performance
 observations so far:
 
-  * The argument to _expand is often empty.
-  * When not empty, it usually has one element.
+  * The argument to _expand is often empty (~46%).
+  * When not empty, it usually has one element. (~42%)
   * Usually it has no "*" and no alias name, and can return its input.
 
 (define (_expand names)
   (if names
-    (if (or (findstring "*" names)
+    (if (or (findstring "@" names)
             (filter _aliases names))
       (call _ex,names) ;; $(_ex)
       names)))

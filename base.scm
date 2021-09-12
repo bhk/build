@@ -9,7 +9,7 @@
 ;; Symbols defined separately in minion.mk
 ;;--------------------------------
 
-;; Defined in minion.mk: \\n \\H \\L \\R [ ] OUTDIR
+;; Defined in minion.mk: \\n \\H [ ] [[ ]] OUTDIR
 
 (export-text "# base.scm")
 
@@ -27,8 +27,8 @@
 
 (define \H &native &public "#")
 (define \n &native &public "\n")
-(set-native "\\L" "{")
-(set-native "\\R" "}")
+(set-native "[[" "{")
+(set-native "]]" "}")
 
 
 (define `(isInstance target)

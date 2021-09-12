@@ -19,7 +19,7 @@ include ../minion.mk
 
 This Makefile doesn't describe anything to be built, but it does invoke
 Minion, so when we type `make` in this directory, Minion will process the
-goals.  A *goal* is target name that is listed on the command line.  Goals
+goals.  A *goal* is a target name that is listed on the command line.  Goals
 determine what Make actually does when it is invoked.
 
 
@@ -344,8 +344,130 @@ and so on.  Properties can refer to other properties.  Minion's notion of
 inheritance works like that of some object-oriented languages (hence the
 term "instance"), but in Minion there is no mutable state.
 
-The `command` property gives the command that will be executed to build an
-output file.  We can ask Minion to describe that property:
+We can best illustrate the basic principles of property evaluation with a
+simple example that avoids the complexities of `CC` and other Minion rules.
+
+```console
+$ cat MakefileP
+C1(a).x = Xa
+
+C1.value = {x} {y} {z}
+C1.x = X1
+C1.y = Y1
+C1.z = Z1
+
+C2.inherit = C1
+C2.z = C2
+
+C3.inherit = C2
+C3.y = Y3
+C3(b).z = {inherit}b
+
+Extra.z = ZZZ
+
+C4.inherit = Extra C3
+
+include ../minion.mk
+```
+
+This makefile includes various definitions for the properties `x`, `y`, and
+`z`, attached to different classes and instances.  We can use Minion's
+`help` facility to interactively explore property definitions and their
+computed values.
+
+```console
+$ make -f MakefileP help 'C1(a).x'
+C1(a) inherits from: C1
+
+C1(a).x is defined by:
+
+   C1(a).x = Xa
+
+Its value is: 'Xa'
+
+```
+
+Here, the definition for `x` came from a matching instance-specific
+definition, which takes precedence over all other definitions.
+
+If there is no matching instance-specific definition, the `CLASS.PROP`
+definition is chosen:
+
+```console
+$ make -f MakefileP help 'C1(b).x'
+C1(b) inherits from: C1
+
+C1(b).x is defined by:
+
+   C1.x = X1
+
+Its value is: 'X1'
+
+```
+
+When there is no matching `CLASS.PROP` definition, `CLASS.inherit` will be
+consulted, and Minion will look for definitions associated with those
+classes, in the order they are listed.  (Note that `inherit` in
+`CLASS.inherit` is not a property name; this is just the way to specify
+inheritance.)
+
+```console
+$ make -f MakefileP help 'C2(b).x'
+C2(b) inherits from: C2 C1
+
+C2(b).x is defined by:
+
+   C1.x = X1
+
+Its value is: 'X1'
+
+```
+
+Property definitions can refer to other properties using the `{NAME}`
+syntax:
+
+```console
+$ make -f MakefileP help 'C2(b).value'
+C2(b) inherits from: C2 C1
+
+C2(b).value is defined by:
+
+   C1.value = {x} {y} {z}
+
+Its value is: 'X1 Y1 C2'
+
+```
+
+When a definition includes `{inherit}`, it is replaced with the property
+value that would have been inherited.  That is, Minion looks for the *next*
+definition for the current property in the inheritance sequence, and
+evaluates it.
+
+```console
+$ make -f MakefileP help 'C3(b).z'
+C3(b) inherits from: C3 C2 C1
+
+C3(b).z is defined by:
+
+   C3(b).z = {inherit}b
+
+...wherein {inherit} references:
+
+   C2.z = C2
+
+Its value is: 'C2b'
+
+```
+
+This can be used to, for example, provide a property definition that simply
+adds a flag to a list of flags, without discarding all of the
+previously-inherited values.
+
+Returning to our `CC(hello.c)` instance, we can look at some of the
+properties that determine how it works.
+
+The `command` property gives the command that will be executed to build the
+target file.
 
 ```console
 $ make help 'CC(hello.c).command'
@@ -359,24 +481,21 @@ Its value is: 'gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/he
 
 ```
 
-This shows us the computed value, the definition, which is attached to a
-base class called `_Compile`, and the classes from which this instance
-inherits properties, in order of precedence.
+Here we see the computed value and its definition, which is attached to a
+base class called `_Compile`.  We can also see the classes from which this
+instance inherits properties, in order of precedence, so we can consider
+which classes to which we might attach new property definitions.
 
-Within a Minion property definition, `{NAME}` is a syntax for property
-expansion.  When a property definition is evaluated, `{NAME}` is replaced
-with the value of the property `NAME`.  The `@` and `<` properties mimic the
-`$@` and `$<` variables available in Make recipes, and there is also a `^`
-property analogous to `$^`.  We can see that the `_Compile.command`
-definition concerns itself with specifying the input files, output files,
-and implied dependencies.  It refers to a property named `flags` for
-command-line options that address other concerns.
+The `@` and `<` properties mimic the `$@` and `$<` variables available in
+Make recipes, and there is also a `^` property analogous to `$^`.  We can
+see that the `_Compile.command` definition concerns itself with specifying
+the input files, output files, and implied dependencies.  It refers to a
+property named `flags` for command-line options that address other concerns.
 
-Our previous two examples, above, provided overriding definitions for
-`flags`.  Setting `CC(hello.c).flags=-Os` defined an instance-specific
-property, so it only affected the command line for one object file.  Setting
-`CC.flags` provided a definition inherited by all `CC` instances (unless
-they have their own instance-specific definitions).
+We can now see how the earlier command that set `CC(hello.c).flags=-Os`
+defined an instance-specific property, so it only affected the command line
+for one object file, and the command that set `CC.flags` provided a
+definition inherited by both `CC` instances.
 
 ### User Classes
 
@@ -389,14 +508,17 @@ because it will inherit from an internal class that has the same name except
 for a prefixed underscore (`_`).
 
 Directly re-defining properties of non-user classes in Minion is not
-supported.  Instead, define you own sub-classes.
+supported.  Instead, define your own sub-classes.
 
 
 ## Custom Classes
 
 ```console
 $ cp Makefile3 Makefile; diff Makefile2 Makefile3
-5a6,11
+5a6,14
+> CC.flags = -ansi {inherit}
+> CC.warnFlags = -Wall -Werror {inherit}
+> 
 > CCg.inherit = CC
 > CCg.flags = -g {inherit}
 > 
@@ -409,31 +531,31 @@ A variable assignment of the form `CLASS.inherit` specifies the base class
 from which `CLASS` inherits.  (It resembles a property definition, but
 `inherit` is a special keyword, not a property.)
 
-`Sizes` inherits from `Phony`, which is much more generic than `CC`, so its
-subclasses have to define the `command` property in its entirety.
+This makefile defines a class named `Sizes`, which inherits from `Phony`,
+which is a base class for phony targets.  Phony targets must be identified
+to Make using the special target `.PHONY: ...`, and since they have no
+output file, the recipe should not bother creating an output directory for
+them.  The `Phony` class takes care of all of this, so our subclass needs
+only to define `command`.
 
 ```console
 $ make 'Sizes(CC(hello.c),CCg(hello.c))'
 #-> CC(hello.c)
-gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
+gcc -c -o .out/CC.c/hello.o hello.c -ansi  -Wall -Werror    -MMD -MP -MF .out/CC.c/hello.o.d
 #-> CCg(hello.c)
-gcc -c -o .out/CCg.c/hello.o hello.c -g     -MMD -MP -MF .out/CCg.c/hello.o.d
+gcc -c -o .out/CCg.c/hello.o hello.c -g -ansi  -Wall -Werror    -MMD -MP -MF .out/CCg.c/hello.o.d
 wc -c .out/CC.c/hello.o .out/CCg.c/hello.o
      776 .out/CC.c/hello.o
     2056 .out/CCg.c/hello.o
     2832 total
 ```
 
-The `CCg.flags` definition references `{inherit}`.  This is does not refer
-to a property named "inherit"; it has a special function, and that is to
-return the value for the current property that would be in effect if the
-current definition did not exist.  It can be used recursively; an inherited
-definition that was invoked via `{inherit}` may itself use `{inherit}`,
-which will then continue up the inheritance chain, looking for the
-next-lower-precedence definition.  Perhaps the following will illustrate:
+This makefile also defines a class named `CCg`, and defines `CCg.flags`
+using `{inherit}` so that it will extend, not replace, the set of flags it
+inherits.
 
 ```console
-$ make help 'CCg(hello.c).flags' CC.flags='-Wall {inherit}'
+$ make help 'CCg(hello.c).flags'
 CCg(hello.c) inherits from: CCg CC _CC Compile _Compile Builder
 
 CCg(hello.c).flags is defined by:
@@ -442,32 +564,33 @@ CCg(hello.c).flags is defined by:
 
 ...wherein {inherit} references:
 
-   CC.flags = -Wall {inherit}
+   CC.flags = -ansi {inherit}
 
 ...wherein {inherit} references:
 
    _Compile.flags = {optFlags} {warnFlags} {libFlags} $(addprefix -I,{includes})
 
-Its value is: '-g -Wall    '
+Its value is: '-g -ansi  -Wall -Werror   '
 
 ```
 
 
 ## Variants
 
-We can build different *variants* of our the project described by our
-Makefile.  Variants are separate instantiations of our build that will have
-a similar overall structure, but may differ from each other in various ways.
-For example, we may have "release" and "debug" variants, or "ARM" and
-"Intel" variants of a C project.
+We can build different *variants* of the project described by our Makefile.
+Variants are separate instantiations of our build that will have a similar
+overall structure, but may differ from each other in various ways.  For
+example, we may have "release" and "debug" variants, or "ARM" and "Intel"
+variants of a C project.
 
-Furthermore, we want these variants to exist side-by-side and not interfere
-with each other, so we can retain the benefits of incremental builds.  We
-have shown how typing `make CC.flags=-g` and then later `make CC.flags=-O3`
-could be used to achieve some sort of "debug" vs. "release" distinction, but
-not only is this cumbersome, it is inefficient.  Each time we switch
-"variants", it has to compile everything again.  Instead, we do the
-following:
+We have shown how typing `make CC.flags=-g` and then later `make
+CC.flags=-O3` could be used to achieve different builds.  With this
+approach, however, each time we "switch" between the two builds, all
+affected files will have to be recompiled.
+
+Instead, we want these variants to exist side-by-side and not interfere with
+each other, so we can retain all the advantages of incremental builds.  We
+achieve that by doing the following:
 
   * Use the variable `V` to identify a variant name, so that `make
     V=<name>` can be used to build a specific variant.
@@ -482,7 +605,8 @@ When defining variant-dependent properties, we could use Make's functions:
     CC.flags = $(if $(filter debug,$V),-g, ... )
 
 Instead, it is much more elegant to leverage Minion's property evaluation
-and group property definitions into classes whose names incorporate `$V`.
+and group property definitions into classes whose names incorporate `$V`,
+like this:
 
     CC.inherit = CC-$V _CC
 
@@ -526,7 +650,7 @@ The variable `Variants.all` is also used to provide a default for `V`: it
 defaults to the first word in `Variants.all`.
 
 ```console
-$ make sizes           # default (first) variant
+$ make sizes           # sizes for the default (first) variant "debug"
 #-> CC(hello.c)
 gcc -c -o .out/debug/CC.c/hello.o hello.c -g -MMD -MP -MF .out/debug/CC.c/hello.o.d
 #-> LinkC(hello.c)
@@ -541,7 +665,7 @@ wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
    99576 total
 ```
 ```console
-$ make sizes V=fast    # "fast" variant
+$ make sizes V=fast    # sizes for the "fast" variant
 #-> CC(hello.c)
 gcc -c -o .out/fast/CC.c/hello.o hello.c -O3 -MMD -MP -MF .out/fast/CC.c/hello.o.d
 #-> LinkC(hello.c)
@@ -590,7 +714,7 @@ To summarize the key concepts in Minion:
 
  - *Indirections* are ways to reference Make variables that hold lists of
    other targets.  They can be used as arguments to instances, or in the
-   `in` property for an instance, or on the command line.
+   value of an `in` property, or on the command line.
 
  - *Aliases* are short names that can be specified on the command line.
    They can identify sets of other targets to build and/or commands to be
@@ -598,7 +722,12 @@ To summarize the key concepts in Minion:
 
  - Properties dictate how instances behave.  Properties are associated with
    classes or instances, and classes may inherit from other classes.
-   Properties are defined using Make variable assignments, wherein the
-   variable name is structured `CLASSNAME.PROPERTYNAME`.  The definitions
-   are in Make syntax, and can refer to other properties using `{NAME}`.
+   Properties are defined using Make variables whose names identify the
+   property, class, and perhaps instance to which they apply.  The
+   definitions can leverage Make variables and functions, and can refer to
+   other properties using `{NAME}`.
+
+ - To support multiple variants, list them in `Variants.all` putting the
+   default variant first, use `make V=VARIANT` to build a specific variant,
+   and use `Variants(TARGET)` to build all variants of a target.
 

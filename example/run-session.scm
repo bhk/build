@@ -1,4 +1,4 @@
-;; Generate example walkthrough
+;; Expand commands in a Markdown document to include console output
 
 (require "core")
 (require "io")
@@ -19,31 +19,29 @@
 
 ;; Insert a delay so that make won't "miss" a change.
 ;;
-;; Make 3.81 has a flaw wherein a target with the *same* mtime as a
-;; pre-requisite is considered *fresh*.  Given the one-second resolution of
-;; most filesystems, when we build a target and then immediately modify its
-;; pre-requisite, make might later treat the stale target as fresh.  This is
-;; mainly a concern when invoking make from a script (as we are here).  In
-;; our case, an "alternate build" (when `make` is invoked with command-line
+;; Given the one-second resolution of most filesystems, when we build a
+;; target and then immediately modify some pre-requisite, make might not
+;; treat the target as out-of-date.  This is mainly a concern when invoking
+;; make from a script (as we are here).  In our case, this can happen
+;; because a "modified build" (i.e. when `make` is invoked with command-line
 ;; variables) may generate an intermediate file that is different from other
-;; alternate builds, or from the default configuration.  Since the solution
-;; (inserting a one-second delay) is so heinous, we take some pains to do it
-;; only when we need to: before and after each alternate build.
+;; modified builds, or from the default configuration.  Our solution is to
+;; insert one-second delay, which is so heinous we take some pains to do it
+;; only when necessary: before and after each modified build.
 ;;
-(define *was-alt* nil)
+(define *was-mod* nil)
 
-(define (make-delay command)
-  (define `does-make
-    (and (findstring " make " (.. " " command))
-         (not (findstring " help " command))))
+(define (delay-for-make command)
+  (define `is-make
+    (and (filter "make" command)
+         (not (filter "help" command))))
+  (define `is-mod
+    (findstring "=" (subst " V=" "" command)))
 
-  (when does-make
-    (define `is-alt
-      (findstring "=" (subst " V=" "" command)))
-
-    (if (or is-alt *was-alt*)
+  (when is-make
+    (if (or is-mod *was-mod*)
         (shell "sleep 1"))
-    (set *was-alt* is-alt)))
+    (set *was-mod* is-mod)))
 
 
 (define (run script)
@@ -53,7 +51,7 @@
     (cond
      ;; run command & output command + result
      ((eq? "$" (word 1 line))
-      (make-delay line)
+      (delay-for-make line)
       (exec (rest line)))
 
      ;; run command & output nothing
@@ -68,7 +66,7 @@
 
 
 (define (done err-msg)
-  (if err-msg (fprintf 2 "run-example: %s\n" err-msg))
+  (if err-msg (fprintf 2 "run-session: %s\n" err-msg))
   (if err-msg 1 0))
 
 

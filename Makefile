@@ -1,31 +1,33 @@
+# minion.mk and example.md are version-controlled snapshots of build
+# products.  `make all` will build them and warn if they differ from the
+# corresponding files in this directory.  `make promote` will copy them from
+# ./.out to this directory.
+
 MO = .out/minion.mk
+TO = .out/minion.mk.ok
 EO = .out/example.md
 
-all: test minion-is-current $(EO) example-is-current
-test: .out/minion.ok
-minion-is-current: ; diff minion.mk $(MO)
-example-is-current: ; diff -q example.md $(EO)
+.PHONY: default minion example clean test time scam promote
 
-scam: ; scam minion.scm
+default: minion example
+minion: $(MO) $(TO) ; @diff -q minion.mk $(MO)
+example: minion $(EO) ; @diff -q example.md $(EO)
+clean: ; rm -rf .out
+test: $(TO)
 time: ; time make -R -f time.mk
+scam: ; scam minion.scm
 
-.PHONY: all test promote minion-is-current example-is-current
+promote: $(TO) $(MO) $(EO)
+	@$(call promote_cmd,minion.mk)
+	@$(call promote_cmd,example.md)
 
-.out/minion.ok: $(MO) minion_test.mk
-	make -f minion_test.mk MINION=$<
-	mkdir -p $(@D)
-	touch $@
+promote_cmd = @\
+   if ( diff -q $1 .out/$1 ) ; then \
+     true ; \
+   else \
+      echo "updating..." && cp .out/$1 $1 ; \
+   fi
 
-SHELL = /bin/bash
-
-ifeq "promote" "$(filter promote,$(MAKECMDGOALS))"
-
-  promote: minion.mk example.md .out/minion.ok
-  minion.mk: $(MO) ; $(promote_cmd)
-  example.md: $(EO) ; $(promote_cmd)
-  promote_cmd = @if ( diff -q $< $@ ) ; then true ; else echo "updating..." && cp $< $@ ; fi
-
-else
 
 $(MO): *.scm minion.mk Makefile
 	mkdir -p $(@D)
@@ -33,10 +35,14 @@ $(MO): *.scm minion.mk Makefile
 	scam minion.scm $@.2
 	cat $@.1 $@.2 > $@
 
+$(TO): $(MO) minion_test.mk
+	make -f minion_test.mk MINION=$<
+	mkdir -p $(@D)
+	touch $@
+
 $(EO): minion.mk example/*
 	mkdir -p $(@D)
 	rm -rf example/.out
-	cd example && scam run-example.scm example-script.md -- -o ../$@
+	cd example && MAKEFLAGS= scam run-session.scm example-session.md -- -o ../$@
 	rm example/Makefile
 
-endif

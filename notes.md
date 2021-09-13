@@ -199,3 +199,66 @@ Or we could directly emit $(@D) for mkdir command, $@ for {@}, $< for {<}
 
 Also: we could use a temporary variable to reduce repetition of the target
 name within `rule` (in the Make rule, .PHONY)
+
+### More optimization possibilities
+
+ * Separate the cache into "NAME.ids" and "NAME.mk".  NAME.ids
+   assigns `_cachedIDs`, and NAME.mk has everything else.  NAME.mk
+   is built as a side effect of building NAME.ids.  NAME.ids is
+   included when we use the cache, and NAME.mk is used when-AND-IF
+   _rollups encounters a cached ID.
+
+   This avoids the time spent loading the cached makefile (and the dep and
+   vv files) (maybe 100ms in med-sized project), when (A) restart will occur
+   due to stale cache, (B) the goals are non-trivial yet are entirely
+   outside the cache.
+
+ * Allow instances to easily select "lazy" recipes, so that their command
+   will be evaluated only if the target is stale. However, this provides no
+   savings when vv includes {command}.  The only *actual* case right now is
+   Makefile[minion_cache], which does this on its own.  And Makefile would
+   need a way to convert lazy rules into non-lazy:
+
+      ;; assumes no '$@' or other rule-processing-phase-only vars
+      (if (findstring "$" (subst "$$" "" rule))
+         (subst "$" "$$" (native-call "or" rule)))
+
+### Parallel Builds
+
+Passing `-jN` to make will run up to N jobs at a time in parallel.  But
+someone might not know to pass `-jN`, or might forget, or might find it
+tedious to do so, or might not know which `N` is appropriate.  Can our
+Makefile simply "do the right thing"?
+
+First, consider that it isn't easy to divine the appropriate value for `N`.
+It may depend on the number of CPUs in the system, the amount of memory, the
+memory usage of the build itself, and so on, so having the makefile do this
+will result in additional complexity (and time) in the makefile, and it will
+mostly likely not be a completely general solution.
+
+Specifying `N` in an environment variable would allow users to define best
+guesses in their shell rc files, and override on the command line if
+necessary, and can remove this complexity from our makefiles.  This appears
+to be the intended usage of the MAKEFLAGS environment variable. One small
+concern is that this might break some existing makefiles (even though such
+makefiles "should" use `.NOTPARALLEL`).
+
+Then we have the question of what mechanism might be used by the makefile to
+control parallelism...
+
+ * It can define a default alias to invoke `$(MAKE) -jN default-no-j`, and
+   presumably others.  This is inflexible and would clutter the makefile.
+
+ * A makefile can assign `MAKEFLAGS` in the reading phase, and if the value
+   includes `-jN` it will take effect in the rule processing phase of the
+   *current* instance of Make.  However, once that is done, any sub-make
+   will fail to operate in parallel and the a "disabling jobserver" warning
+   will be displayed, which would generally rule out this approach.  (See
+   submake in test.mak).
+
+### Possible Arg Syntax
+
+  $(_args)                -->  {:*}
+  $(_arg1)                -->  {:1}
+  $(call _nameArgs,NAME)  -->  {NAME:*}
+  $(call _nameArg1,NAME)  -->  {NAME:1}

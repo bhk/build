@@ -12,7 +12,9 @@
 
 (define `tail "
 ifndef minion_start
-  $(minion_end)
+  $(eval $(value _epilogue))
+else
+  minion_end = $(eval $(value _epilogue))
 endif
 ")
 

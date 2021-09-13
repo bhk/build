@@ -229,7 +229,6 @@ define Makefile.deferredCommand
 $(call _recipeLines,
 @rm -f {@}
 @echo '_cachedIDs = {IDs}' > {@}_tmp_
-@$(call _printf,$(_globalRules)$(\n)$(\n)) >> {@}_tmp_
 $(foreach i,{IDs},
 @$(call _printf,$(call get,rule,$i)
 $(if {excludeIDs},_$i_needs = $(filter {excludeIDs},$(call _depsOf,$i))
@@ -554,20 +553,16 @@ _help! = \
 
 _forceTarget = $(OUTDIR)FORCE
 
-define _globalRules
-$(_forceTarget):
-endef
+_OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
 
+Alias(clean).command ?= $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
 
 # This will be the default target when `$(minion_end)` is omitted (and
 # no goal is named on the command line)
 _error_default: ; $(error Makefile used minion_start but did not call `$$(minion_end)`)
 
-_OUTDIR_safe? = $(filter-out . ..,$(subst /, ,$(OUTDIR)))
-
-Alias(clean).command ?= $(if $(_OUTDIR_safe?),rm -rf $(OUTDIR),@echo '** make clean is disabled; OUTDIR is unsafe: "$(OUTDIR)"' ; false)
-
-minion_end = $(eval $(value _epilogue))
+.SUFFIXES:
+$(_forceTarget):
 
 define _epilogue
   # Check OUTDIR
@@ -590,36 +585,17 @@ define _epilogue
   endif
 
   ifeq "" "$(strip $(call get,needs,$(_goalIDs)))"
-    # Trivial goals do not benefit from a cache or sub-make.  Importantly,
-    # avoid a sub-make when handling '$(...)', and avoid the cache when
-    # handling `help` (targets may conflict with cache file) or `clean` (so
-    # we can recover from broken cache file).
-    _strategy = trivial
-  else ifeq "0" "$(MAKELEVEL)$(findstring r,$(word 1,$(MFLAGS)))"
-    # Invoking make with -r can greatly improve rule processing speed.  Use
-    # a single sub-make instance for safe concurrency.  Don't use -R because
-    # that could lead to inconsistency between initial & sub makes.
-    _strategy = submake
-    _goalIDs :=
-    %: sub ; @true
-    .PHONY: sub
-    sub: ; $(if $(filter $(minion_debug),goals),,@)+$(MAKE) -R\
-      -f $(word 1,$(MAKEFILE_LIST))\
-      $(foreach g,$(MAKECMDGOALS),$(call _shellQuote,$g))
+    # Trivial goals do not benefit from a cache.  Importantly, avoid the
+    # cache when handling `help` (targets may conflict with cache file) or
+    # `clean` (so we can recover from broken cache file).
   else ifdef minion_cache
-    # Include cache file
-    _strategy = cache
     $(call _evalRules,UseCache(minion_cache))
     # If _cachedIDs is unset, the cache must not exist and Make will
     # restart, so skip rule computation.
     _cachedIDs ?= %
-  else
-    _strategy = normal
   endif
 
-  $(call _log,goals,$(_strategy): $(_goalIDs))
   $(call _evalRules,$(_goalIDs),$(_cachedIDs))
-  $(eval $(_globalRules))
 endef
 
 
@@ -682,5 +658,7 @@ _outBS = $(_fsenc)$(if $(findstring %,$3),,$(suffix $4))$(if $4,$(patsubst _/$(O
 _outBasis = $(if $(filter $5,$2),$(_outBS),$(call _outBS,$1$(subst _$(or $5,|),_|,_$2),$(or $5,out),$3,$4))
 
 ifndef minion_start
-  $(minion_end)
+  $(eval $(value _epilogue))
+else
+  minion_end = $(eval $(value _epilogue))
 endif

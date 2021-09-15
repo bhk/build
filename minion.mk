@@ -136,18 +136,18 @@ endef
 _vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\n),!n,$(subst $(\t),!+,$(subst \#,!H,$(subst $2,!@,$(subst \,!B,$(subst !,!1,$1)))))))))).#'
 
 
-# $(call _defer,MAKESRC) : Encode MAKESRC for inclusion in a recipe so that
+# $(call _lazy,MAKESRC) : Encode MAKESRC for inclusion in a recipe so that
 # it will be expanded when and if the recipe is executed.  Otherwise, all
 # "$" characters will be escaped to avoid expansion by Make. For example:
-# $(call _defer,$$(info X=$$X))
-_defer = $(subst $$,$$\$(\t),$1)
+# $(call _lazy,$$(info X=$$X))
+_lazy = $(subst $$,$(\e),$1)
 
 # Remove empty lines, prefix remaining lines with \t
 _recipeLines = $(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))
 
 # Format recipe lines and escape for rule-phase expansion. Un-escape
-# _defer encoding to enable on-demand execution of functions.
-_recipe = $(subst $$$$\$(\t),$$,$(subst $$,$$$$,$(_recipeLines)))
+# _lazy encoding to enable on-demand execution of functions.
+_recipe = $(subst $(\e),$$,$(subst $$,$$$$,$(_recipeLines)))
 
 # A Minion instance's "rule" is all the Make source code required to build
 # it.  It contains a Make rule (target, prereqs, recipe) and perhaps other
@@ -198,7 +198,7 @@ Goal.in = $(_argText)
 # HelpGoal(TARGETNAME) : Generate a rule that invokes `_help!`
 #
 HelpGoal.inherit = Alias
-HelpGoal.command = @true$(call _defer,$$(call _help!,$(call _escArg,$(_argText))))
+HelpGoal.command = @true$(call _lazy,$$(call _help!,$(call _escArg,$(_argText))))
 
 
 # Variants(TARGETNAME) : Build {all} variants of TARGETNAME.  Each variant
@@ -224,10 +224,10 @@ Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(
 Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.vvFile = # too costly; defeats the purpose
-Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$(_self))))
+Makefile.command = $(call _lazy,$$(call get,lazyCommand,$(call _escArg,$(_self))))
 Makefile.excludeIDs = $(filter %$],$(call _expand,$($(_argText)_exclude)))
 Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$(_argText))))
-define Makefile.deferredCommand
+define Makefile.lazyCommand
 $(call _recipeLines,
 @rm -f {@}
 @echo '_cachedIDs = {IDs}' > {@}_tmp_
@@ -440,6 +440,8 @@ define \n
 
 
 endef
+# This character may not appear in `command` values, except via _lazy.
+\e = 
 
 _eq? = $(findstring $(subst x$1,1,x$2),1)
 _shellQuote = '$(subst ','\'',$1)'#'  (comment to fix font coloring)

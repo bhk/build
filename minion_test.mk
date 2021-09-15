@@ -281,7 +281,7 @@ $(call _expectEQ,1,$(call vvOK?, \# \ \\ $$a $(\t)$(\n) x ))
 # _defer
 
 Defer.inherit = Builder
-Defer.command = true $(call _defer,$$($(_argText)))
+Defer.command = true $(call _lazy,$$($(_argText)))
 Defer.vvFile =
 
 define DeferRule

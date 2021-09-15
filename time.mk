@@ -27,4 +27,7 @@ ExecTest.inherit = Exec
 CC++.optFlags = -Os
 CC++.warnFlags = -W -Wall
 
+minion_start=1
 include $(or $(MINION),minion.mk)
+include x11.mk
+$(minion_end)

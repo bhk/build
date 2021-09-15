@@ -2,9 +2,6 @@
 
 ## Todo
 
- * Check validity of indirections in _expand
-   Variable is definecd & class names valid
-   $(call _expand,C(A).@) ->  ""  (no error!)
 
 ## Design Notes
 

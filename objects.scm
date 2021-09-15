@@ -9,22 +9,6 @@
 (export-text "# objects.scm")
 
 
-;; Dynamic state during property evaluation enables `.`, `C`, and `A`:
-;;   _self = current instance, bound with `foreach`
-;;   _class = current class, bound with `foreach`
-(declare _self &native)
-(declare _class &native)
-
-;; Display an error and halt.  We call this function, instead of `error`, so
-;; that is can be dynamically interecpted for testing purposes.
-;;
-(define (_error msg)
-  &native
-  (error msg))
-
-(export (native-name _error) 1)
-
-
 ;; Return the class portion of an instance name, or nil if ID is a
 ;; valid file name instead.
 ;;
@@ -135,6 +119,7 @@
          p
          (.. "^" parents)))
 
+
   (define `obj
     (foreach (src-var src-var)
       (define `src
@@ -206,12 +191,12 @@
   &native
   (define `reason
     (if (filter "(%" _self)
-        "empty CLASS"
+        "no CLASS before '('"
         (if (findstring "(" _self)
-            "missing ')'"
+            "no ')' at end"
             "unbalanced ')'")))
 
-  (_error (.. "Mal-formed instance name '" _self "'; " reason)))
+  (_error (.. "Mal-formed target ID '" _self "'; " reason)))
 
 (export (native-name _E0) 1)
 
@@ -220,12 +205,13 @@
 ;; Report an error if the ID is mal-formed.
 ;;
 (define `(idClass id)
-  (or (if (findstring "(" id)
-          (filter-out "|%" (subst "(" " |" (filter "%)" id)))
-          (if (findstring ")" id)
-              nil
-              "File"))
-      (_E0)))
+  (if (findstring "(" id)
+      (or (filter-out "|%" (subst "(" " |" (filter "%)" id)))
+          (_E0))
+      (if (findstring ")" id)
+          (_E0)
+          "File")))
+
 
 (let-global ((_error "-"))
   (expect (idClass "f") "File")
@@ -233,6 +219,7 @@
   (expect (idClass "(a)") "-")
   (expect (idClass "C(a") "-")
   (expect (idClass "Ca)") "-")
+  (expect (idClass "Ca)b") "-")
   (expect (idClass "C(a)b") "-"))
 
 (define (get p ids)
@@ -404,24 +391,20 @@
 
 ;; error reporting
 
-(define *last-error* nil)
-(define (trapError msg)
-  (set *last-error* msg))
-
-(define `(error-contains str)
-  (expect 1 (see str *last-error*)))
-
 (define `(expect-error expr value error-content)
-  (let-global ((_error trapError))
-    (set *last-error* nil)
+  (let-global ((_error logError)
+               (*errorLog* nil))
     (expect expr value)
-    (error-contains error-content)))
+    (expect 1 (see error-content (first *errorLog*)))))
 
 (expect-error (get "p" "(a)") nil
-               "'(a)'; empty CLASS")
+               "'(a)'; no CLASS")
 
 (expect-error (get "p" "C(a") nil
-              "'C(a'; missing ')'")
+              "'C(a'; no ')'")
+
+(expect-error (get "p" "C(a)b") nil
+              "'C(a)b'; no ')' at end")
 
 (expect-error (get "p" "Ca)") nil
               "'Ca)'; unbalanced ')'")
@@ -431,8 +414,8 @@
 
 (set-native-fn "C.e1" "{inherit}")
 (expect-error (get "e1" "C(a)") nil
-              "Undefined")
-(error-contains "from {inherit} in:\nC.e1 = {inherit}")
+              (.. "Undefined property 'e1' for C(a) was referenced "
+                  "from {inherit} in:\nC.e1 = {inherit}"))
 
 (set-native-fn "C(a).e2" "{inherit}")
 (expect-error (get "e2" "C(a)") nil

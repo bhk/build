@@ -73,21 +73,20 @@ Builder.up< = $(firstword {up^})
 #
 Builder.in = $(_args)
 
-_pairs = $(foreach i,$(call _expand,$1),$(if $(filter %$],$i),$i$$$(call get,out,$i),$i))
+# list of ([ID,]FILE) pairs for inputs
+Builder.inPairs = $(call _inferPairs,$(foreach i,$(call _expand,{in},in),$i$(if $(filter %$],$i),$$$(call get,out,$i))),{inferClasses})
 
-# list of ([ID,]FILE) pairs for inputs (reuse argPairs if relevant)
-Builder.inPairs = $(call _inferPairs,$(if $(call _eq?,{in},$(_args)),$(call _pairs,$(_args)),$(call _pairs,{in})),{inferClasses})
 Builder.inIDs = $(call _pairIDs,{inPairs})
 Builder.inFiles = $(call _pairFiles,{inPairs})
 
 # `up` lists dependencies that are typically specified by the class itself,
 # not by the instance argument or `in` property.
 Builder.up =
-Builder.upIDs = $(call _expand,{up})
+Builder.upIDs = $(call _expand,{up},up)
 
 # `oo` lists order-only dependencies.
 Builder.oo =
-Builder.ooIDs = $(call _expand,{oo})
+Builder.ooIDs = $(call _expand,{oo},oo)
 
 # `inferClasses` a list of words in the format "CLASS.EXT", implying
 # that each input filename ending in ".EXT" should be replaced with
@@ -102,7 +101,7 @@ Builder.out = {outDir}{outName}
 Builder.outDir = $(dir {outBasis})
 Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
 Builder.outExt = %
-Builder.outBasis = $(VOUTDIR)$(call _outBasis,$(_class),$(_argText),{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in})))),$(_arg1))
+Builder.outBasis = $(VOUTDIR)$(call _outBasis,$(_class),$(_argText),{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in},in)))),$(_arg1))
 
 _applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
 
@@ -226,7 +225,7 @@ Makefile.inherit = Builder
 Makefile.in = $(MAKEFILE_LIST)
 Makefile.vvFile = # too costly; defeats the purpose
 Makefile.command = $(call _defer,$$(call get,deferredCommand,$(call _escArg,$(_self))))
-Makefile.excludeIDs = $(filter %$],$(call _expand,@$(_argText)_exclude))
+Makefile.excludeIDs = $(filter %$],$(call _expand,$($(_argText)_exclude)))
 Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$(_argText))))
 define Makefile.deferredCommand
 $(call _recipeLines,
@@ -483,8 +482,6 @@ endef
 
 _fmtList = $(if $(word 1,$1),$(subst $(\s),$(\n)   , $(strip $1)),(none))
 
-_getID.P = $(foreach p,$(or $(lastword $(subst $].,$] ,$1)),$(error Empty property name)),$(call get,$p,$(patsubst %$].$p,%$],$1)))
-
 _isProp = $(filter $].%,$(lastword $(subst $], $],$1)))
 
 # instance, indirection, alias, other
@@ -580,6 +577,7 @@ define _epilogue
     %: ; @echo 'Cannot build "$*" alongside $$(...)' && false
   else ifneq "" "$(filter help,$(MAKECMDGOALS))"
     _goalIDs := $(MAKECMDGOALS:%=HelpGoal$[%$])
+    _error = $(info $(subst $(\n),$(\n)   ,ERROR: $1)$(\n))
   else
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
   endif
@@ -603,18 +601,20 @@ endef
 
 # base.scm
 
+_error = $(error $1)
 _isInstance = $(filter %$],$1)
 _isIndirect = $(findstring @,$(filter-out %$],$1))
 _isAlias = $(filter s% r%,$(flavor Alias($1).in) $(flavor Alias($1).command))
 _goalID = $(if $(_isAlias),Alias($1),$(if $(or $(_isInstance),$(_isIndirect)),Goal($1)))
-_ivar = $(lastword $(subst @, ,$1))
+_ivar = $(filter-out %@,$(subst @,@ ,$1))
 _ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1) % $(subst @, $] ,$1))))
-_expandX = $(foreach w,$1,$(or $(filter %$],$w),$(if $(findstring @,$w),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)))),$w)))
-_expand = $(if $(findstring @,$1),$(call _expandX,$1),$1)
+_EI = $(call _error,$(if $(filter %@,$1),Invalid target ID (ends in '@'): $1,Indirection '$1' references undefined variable '$(_ivar)')$(if $(and $(_self),$2),$(\n)Found while expanding $(if $(filter Goal$[%,$(_self)),command line goal $(patsubst Goal(%),%,$(_self)),$(_self).$2)))
+_expandX = $(foreach w,$1,$(if $(findstring @,$w),$(if $(findstring $[,$w)$(findstring $],$w),$w,$(if $(filter u%,$(flavor $(call _ivar,$w))),$(call _EI,$w,$2),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)),$2)))),$w))
+_expand = $(if $(findstring @,$1),$(call _expandX,$1,$2),$1)
 _set = $(eval $(subst \#,$$(\H),$(subst :,$$(or :),$(subst $$,$$$$,$1)):=$$(or )$(subst $(\n),$$(\n),$(subst $$,$$$$,$2))))$2
 _fset = $(and $(eval $1 = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))1,$1)
 _once = $(if $(filter u%,$(flavor _o~$1)),$(call _set,_o~$1,$($1)),$(_o~$1))
-_argError = $(error Argument '$(subst `,,$1)' is mal-formed:$(\n)   $(subst `,,$(subst `$], *$]* ,$(subst `$[, *$[*,$1)))$(\n)$(if $(C),during evaluation of $(C)($(A))))
+_argError = $(call _error,Argument '$(subst `,,$1)' is mal-formed:$(\n)   $(subst `,,$(subst `$], *$]* ,$(subst `$[, *$[*,$1)))$(\n)$(if $(C),during evaluation of $(C)($(A))))
 _argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)
 _argHash2 = $(subst `,,$(foreach w,$(subst $(if ,,`,), ,$(call _argGroup,$(subst :,`:,$(subst $;,$(if ,,`,),$(subst $],`$],$(subst $[,`$[,$1)))))),$(if $(findstring `:,$w),,:)$w))
 _argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(or $(_h~$1),$(call _set,_h~$1,$(_argHash2))),:$(subst $;, :,$1))
@@ -623,7 +623,6 @@ _describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value 
 
 # objects.scm
 
-_error = $(error $1)
 _idC = $(if $(findstring $[,$1),$(word 1,$(subst $[, ,$1)))
 _pup = $(filter-out &%,$($(word 1,$1).inherit) &$1)
 _walk = $(if $1,$(if $(findstring s,$(flavor $(word 1,$1).$2)),$1,$(call _walk,$(_pup),$2)))
@@ -631,8 +630,8 @@ _E1 = $(call _error,Undefined property '$2' for $(_self) was referenced$(if $(fi
 _cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$(_self).$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$($w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$(_class),$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
 .& = $(if $(findstring s,$(flavor $(_self).$1)),$(call _cx,$(_self),$1,$2,1),$(if $(findstring s,$(flavor &$(_class).$1)),&$(_class).$1,$(call _fset,&$(_class).$1,$(value $(call _cx,$(call _walk,$(_class),$1),$1,$2)))))
 . = $(if $(filter s%,$(flavor ~$(_self).$1)),$(~$(_self).$1),$(call _set,~$(_self).$1,$(call $(.&))))
-_E0 = $(call _error,Mal-formed instance name '$(_self)'; $(if $(filter $[%,$(_self)),empty CLASS,$(if $(findstring $[,$(_self)),missing '$]',unbalanced '$]')))
-get = $(foreach _self,$2,$(foreach _class,$(or $(if $(findstring $[,$(_self)),$(filter-out |%,$(subst $[, |,$(filter %$],$(_self)))),$(if $(findstring $],$(_self)),,File)),$(_E0)),$(call .,$1)))
+_E0 = $(call _error,Mal-formed target ID '$(_self)'; $(if $(filter $[%,$(_self)),no CLASS before '$[',$(if $(findstring $[,$(_self)),no '$]' at end,unbalanced '$]')))
+get = $(foreach _self,$2,$(foreach _class,$(if $(findstring $[,$(_self)),$(or $(filter-out |%,$(subst $[, |,$(filter %$],$(_self)))),$(_E0)),$(if $(findstring $],$(_self)),$(_E0),File)),$(call .,$1)))
 _argText = $(patsubst $(_class)(%),%,$(_self))
 _args = $(call _hashGet,$(call _argHash,$(patsubst $(_class)(%),%,$(_self))))
 _arg1 = $(word 1,$(_args))

@@ -17,7 +17,7 @@ test: $(TO)
 time: ; time make -R -f time.mk
 scam: ; scam minion.scm
 
-promote: $(TO) $(MO) $(EO)
+promote:
 	@$(call promote_cmd,minion.mk)
 	@$(call promote_cmd,example.md)
 

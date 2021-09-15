@@ -6,7 +6,7 @@
 (require "export.scm")
 
 ;;--------------------------------
-;; Symbols defined separately in minion.mk
+;; Symbols defined elsewhere
 ;;--------------------------------
 
 ;; Defined in minion.mk: \\n \\H [ ] [[ ]] OUTDIR
@@ -36,9 +36,59 @@
   (filter "%)" target))
 
 
+;; Defined in objects.scm: _self, _class
+
+;; Dynamic state during property evaluation enables `.`, `C`, and `A`:
+;;   _self = current instance, bound with `foreach`
+;;   _class = current class, bound with `foreach`
+
+(declare _self &native &public)
+(declare _class &native &public)
+
 ;;--------------------------------
 ;; Exported symbols
 ;;--------------------------------
+
+;; Return non-nil if VAR has been assigned a value.
+;;
+(define `(defined? var)
+  &public
+  ;; "recursive" or "simple" (not "undefined")
+  (findstring "s" (native-flavor var)))
+
+;; Return non-nil if VAR has not been assigned a value.
+;;
+(define `(undefined? var)
+  &public
+  (filter "u%" (native-flavor var)))
+
+(define `(recursive? var)
+  &public
+  (filter "r%" (native-flavor var)))
+
+(define `(simple? var)
+  &public
+  (filter "s%" (native-flavor var)))
+
+
+;; Display an error and halt.  We call this function, instead of `error`, so
+;; that is can be dynamically intercepted for testing purposes.
+;;
+(define (_error msg)
+  &native
+  &public
+  (error msg))
+
+(export (native-name _error) 1)
+
+
+(declare *errorLog* &native &public)
+
+;; Append error message to list
+(define (logError msg)
+  &public
+  (set *errorLog* (._. *errorLog* [msg])))
+
 
 ;; Discriminate instances -- CLASS(ARGS) -- from other target list entries or
 ;; goals.  We assume ID is either a valid target (instance, make target),
@@ -91,12 +141,14 @@
 (export (native-name _goalID) 1)
 
 
-;; Return the variable portion of indirection ID.
+;; Return the variable portion of indirection ID.  Return nil if the ID ends
+;; in @.
+;;
 ;;    @VAR, C@VAR, D@C@VAR  -->  VAR, VAR, VAR
 ;;
 (define (_ivar id)
   &native
-  (lastword (subst "@" " " id)))
+  (filter-out "%@" (subst "@" "@ " id)))
 
 (export (native-name _ivar) 1)
 
@@ -115,26 +167,47 @@
 (export (native-name _ipat) 1)
 
 
-(define (_expandX list)
+(define (_EI id prop)
+  &native
+
+  (_error
+   (..
+    (if (filter "%@" id)
+        (.. "Invalid target ID (ends in '@'): " id)
+        (.. "Indirection '" id "' references undefined variable '" (_ivar id) "'"))
+    (if (and _self prop)
+        (.. "\nFound while expanding "
+            (if (filter "Goal(%" _self)
+                (.. "command line goal " (patsubst "Goal(%)" "%" _self))
+                (.. _self "." prop)))))))
+
+(export (native-name _EI) 1)
+
+
+(define (_expandX list prop)
   &native
   (foreach (w list)
-    (or (filter "%)" w)
-        (if (findstring "@" w)
-            (patsubst "%" (_ipat w) (_expandX (native-var (_ivar w))))
-            w))))
+    (if (findstring "@" w)
+        (if (.. (findstring "(" w) (findstring ")" w))
+            w
+            (if (undefined? (_ivar w))
+                (_EI w prop)
+                (patsubst "%" (_ipat w)
+                          (_expandX (native-var (_ivar w)) prop))))
+        w)))
 
 (export (native-name _expandX) nil)
 
 
 ;; Expand indirections in LIST
 ;;
-(define (_expand list)
+(define (_expand list ?prop)
   &native
   (if (findstring "@" list)
-      (_expandX list)
+      (_expandX list prop)
       list))
 
-(export (native-name _expand) 1)
+(export (native-name _expand) nil)
 
 
 (begin
@@ -145,29 +218,18 @@
   (expect (_expand "E@ev0") "")
   (expect (_expand "a @ev2")
           "a a2 a1 b1 c(a1) c(b1) c(@v) D(C(a1)) D(C(b1))")
+
+  (let-global ((_error logError)
+               (*errorLog* nil)
+               (_self "C(A)"))
+    (expect "" (_expand "a@" "x"))
+    (expect "" (_expand "a@undef" "x"))
+    (expect 1 (see "Invalid target ID" (first *errorLog*)))
+    (expect 1 (see "Found while expanding C(A).x" (first *errorLog*)))
+    (expect 1 (see "undefined variable 'undef'" (nth 2 *errorLog*)))
+    nil)
+
   nil)
-
-
-;; Return non-nil if VAR has been assigned a value.
-;;
-(define `(defined? var)
-  &public
-  ;; "recursive" or "simple" (not "undefined")
-  (findstring "s" (native-flavor var)))
-
-;; Return non-nil if VAR has not been assigned a value.
-;;
-(define `(undefined? var)
-  &public
-  (filter "u%" (native-flavor var)))
-
-(define `(recursive? var)
-  &public
-  (filter "r%" (native-flavor var)))
-
-(define `(simple? var)
-  &public
-  (filter "s%" (native-flavor var)))
 
 
 ;; Set variable named KEY to VALUE; return VALUE.
@@ -254,7 +316,7 @@
 
 (define (_argError arg)
   &native
-  (error
+  (_error
    (.. "Argument '" (subst "`" "" arg) "' is mal-formed:\n"
        "   " (subst "`(" " *(*" "`)" " *)* " "`" "" arg) "\n"
        (if (native-var "C")

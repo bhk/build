@@ -169,10 +169,6 @@ C.inherit = Builder
 C.x = <$(_argText)>
 C.x.y = :$(_argText):
 
-$(call _expectEQ,$(call _getID.P,C(i).x),<i>)
-$(call _expectEQ,$(call _getID.P,C(i).x.y),:i:)
-$(call _expectEQ,$(call _getID.P,C(c(j).y).x),<c(j).y>)
-
 $(call _expectEQ,$(call _goalType,C(I).P),Property)
 $(call _expectEQ,$(call _goalType,C(I)),Instance)
 $(call _expectEQ,$(call _goalType,C(c(I).p)),Instance)

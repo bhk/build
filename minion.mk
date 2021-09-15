@@ -239,13 +239,19 @@ $(if {excludeIDs},_$i_needs = $(filter {excludeIDs},$(call _depsOf,$i))
 endef
 
 
-# UseCache(IDS) : Include a cached makefile.
+# CancelRules() : Generate a makefile that cancels the implicit pattern
+#    rules built into Make.
 #
-UseCache.inherit =
-UseCache.out = 
-UseCache.rule = -include {^}
-UseCache.needs = Makefile($(_argText))
-UseCache.^ = $(call get,out,{needs})
+CancelRules.out = $(OUTDIR)cancelrules.mk
+CancelRules.needs =
+CancelRules.rule = {out}: ; @mkdir -p $$(OUTDIR) && echo 'a:;@true' | $$(MAKE) -pf - | sed '/^[^: ]*%[^: ]*\::* /!d' > {out}
+
+
+# Include(MAKEFILE) : Include a makefile.
+#
+Include.out =
+Include.needs = $(_argText)
+Include.rule = -include $(call get,out,$(_argText))
 
 
 # _Compile(SOURCE) : Base class for invoking a compiler.
@@ -585,12 +591,18 @@ define _epilogue
   ifeq "" "$(strip $(call get,needs,$(_goalIDs)))"
     # Trivial goals do not benefit from a cache.  Importantly, avoid the
     # cache when handling `help` (targets may conflict with cache file) or
-    # `clean` (so we can recover from broken cache file).
-  else ifdef minion_cache
-    $(call _evalRules,UseCache(minion_cache))
-    # If _cachedIDs is unset, the cache must not exist and Make will
-    # restart, so skip rule computation.
-    _cachedIDs ?= %
+    # `clean` (so we can recover from a corrupted cache file).
+  else
+    ifeq "" "$(findstring r,$(MFLAGS))"
+      # Cancel Make's implicit pattern rules
+      $(call _evalRules,Include(CancelRules()))
+    endif
+    ifdef minion_cache
+      $(call _evalRules,Include(Makefile(minion_cache)))
+      # If _cachedIDs is unset, the cache must not exist and Make will
+      # restart, so skip rule computation.
+      _cachedIDs ?= %
+    endif
   endif
 
   $(call _evalRules,$(_goalIDs),$(_cachedIDs))

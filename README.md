@@ -1,12 +1,12 @@
 # Minion
 
-Minion is a Make-based build tool.  It objective is to enable build
-descriptions that are:
+Minion is a Make-based build tool designed to enable build descriptions that
+are:
 
 * Lightweight
 
-  Minion does not pollute your project with external dependencies.  It
-  consists of a single file (minion.mk), and depends only on GNU Make
+  Minion does not pollute your project with external dependencies.  Projects
+  need to include just one file, minion.mk, and it depends only on GNU Make
   3.81 or higher.
 
 * Maintainable
@@ -17,11 +17,11 @@ descriptions that are:
 
 * Fast
 
-  Minion does not utilize complex and costly features of GNU Make, and in
-  particular uses the `-r` flag, which significantly speeds up Make's rule
-  processing.  Minion supports cached (pre-compiled) makefiles.  There is
-  usually no need for `make clean` after changes to Makefiles; only the
-  affects targets will be rebuilt.
+  Minion supports cached (pre-compiled) makefiles.  There is usually no need
+  for `make clean` after changes to Makefiles; only the affected targets
+  need to be rebuilt.  Minion significantly speeds up Make's rule processing
+  by disabling its implicit rules, which are unneeded, given Minion's
+  functionality.
 
 [Example Walk-Through](example.md)
 

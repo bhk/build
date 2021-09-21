@@ -245,9 +245,9 @@
   (define `ekey (subst "$" "$$" ":" "$(or :)" key))
   (define `evalue (subst "$" "$$" "\n" "$(\\n)" value))
 
-  (.. (native-eval (subst "#" "$(\\H)"
-                          (.. ekey ":=$(or )" evalue)))
-      value))
+  (native-eval (subst "#" "$(\\H)"
+                      (.. ekey ":=$(or )" evalue)))
+  value)
 
 (export (native-name _set) 1)
 

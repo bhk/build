@@ -11,11 +11,16 @@
   (define `cmd-expr
     (first (filter-out "#%" (subst "#" " #" [command]))))
 
-  (.. (fprintf 2 (.. "$ " command "\n"))
-      "```console\n"
-      "$ " command "\n"
-      (concat-vec (shell-lines "%s" cmd-expr) "\n")
-      "```\n"))
+  ;; show progress message
+  (fprintf 2 "$ %s\n" command)
+
+  (sprintf (.. "```console\n"
+               "$ %s\n"
+               "%s\n"
+               "```\n")
+           command
+           (concat-vec (shell-lines "( %s ) 2>&1" cmd-expr) "\n")))
+
 
 ;; Insert a delay so that make won't "miss" a change.
 ;;
@@ -65,18 +70,17 @@
       (.. line "\n")))))
 
 
-(define (done err-msg)
-  (if err-msg (fprintf 2 "run-session: %s\n" err-msg))
-  (if err-msg 1 0))
-
-
 (define (main argv)
   (let ((map (getopts argv "-o=")))
     (define `[infile]  (dict-get "*" map))
     (define `[outfile] (dict-get "o" map))
 
-    (or (if (not infile)
-            (done "no input file given"))
-        (if (not outfile)
-            (done "no output file given"))
-        (done (write-file outfile (run infile))))))
+    (define err-msg
+      (cond
+       ((not infile) "no input file given")
+       ((not outfile) "no output file given")
+       (else (write-file outfile (run infile)))))
+
+    (when err-msg
+      (fprintf 2 "run-session: %s\n" err-msg)
+      1)))

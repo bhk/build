@@ -11,10 +11,12 @@ We begin with a minimal Makefile:
 
 ```console
 $ cp Makefile1 Makefile
+
 ```
 ```console
 $ cat Makefile
 include ../minion.mk
+
 ```
 
 This Makefile doesn't describe anything to be built, but it does invoke
@@ -38,16 +40,19 @@ Makefile.  To get started, let's use some classes built into Minion:
 $ make 'CC(hello.c)'
 #-> CC(hello.c)
 gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
+
 ```
 ```console
 $ make 'LinkC(CC(hello.c))'
 #-> LinkC(CC(hello.c))
 gcc -o .out/LinkC.o_CC.c/hello .out/CC.c/hello.o  
+
 ```
 ```console
 $ make 'Run(LinkC(CC(hello.c)))'
 ./.out/LinkC.o_CC.c/hello 
 Hello world.
+
 ```
 
 
@@ -61,6 +66,7 @@ the file extension.  For example, if we provide a ".c" file directly to
 $ make 'LinkC(hello.c)'
 #-> LinkC(hello.c)
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
+
 ```
 
 This command linked the program, but did not rebuild `hello.o`.  This is
@@ -79,6 +85,7 @@ rm -rf .out/
 gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
 #-> LinkC(hello.c)
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
+
 ```
 
 Likewise, `Run` can also infer a `LinkC` instance (which in turn will infer
@@ -93,6 +100,7 @@ gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
 ./.out/LinkC.c/hello 
 Hello world.
+
 ```
 
 
@@ -109,6 +117,7 @@ a goal, and so on.
 $ make 'Run(hello.c)'
 ./.out/LinkC.c/hello 
 Hello world.
+
 ```
 
 A class named `Exec` also runs a program, but it captures its output in a
@@ -118,6 +127,7 @@ file, so its targets are *not* phony.
 $ make 'Exec(hello.c)'
 #-> Exec(hello.c)
 ( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
+
 ```
 
 Using `Exec` is a way to run unit tests.  The existence of the output file
@@ -132,10 +142,12 @@ $ make 'Print(hello.c)'
 int main() {
    printf("Hello world.\n");
 }
+
 ```
 ```console
 $ make 'Print(Exec(hello.c))'
 Hello world.
+
 ```
 
 
@@ -164,6 +176,7 @@ Direct dependencies:
 
 Indirect dependencies: 
    CC(hello.c)
+
 ```
 ```console
 $ make help 'Exec(hello.c)'
@@ -190,6 +203,7 @@ Direct dependencies:
 
 Indirect dependencies: 
    CC(hello.c)
+
 ```
 
 
@@ -207,6 +221,9 @@ variable.
 $ make 'Tar(@sources)' sources='hello.c binsort.c'
 #-> Tar(@sources)
 tar -cvf .out/Tar_@/sources.tar hello.c binsort.c
+a hello.c
+a binsort.c
+
 ```
 
 The other form is called a mapped indirection.  This constructs an instance
@@ -221,6 +238,7 @@ $ make help Run@sources sources='hello.c binsort.c'
 It expands to the following targets: 
    Run(hello.c)
    Run(binsort.c)
+
 ```
 ```console
 $ make Run@sources sources='hello.c binsort.c'
@@ -235,11 +253,15 @@ srch(7) = 5
 srch(6) = 9
 srch(12) = 9
 srch(0) = 9
+
 ```
 ```console
 $ make 'Tar(CC@sources)' sources='hello.c binsort.c'
 #-> Tar(CC@sources)
 tar -cvf .out/Tar_CC@/sources.tar .out/CC.c/hello.o .out/CC.c/binsort.o
+a .out/CC.c/hello.o
+a .out/CC.c/binsort.o
+
 ```
 
 
@@ -263,6 +285,7 @@ This next Makefile defines alias goals for "default" and "deploy":
 
 ```console
 $ cp Makefile2 Makefile
+
 ```
 ```console
 $ cat Makefile
@@ -272,6 +295,7 @@ Alias(default).in = Exec@sources
 Alias(deploy).in = Copy@LinkC@sources
 
 include ../minion.mk
+
 ```
 ```console
 $ make deploy
@@ -279,6 +303,7 @@ $ make deploy
 cp .out/LinkC.c/hello .out/Copy/hello
 #-> Copy(LinkC(binsort.c))
 cp .out/LinkC.c/binsort .out/Copy/binsort
+
 ```
 
 If no goals are provided on the command line, Minion attempts to build the
@@ -288,9 +313,11 @@ target named `default`, so these commands do the same thing:
 $ make
 #-> Exec(binsort.c)
 ( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
+
 ```
 ```console
 $ make default
+
 ```
 
 One last note about aliases: alias names are just for the Make command line.
@@ -316,6 +343,7 @@ gcc -c -o .out/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/CC.c/hello.o.d
 gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
 #-> Exec(hello.c)
 ( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
+
 ```
 
 Observe how this affected the `gcc` command line.  [Also, as a side note,
@@ -334,6 +362,7 @@ gcc -c -o .out/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/CC.c/binsort.o.d
 gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
 #-> Exec(binsort.c)
 ( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
+
 ```
 
 So what's going on here?
@@ -368,6 +397,7 @@ Extra.z = ZZZ
 C4.inherit = Extra C3
 
 include ../minion.mk
+
 ```
 
 This makefile includes various definitions for the properties `x`, `y`, and
@@ -384,6 +414,7 @@ C1(a).x is defined by:
    C1(a).x = Xa
 
 Its value is: 'Xa'
+
 
 ```
 
@@ -403,6 +434,7 @@ C1(b).x is defined by:
 
 Its value is: 'X1'
 
+
 ```
 
 When there is no matching `CLASS.PROP` definition, `CLASS.inherit` will be
@@ -421,6 +453,7 @@ C2(b).x is defined by:
 
 Its value is: 'X1'
 
+
 ```
 
 Property definitions can refer to other properties using the `{NAME}`
@@ -435,6 +468,7 @@ C2(b).value is defined by:
    C1.value = {x} {y} {z}
 
 Its value is: 'X1 Y1 C2'
+
 
 ```
 
@@ -457,6 +491,7 @@ C3(b).z is defined by:
 
 Its value is: 'C2b'
 
+
 ```
 
 This can be used to, for example, provide a property definition that simply
@@ -478,6 +513,7 @@ CC(hello.c).command is defined by:
    _Compile.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsFile}
 
 Its value is: 'gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d'
+
 
 ```
 
@@ -525,6 +561,7 @@ $ cp Makefile3 Makefile; diff Makefile2 Makefile3
 > Sizes.inherit = Phony
 > Sizes.command = wc -c {^}
 > 
+
 ```
 
 A variable assignment of the form `CLASS.inherit` specifies the base class
@@ -548,6 +585,7 @@ wc -c .out/CC.c/hello.o .out/CCg.c/hello.o
      776 .out/CC.c/hello.o
     2056 .out/CCg.c/hello.o
     2832 total
+
 ```
 
 This makefile also defines a class named `CCg`, and defines `CCg.flags`
@@ -571,6 +609,7 @@ CCg(hello.c).flags is defined by:
    _Compile.flags = {optFlags} {warnFlags} {libFlags} $(addprefix -I,{includes})
 
 Its value is: '-g -ansi  -Wall -Werror   '
+
 
 ```
 
@@ -616,6 +655,7 @@ like this:
 
 ```console
 $ cp Makefile4 Makefile
+
 ```
 ```console
 $ make V=debug help 'CC(hello.c).flags'
@@ -627,6 +667,7 @@ CC(hello.c).flags is defined by:
 
 Its value is: '-g'
 
+
 ```
 ```console
 $ make V=fast help 'CC(hello.c).flags'
@@ -637,6 +678,7 @@ CC(hello.c).flags is defined by:
    CC-fast.flags = -O3
 
 Its value is: '-O3'
+
 
 ```
 
@@ -663,6 +705,7 @@ wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
    49648 .out/debug/LinkC.c/hello
    49928 .out/debug/LinkC.c/binsort
    99576 total
+
 ```
 ```console
 $ make sizes V=fast    # sizes for the "fast" variant
@@ -678,6 +721,7 @@ wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
    49424 .out/fast/LinkC.c/hello
    49456 .out/fast/LinkC.c/binsort
    98880 total
+
 ```
 ```console
 $ make all-sizes       # sizes for *all* variants
@@ -701,6 +745,7 @@ wc -c .out/small/LinkC.c/hello .out/small/LinkC.c/binsort
    49424 .out/small/LinkC.c/hello
    49456 .out/small/LinkC.c/binsort
    98880 total
+
 ```
 
 

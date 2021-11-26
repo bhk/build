@@ -285,7 +285,7 @@ Defer.command = true $(call _lazy,$$($(_argText)))
 Defer.vvFile =
 
 define DeferRule
-.out/Defer/a : a  | 
+.out/Defer/a : a   | 
 	@echo '#-> Defer(a)'
 	@mkdir -p .out/Defer/
 	true $(a)
@@ -300,7 +300,7 @@ $(call _expectEQ,$(call get,rule,Defer(a)),$(value DeferRule))
 WVAR = test
 
 define WWrule
-.out/Write/WVAR :   | 
+.out/Write/WVAR :    | 
 	@echo '#-> Write(WVAR)'
 	@mkdir -p .out/Write/
 	@echo '_vv=.@printf !`%b!` `test` > !@.' > .out/Write/WVAR.vv

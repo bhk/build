@@ -7,7 +7,7 @@ Here is an example command line session that introduces Minion
 functionality.  You can follow along typing the commands yourself in the
 `example` subdirectory of the project.
 
-We begin with a minimal Makefile:
+We begin with a minimal makefile:
 
 ```console
 $ cp Makefile1 Makefile
@@ -19,7 +19,7 @@ include ../minion.mk
 
 ```
 
-This Makefile doesn't describe anything to be built, but it does invoke
+This makefile doesn't describe anything to be built, but it does invoke
 Minion, so when we type `make` in this directory, Minion will process the
 goals.  A *goal* is a target name that is listed on the command line.  Goals
 determine what Make actually does when it is invoked.
@@ -34,7 +34,8 @@ build steps.
 An instance is written `CLASS(ARGS)`.  `ARGS` is a comma-delimited list of
 arguments, each of which is typically the name of an input to the build
 step.  `CLASS` is the name of a class that is defined by Minion or your
-Makefile.  To get started, let's use some classes built into Minion:
+makefile.  To get started, let's use some classes that are built into
+Minion:
 
 ```console
 $ make 'CC(hello.c)'
@@ -59,8 +60,9 @@ Hello world.
 ## Inference
 
 Some classes have the ability to *infer* intermediate build steps, based on
-the file extension.  For example, if we provide a ".c" file directly to
-`LinkC`, it knows how to generate the intermediate artifacts.
+the extension of the input file (or files).  For example, if we provide a
+".c" file as an argument to `LinkC`, it knows how to generate the
+intermediate ".o" artifact.
 
 ```console
 $ make 'LinkC(hello.c)'
@@ -166,7 +168,7 @@ Output: .out/Run/hello.c
 
 Rule: 
   | .PHONY: .out/Run/hello.c
-  | .out/Run/hello.c : .out/LinkC.c/hello  | 
+  | .out/Run/hello.c : .out/LinkC.c/hello   | 
   | 	./.out/LinkC.c/hello 
   | 
   | 
@@ -185,7 +187,7 @@ Target ID "Exec(hello.c)" is an instance (a generated artifact).
 Output: .out/Exec.c/hello.out
 
 Rule: 
-  | .out/Exec.c/hello.out : .out/LinkC.c/hello  | 
+  | .out/Exec.c/hello.out : .out/LinkC.c/hello   | 
   | 	@echo '#-> Exec(hello.c)'
   | 	@mkdir -p .out/Exec.c/
   | 	@echo '_vv=.( ./.out/LinkC.c/hello  ) > !@ || rm !@.' > .out/Exec.c/hello.c.vv
@@ -209,12 +211,9 @@ Indirect dependencies:
 
 ## Indirections
 
-An *indirection* is a notation for referencing the contents of a variable.
-Indirections can be used in contexts where lists of targets are expected.
-They are often used as a way to convey multiple input files in an argument.
-
-There are two forms of indirections.  The first is called a simple
-indirection, and it represents all of the targets identified in the
+An *indirection* is a way of referencing the contents of a variable.  There
+are two forms of indirections.  The first is called a simple indirection,
+written `@VARIABLE`.  It represents all of the targets identified in the
 variable.
 
 ```console
@@ -226,8 +225,9 @@ a binsort.c
 
 ```
 
-The other form is called a mapped indirection.  This constructs an instance
-for each target identified in the variable.
+The other form is called a mapped indirection, written `CLASS@VARIABLE`.
+This references a set of instances which are obtained by applying the class
+to each target identified in the variable.
 
 ```console
 $ make help Run@sources sources='hello.c binsort.c'
@@ -267,21 +267,24 @@ a .out/CC.c/binsort.o
 
 ## Aliases
 
-So far we haven't added anything to our Makefile, so we can only build what
-we explicitly describe on the command line.  A build system should allow us
-to describe complex builds in a Makefile so they can invoked with a simple
-command, like `make` or `make deploy`.  Minion provides aliases for this
-purpose.  An alias is a name that identifies a phony target instead of an
-actual file.
+So far we haven't added anything to our makefile, so we could only build
+things that we explicitly describe on the command line.  A build system
+should allow us to describe complex builds in a makefile so they can invoked
+with a simple command, like `make` or `make deploy`.  Minion provides
+*aliases* for this purpose.  An alias is a name that identifies a phony
+target instead of an actual file.
 
-To define an alias, define a variable named `Alias(NAME).in` to specify a
-list of targets to be built when NAME is given as a goal, *or* define
-`Alias(NAME).command` to specify a command to be executed when NAME is given
-as a goal.  Or define both.  Then, when Minion sees `NAME` listed on the
-command line, it will know it should build the corresponding `Alias(NAME)`
-instance.
+To define an alias, do one of the following (or both):
 
-This next Makefile defines alias goals for "default" and "deploy":
+1. Define a variable named `Alias(NAME).in`.  The value you assign to it
+   will be treated as a list of targets to be built when NAME is given as a
+   goal.
+
+2. Define a variable named `Alias(NAME).command`.  The value you assign
+   to is will be treated as a command to be executed when NAME is given
+   as a goal.
+
+This next makefile defines aliases named "default" and "deploy":
 
 ```console
 $ cp Makefile2 Makefile
@@ -307,7 +310,7 @@ cp .out/LinkC.c/binsort .out/Copy/binsort
 ```
 
 If no goals are provided on the command line, Minion attempts to build the
-target named `default`, so these commands do the same thing:
+alias or target named `default`, so these commands do the same thing:
 
 ```console
 $ make
@@ -320,18 +323,18 @@ $ make default
 
 ```
 
-One last note about aliases: alias names are just for the Make command line.
-Within a Minion makefile, when specifying targets we use only instances,
-source file names, or targets of Make rules.  So if you want to refer to one
-alias as a dependency of another alias, use its instance name:
-`Alias(NAME)`.  For example:
+One last note about aliases: alias names are just for use as goals on the
+Make command line.  Within a Minion makefile, when specifying targets we use
+only instances, source file names, or targets of Make rules.  So if you want
+to refer to one alias as a dependency of another alias, use its instance
+name: `Alias(NAME)`.  For example:
 
     Alias(default).in = Alias(exes) Alias(tests)
 
 
 ## Properties and Customization
 
-A build system should make it easy to customize how build results are
+A build system should make it easy to customize the way build results are
 generated, and to define entirely new, unanticipated build steps.  Let's
 show a couple of examples, and then dive into how and why they work.
 
@@ -346,11 +349,12 @@ gcc -o .out/LinkC.c/hello .out/CC.c/hello.o
 
 ```
 
-Observe how this affected the `gcc` command line.  [Also, as a side note,
-note that Minion knew to re-compile the object file, even when no input
-files had changed ... only the command line changed.  This fine-grained
-dependency tracking means that `make clean` is almost never needed, even
-after editing makefiles.]
+Observe how this `gcc` command line differs from that of the earlier
+`CC(hello.c)` example.  [By the way, also note that Minion knew to
+re-compile the object file, even when no input files had changed.  The
+previous build result became invalid when the command line changed.  This
+fine-grained dependency tracking means that when using Minion you almost
+never need to `make clean`, even after you have edited your makefile.]
 
 We can make this change apply more widely:
 
@@ -582,9 +586,9 @@ gcc -c -o .out/CC.c/hello.o hello.c -ansi  -Wall -Werror    -MMD -MP -MF .out/CC
 #-> CCg(hello.c)
 gcc -c -o .out/CCg.c/hello.o hello.c -g -ansi  -Wall -Werror    -MMD -MP -MF .out/CCg.c/hello.o.d
 wc -c .out/CC.c/hello.o .out/CCg.c/hello.o
-     776 .out/CC.c/hello.o
-    2056 .out/CCg.c/hello.o
-    2832 total
+     760 .out/CC.c/hello.o
+    2040 .out/CCg.c/hello.o
+    2800 total
 
 ```
 
@@ -616,7 +620,7 @@ Its value is: '-g -ansi  -Wall -Werror   '
 
 ## Variants
 
-We can build different *variants* of the project described by our Makefile.
+We can build different *variants* of the project described by our makefile.
 Variants are separate instantiations of our build that will have a similar
 overall structure, but may differ from each other in various ways.  For
 example, we may have "release" and "debug" variants, or "ARM" and "Intel"
@@ -653,8 +657,32 @@ like this:
     CC-fast.flags = -O3
     CC-small.flags = -Os
 
+The following Makfile uses this approach.
+
 ```console
 $ cp Makefile4 Makefile
+
+```
+```console
+$ cat Makefile
+Variants.all = debug fast small
+
+Alias(sizes).in = Sizes(LinkC@sources)
+Alias(all-sizes).in = Variants(Alias(sizes))
+Alias(default).in = Alias(sizes)
+
+sources = hello.c binsort.c
+
+CC.inherit = CC-$V _CC
+
+CC-debug.flags = -g
+CC-fast.flags = -O3
+CC-small.flags = -Os
+
+Sizes.inherit = Phony
+Sizes.command = wc -c {^}
+
+include ../minion.mk
 
 ```
 ```console
@@ -669,18 +697,7 @@ Its value is: '-g'
 
 
 ```
-```console
-$ make V=fast help 'CC(hello.c).flags'
-CC(hello.c) inherits from: CC CC-fast _CC Compile _Compile Builder
 
-CC(hello.c).flags is defined by:
-
-   CC-fast.flags = -O3
-
-Its value is: '-O3'
-
-
-```
 
 Finally, we want to be able to build multiple variants with a single
 invocation.  Minion provides a built-in class, `Variants(TARGET)`, that
@@ -761,16 +778,16 @@ To summarize the key concepts in Minion:
    other targets.  They can be used as arguments to instances, or in the
    value of an `in` property, or on the command line.
 
- - *Aliases* are short names that can be specified on the command line.
-   They can identify sets of other targets to build and/or commands to be
-   executed when they are built.
+ - *Aliases* are short names that can be specified as goals on the command
+   line.  An alias can identify a set of other targets to be built, or a
+   command to be executed, or both.
 
- - Properties dictate how instances behave.  Properties are associated with
-   classes or instances, and classes may inherit from other classes.
-   Properties are defined using Make variables whose names identify the
-   property, class, and perhaps instance to which they apply.  The
-   definitions can leverage Make variables and functions, and can refer to
-   other properties using `{NAME}`.
+ - *Properties* dictate how instances behave.  Properties definitions are
+   associated with classes or instances, and classes may inherit property
+   definitions from other classes.  Properties are defined using Make
+   variables whose names identify the property, class, and perhaps instance
+   to which they apply.  The definitions can leverage Make variables and
+   functions, and can refer to other properties using `{NAME}`.
 
  - To support multiple variants, list them in `Variants.all` putting the
    default variant first, use `make V=VARIANT` to build a specific variant,

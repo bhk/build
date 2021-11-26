@@ -56,7 +56,7 @@ Builder.^ = {inFiles}
 # `needs` should include all explicit dependencies and any instances
 # required to build auto-generated implicit dependencies (which should be
 # included in `ooIDs`).
-Builder.needs = {inIDs} {upIDs} {ooIDs}
+Builder.needs = {inIDs} {upIDs} {depsIDs} {ooIDs}
 
 Builder.up^ = $(call get,out,{upIDs})
 Builder.up< = $(firstword {up^})
@@ -87,6 +87,12 @@ Builder.upIDs = $(call _expand,{up},up)
 # `oo` lists order-only dependencies.
 Builder.oo =
 Builder.ooIDs = $(call _expand,{oo},oo)
+
+# `deps` lists implicit dependencies: artifacts that are not listed on the
+# command line, but that (may) affect the output file anyway.
+Builder.deps =
+Builder.depsIDs = $(call _expand,{deps})
+Builder.deps^ = $(call get,out,{depsIDs})
 
 # `inferClasses` a list of words in the format "CLASS.EXT", implying
 # that each input filename ending in ".EXT" should be replaced with
@@ -154,7 +160,7 @@ _recipe = $(subst $(\e),$$,$(subst $$,$$$$,$(_recipeLines)))
 # statements.
 #
 define Builder.rule
-{@} : {^} {up^} | $(call get,out,{ooIDs})
+{@} : {^} {up^} {deps^} | $(call get,out,{ooIDs})
 $(call _recipe,
 $(if {message},@echo $(call _shellQuote,{message}))
 $(if {mkdirs},@mkdir -p {mkdirs})
@@ -401,7 +407,7 @@ _Unzip.in = $(_class).zip
 #   Write the value of a variable to a file.
 #
 _Write.inherit = Builder
-_Write.out = $(or $(call _namedArg1,out),$(VOUTDIR)$(_class)/$(notdir $(_arg1)))
+_Write.out = $(or $(call _namedArg1,out),{inherit})
 _Write.command = @$(call _printf,{data}) > {@}
 _Write.data = $($(_arg1))
 _Write.in =
@@ -650,6 +656,7 @@ _inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %$],$(pa
 _depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %$],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
 _rollup = $(sort $(foreach w,$(filter %$],$1),$w $(call _depsOf,$w)))
 _rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %$],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
+_relpath = $(if $(filter /%,$2),$2,$(if $(filter ..,$(subst /, ,$1)),$(error _relpath: '..' in $1),$(or $(foreach w,$(filter %/%,$(word 1,$(subst /,/% ,$1))),$(call _relpath,$(patsubst $w,%,$1),$(if $(filter $w,$2),$(patsubst $w,%,$2),../$2))),$2)))
 
 # outputs.scm
 

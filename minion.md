@@ -511,6 +511,12 @@ within recursive property definitions.
 
   Same as `$(word 1,$(call _namedArgs,NAME))`.
 
+* `$(call _relpath,FROM,TO)`
+
+  Construct a path that can be used to refer to file `TO` from file `FROM`.
+  If `TO` is an absolute path, it is returned as the result.  Otherwise, both
+  `FROM` must be a relative path and the result will be a relative path.
+
 
 ## Syntax
 

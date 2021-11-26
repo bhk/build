@@ -151,3 +151,28 @@
   (expect (strip (_rollupEx "R(a)" "R(d)"))
           "R(a) R(b) R(c) R(x)")
   nil)
+
+
+
+(define (_relpath from to)
+  &native
+  (if (filter "/%" to)
+      to
+      (if (filter ".." (subst "/" " " from))
+          (error (.. "_relpath: '..' in " from))
+          (or (foreach (f1 (filter "%/%" (word 1 (subst "/" "/% " from))))
+                (_relpath (patsubst f1 "%" from)
+                          (if (filter f1 to)
+                              (patsubst f1 "%" to)
+                              (.. "../" to))))
+              to))))
+
+
+(export (native-name _relpath) nil)
+
+(expect (_relpath "a/b/c" "/x") "/x")
+(expect (_relpath "a" "x/y") "x/y")
+(expect (_relpath "a/b" "x/y") "../x/y")
+(expect (_relpath "x/b" "x/y") "y")
+(expect (_relpath "a/b/c"
+                  "a/x/y") "../x/y")

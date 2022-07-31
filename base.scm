@@ -246,7 +246,7 @@
   (define `evalue (subst "$" "$$" "\n" "$(\\n)" value))
 
   (native-eval (subst "#" "$(\\H)"
-                      (.. ekey ":=$(or )" evalue)))
+                   (.. ekey ":=$(or )" evalue)))
   value)
 
 (export (native-name _set) 1)
@@ -256,7 +256,7 @@
     (_set key value)
     (expect (native-var key) value))
   (test "temp_set_test" "a\\b#c\\#\\\\$v\nz")
-  (test "temp_$: a b" "a\\b#c\\#\\\\$v\nz"))
+  (test "temp_$:ab" "a\\b#c\\#\\\\$v\nz"))
 
 
 ;; Assign a recursive variable NAME, and return NAME.  The resulting
@@ -269,7 +269,8 @@
   (define `protect
     (if (filter "1" (word 1 (.. 1 value 1)))
         "$(or )"))
-  (native-eval (.. name " = "
+  (native-eval (.. (subst " " "$(if ,, )" name)
+                   " = "
                    protect (subst "\n" "$(\\n)" "#" "$(\\H)" value)))
   name)
 

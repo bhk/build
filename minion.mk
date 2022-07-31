@@ -620,7 +620,7 @@ _EI = $(call _error,$(if $(filter %@,$1),Invalid target ID (ends in '@'): $1,Ind
 _expandX = $(foreach w,$1,$(if $(findstring @,$w),$(if $(findstring $[,$w)$(findstring $],$w),$w,$(if $(filter u%,$(flavor $(call _ivar,$w))),$(call _EI,$w,$2),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)),$2)))),$w))
 _expand = $(if $(findstring @,$1),$(call _expandX,$1,$2),$1)
 _set = $(eval $(subst \#,$$(\H),$(subst :,$$(or :),$(subst $$,$$$$,$1)):=$$(or )$(subst $(\n),$$(\n),$(subst $$,$$$$,$2))))$2
-_fset = $(eval $1 = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))$1
+_fset = $(eval $(subst $(\s),$$(if ,, ),$1) = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))$1
 _once = $(if $(filter u%,$(flavor _o~$1)),$(call _set,_o~$1,$($1)),$(_o~$1))
 _argError = $(call _error,Argument '$(subst `,,$1)' is mal-formed:$(\n)   $(subst `,,$(subst `$], *$]* ,$(subst `$[, *$[*,$1)))$(\n)$(if $(C),during evaluation of $(C)($(A))))
 _argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)

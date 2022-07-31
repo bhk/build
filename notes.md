@@ -19,27 +19,31 @@
 We could support filenames that contain spaces and other characters that are
 usually difficult to handle in Make.  It would look like this:
 
-Target lists could contain quoted substrings, and _expand would convert them
-an internal word-encoded form ("!" -> "!1", " " -> "!0", "\t" -> "!+", ...).
+Target lists could contain quoted substrings, and `_expand` would convert
+them to a word-encoded form (`!` -> `!1`, ` ` -> `!0`, `\t` -> `!+`, ...).
 
-     sources = "f $1!00" f!00 bar
-     $(call _expand,*sources)  -->  f!01!S!100 f!0o bar
-     ${^}                      -->  "f \$1!00" "f 0" bar
+     sources = "Hello World!.c" bar.c
+     $(call _expand,*sources)  -->  Hello!0World!1.c bar.c
+     {in}                      -->  Hello!0World!1.c bar.c
+     {^}                       -->  'Hello World!.c' bar.c
 
 The shorthand properties, {@}, {^} and {<}, would encode their values for
 inclusion on shell command lines.  Presence of "!" means that quoting is
 necessary; other file names remain unquoted.
 
 Where file names are provided to Make (in rules), Minion would encode the
-names properly for Make.  E.g.: $(call _mkEnc,{out} : {prereqs} ...)
+names properly for Make.  E.g.: `$(call _mkEnc,{out} : {prereqs} ...)`
 In Make targets & pre-requisistes, we must backslash-escape:
+
       \s \t : = % * [ ] ?
+
 In Make v3.81, wildcard character escaping does not work.
 
 Syntax would be amended:
-   Name := ( NameChar | '"' QChar+ '"' )+
 
-For "~", we might want both the shell/Make meaning and the literal form.
+    Name := ( NameChar | '"' QChar+ '"' )+
+
+For `~`, we might want both the shell/Make meaning and the literal form.
 E.g.: "~/\~" --> `~/!T`.  (Is there a way to escape for Make?)
 
 Problems:
@@ -48,7 +52,7 @@ Problems:
 
     `$(wildcard ...)` won't work.
 
-    Using `dir`, `basename`, etc., on {@} et al will not work reliably.
+    Using `dir`, `basename`, etc., on `{@}` et al will not work reliably.
     However, they can be used with {out}, {inFiles}, etc., since they are
     word-encoded; the user would have to explicitly shell-encode the
     results.
@@ -62,14 +66,14 @@ Problems:
 
  * Pretty-printing instance names
 
-     C!lA!r          --> "C(A)"
-     P(C!ra!0b.c!r)  --> P("C(a b.c)")
-     P(C(a!0b.c))    --> P(C("a b.c"))
-     C(x!cy,a!Cz)    --> C("x,y","a=z")
+       C!lA!r          --> "C(A)"
+       P(C!ra!0b.c!r)  --> P("C(a b.c)")
+       P(C(a!0b.c))    --> P(C("a b.c"))
+       C(x!cy,a!Cz)    --> C("x,y","a=z")
 
  * Command-line goal processing
 
-     $ make 'CC("a b.c")'  # 1 arg, 1 goal, 2 words in MAKECMDGOALS
+       $ make 'CC("a b.c")'  # 1 arg, 1 goal, 2 words in MAKECMDGOALS
 
 
 ### Rewrites
@@ -98,6 +102,8 @@ echo to stdout) or Prop(C(A).P) (to write to file).
 
 ### Variable Namespace Pollution
 
+Class names to be avoided:
+
     $ echo '$(info $(sort $(patsubst %.,%,$(filter %.,$(subst .,. ,$(.VARIABLES))))))a:;@#' | make -f /dev/stdin
     COMPILE LEX LINK LINT PREPROCESS YACC
 
@@ -112,16 +118,16 @@ Alias names appear only in goals.
 
 To summarize:
 
-   goals, cache         PLAIN | C(A) | *VAR | ALIAS   (user-facing)
-   in, up, oo           PLAIN | C(A) | *VAR           (user-facing)
-   get, needs, rollup   PLAIN | C(A)
-   out, <, ^, up^       PLAIN                         (user-facing)
+    goals, cache         PLAIN | C(A) | *VAR | ALIAS   (user-facing)
+    in, up, oo           PLAIN | C(A) | *VAR           (user-facing)
+    get, needs, rollup   PLAIN | C(A)
+    out, <, ^, up^       PLAIN                         (user-facing)
 
 The following change would simplify documentation:
 
-   goals, cache, in, ...  PLAIN | C(A) | *VAR | ALIAS   (user-facing)
-   get, needs, rollup     PLAIN | C(A)
-   out, <, ^, up^         PLAIN                         (user-facing)
+    goals, cache, in, ...  PLAIN | C(A) | *VAR | ALIAS   (user-facing)
+    get, needs, rollup     PLAIN | C(A)
+    out, <, ^, up^         PLAIN                         (user-facing)
 
 [If we were to include ALIAS values in the middle category, then we have
 the problem of duplicates due to, uh, "aliasing" of Alias(X) and X.]
@@ -135,12 +141,12 @@ observations so far:
   * When not empty, it usually has one element. (~42%)
   * Usually it has no "*" and no alias name, and can return its input.
 
-(define (_expand names)
-  (if names
-    (if (or (findstring "@" names)
-            (filter _aliases names))
-      (call _ex,names) ;; $(_ex)
-      names)))
+    (define (_expand names)
+      (if names
+        (if (or (findstring "@" names)
+                (filter _aliases names))
+          (call _ex,names) ;; $(_ex)
+          names)))
 
 
 ### "Compress" recipe?
@@ -178,13 +184,13 @@ name within `rule` (in the Make rule, .PHONY)
       (if (findstring "$" (subst "$$" "" rule))
          (subst "$" "$$" (native-call "or" rule)))
 
+
 ### Possible Arg Syntax
 
-  $(_args)                -->  {:*}
-  $(_arg1)                -->  {:1}
-  $(call _nameArgs,NAME)  -->  {NAME:*}
-  $(call _nameArg1,NAME)  -->  {NAME:1}
-
+    $(_args)                -->  {:*}
+    $(_arg1)                -->  {:1}
+    $(call _nameArgs,NAME)  -->  {NAME:*}
+    $(call _nameArg1,NAME)  -->  {NAME:1}
 
 ## Advice
 

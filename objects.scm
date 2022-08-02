@@ -19,6 +19,17 @@
 
 (export (native-name _idC) 1)
 
+
+;; True when ID -- which must be an instance -- has an invalid class name.
+;;
+(define (_isClassInvalid id)
+  &public
+  &native
+  (undefined? (.. (_idC id) ".inherit")))
+
+(export (native-name _isClassInvalid) 1)
+
+
 ;; Parent lists: a parent list is a list of zero or more classes that
 ;; describe an "inheritance scope".  Each class implies all the classes it
 ;; inherits, so parent lists have more than one item only when multiple

@@ -166,12 +166,7 @@ Target ID "Run(hello.c)" is an instance (a generated artifact).
 
 Output: .out/Run/hello.c
 
-Rule: 
-  | .PHONY: .out/Run/hello.c
-  | .out/Run/hello.c : .out/LinkC.c/hello   | 
-  | 	./.out/LinkC.c/hello 
-  | 
-  | 
+Command: './.out/LinkC.c/hello '
 
 Direct dependencies: 
    LinkC(hello.c)
@@ -186,19 +181,7 @@ Target ID "Exec(hello.c)" is an instance (a generated artifact).
 
 Output: .out/Exec.c/hello.out
 
-Rule: 
-  | .out/Exec.c/hello.out : .out/LinkC.c/hello   | 
-  | 	@echo '#-> Exec(hello.c)'
-  | 	@mkdir -p .out/Exec.c/
-  | 	@echo '_vv=.( ./.out/LinkC.c/hello  ) > !@ || rm !@.' > .out/Exec.c/hello.c.vv
-  | 	( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
-  | 
-  | _vv =
-  | -include .out/Exec.c/hello.c.vv
-  | ifneq "$(_vv)" ".( ./.out/LinkC.c/hello  ) > !@ || rm !@."
-  |   .out/Exec.c/hello.out: .out/FORCE
-  | endif
-  | 
+Command: '( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out'
 
 Direct dependencies: 
    LinkC(hello.c)

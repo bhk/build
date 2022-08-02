@@ -148,12 +148,12 @@ _vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\n),!n,$
 # $(call _lazy,$$(info X=$$X))
 _lazy = $(subst $$,$(\e),$1)
 
-# Remove empty lines, prefix remaining lines with \t
-_recipeLines = $(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))
-
 # Format recipe lines and escape for rule-phase expansion. Un-escape
 # _lazy encoding to enable on-demand execution of functions.
-_recipe = $(subst $(\e),$$,$(subst $$,$$$$,$(_recipeLines)))
+_recipeEnc = $(subst $(\e),$$,$(subst $$,$$$$,$1))
+
+# Remove empty lines, prefix remaining lines with \t
+_recipe = $(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))
 
 # A Minion instance's "rule" is all the Make source code required to build
 # it.  It contains a Make rule (target, prereqs, recipe) and perhaps other
@@ -161,11 +161,11 @@ _recipe = $(subst $(\e),$$,$(subst $$,$$$$,$(_recipeLines)))
 #
 define Builder.rule
 {@} : {^} {up^} {deps^} | $(call get,out,{ooIDs})
-$(call _recipe,
+$(call _recipeEnc,$(call _recipe,
 $(if {message},@echo $(call _shellQuote,{message}))
 $(if {mkdirs},@mkdir -p {mkdirs})
 $(if {vvFile},@echo '_vv={vvValue}' > {vvFile})
-{command})
+{command}))
 $(if {vvFile},{vvRule})
 endef
 
@@ -235,7 +235,7 @@ Makefile.command = $(call _lazy,$$(call get,lazyCommand,$(call _escArg,$(_self))
 Makefile.excludeIDs = $(filter %$],$(call _expand,$($(_argText)_exclude)))
 Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$(_argText))))
 define Makefile.lazyCommand
-$(call _recipeLines,
+$(call _recipe,
 @rm -f {@}
 @echo '_cachedIDs = {IDs}' > {@}_tmp_
 $(foreach i,{IDs},
@@ -494,9 +494,16 @@ _fmtList = $(if $(word 1,$1),$(subst $(\s),$(\n)   , $(strip $1)),(none))
 _isProp = $(filter $].%,$(lastword $(subst $], $],$1)))
 
 # instance, indirection, alias, other
-_goalType = $(if $(_isProp),Property,$(if $(_isInstance),Instance,$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,Other))))
+_goalType = $(if $(_isProp),Property,$(if $(_isInstance),$(if $(_isClassInvalid),InvalidClass,Instance),$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,Other))))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
+
+
+define _helpInvalidClass
+"$1" looks like an instance with an invalid class name;
+`$(_idC).inherit` is not defined.  Perhaps a typo?
+
+endef
 
 
 define _helpInstance
@@ -504,7 +511,7 @@ Target ID "$1" is an instance (a generated artifact).
 
 Output: $(call get,out,$1)
 
-Rule: $(call _qv,$(call get,rule,$1))
+Command: $(call _qv,$(call _recipeEnc,$(call get,command,$1)))
 
 $(_helpDeps)
 endef
@@ -633,6 +640,7 @@ _describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value 
 # objects.scm
 
 _idC = $(if $(findstring $[,$1),$(word 1,$(subst $[, ,$1)))
+_isClassInvalid = $(filter u%,$(flavor $(_idC).inherit))
 _pup = $(filter-out &%,$($(word 1,$1).inherit) &$1)
 _walk = $(if $1,$(if $(findstring s,$(flavor $(word 1,$1).$2)),$1,$(call _walk,$(_pup),$2)))
 _E1 = $(call _error,Undefined property '$2' for $(_self) was referenced$(if $(filter u%,$(flavor $(_class).inherit)),;$(\n)$(_class) is not a valid class name ($(_class).inherit is not defined),$(if $3,$(if $(filter ^%,$3), from {inherit} in,$(if $(filter &&%,$3), from {$2} in, during evaluation of)):$(\n)$(call _describeVar,$(if $(filter &%,$3),$(foreach w,$(lastword $(subst ., ,$3)),$(word 1,$(call _walk,$(word 1,$(subst &, ,$(subst ., ,$3))),$w)).$w),$(if $(filter ^%,$3),$(subst ^,,$(word 1,$3)).$2,$3)))))$(\n))

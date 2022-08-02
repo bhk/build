@@ -232,21 +232,18 @@
   nil)
 
 
-;; Set variable named KEY to VALUE; return VALUE.
+;; Assign a simple variable named NAME to VALUE; return VALUE.
 ;;
-;; We assume KEY does not contain any characters illegal in Minion IDs.
-;; Note: If a variable name includes `:` and `=` (not a legal ID char) then
-;; `native-var` cannot be used to obtain its value, but native-value can.
+;; When NAME contains `)` or `:`-before-`=` it will cause problems later
+;; when using $(call NAME) or $(NAME); see varnames.mk.
 ;;
-(define (_set key value)
+;; (native-value NAME) -- `$(value NAME)` in Make -- is the reliable way to
+;; access the value.
+;;
+(define (_set name value)
   &public
   &native
-  ;; Encode "$" (not a legal ID char) to avoid fatal errors.
-  (define `ekey (subst "$" "$$" ":" "$(or :)" key))
-  (define `evalue (subst "$" "$$" "\n" "$(\\n)" value))
-
-  (native-eval (subst "#" "$(\\H)"
-                   (.. ekey ":=$(or )" evalue)))
+  (native-eval "$1 := $2")
   value)
 
 (export (native-name _set) 1)
@@ -254,38 +251,55 @@
 (begin
   (define `(test key value)
     (_set key value)
-    (expect (native-var key) value))
-  (test "temp_set_test" "a\\b#c\\#\\\\$v\nz")
-  (test "temp_$:ab" "a\\b#c\\#\\\\$v\nz"))
+    (expect (native-value key) value))
+  (test "test_x \ty(" 1)
+  (test "test_set" "a\\b#c\\#\\\\$v\nz")
+  (test "test$:a=b(" "a\\b#c\\#\\\\$v\nz"))
 
 
-;; Assign a recursive variable NAME, and return NAME.  The resulting
-;; (native-value NAME) may not match VALUE, but (native-var NAME) should be
-;; equal to VALUE.
+;; Assign a recursive variable NAME, and return NAME.
+;;
+;; _fset defines variables that will be reference with $(call NAME,...)  or
+;; $(NAME).  VALUE is the function body to be expanded when the variable is
+;; referenced.
+;;
+;; NAME should not contain `)` or `:`-before-`=` because that will cause
+;; problems with $(call NAME) or $(NAME); see varnames.mk.
 ;;
 (define (_fset name value)
   &public
   &native
+
+  ;; This prefix preserves leading spaces.  We don't always prepend it
+  ;; because it can accumulate as values are copied to other variables.
   (define `protect
-    (if (filter "1" (word 1 (.. 1 value 1)))
+    (if (filter "1" (word 1 (.. 1 value 0)))
         "$(or )"))
-  (native-eval (.. (subst " " "$(if ,, )" name)
-                   " = "
-                   protect (subst "\n" "$(\\n)" "#" "$(\\H)" value)))
+
+  (native-eval (.. "$1 = " protect
+                   (subst "\n" "$(\\n)"
+                          "#" "$(\\H)"
+                          value)))
   name)
 
 (begin
-  (define `(test var-name)
-    (define `out (.. "~" var-name))
-    (_fset out (native-value var-name))
-    (expect (native-var var-name) (native-var out)))
+  (define `(test name value-in ?value-out-if-different)
+    (define `value-out (or value-out-if-different value-in))
+    (_fset name value-in)
+    (expect value-out (native-call name)))
 
-  (native-eval "define TX\n   abc   \n\n\nendef\n")
-  (test "TX")
-  (native-eval "TX = a\\\\\\\\c\\#c")
-  (test "TX")
-  (native-eval "TX = echo '\\#-> x'")
-  (test "TX"))
+  ;; (test "test_f:x=y" "x")   ;; expected to fail
+  ;; (test "test_f(a)" "abc")  ;; expected to fail
+  (test "test_f x=y" "fxy")
+
+  (test "test_f" "x")
+  (expect (native-value "test_f") "x")  ;; no prefix
+  (test "test_f" "")
+  (expect (native-value "test_f") "")   ;; no prefix
+  (test "test_f" "$(or 1)" "1")
+  (test "test_f" "   abc  \n\ndef\n")
+  (test "test_f" "echo '#-> x'")
+  (test "test_f" "a\\b\\\\c\\#\\"))
 
 (export (native-name _fset) 1)
 
@@ -297,7 +311,7 @@
 
   (if (undefined? cacheVar)
       (_set cacheVar (native-var var))
-      (native-var cacheVar)))
+      (native-value cacheVar)))
 
 (export (native-name _once) nil)
 
@@ -388,7 +402,7 @@
   (define `memo-var (.. "_h~" arg))
 
   (if (or (findstring "(" arg) (findstring ")" arg) (findstring ":" arg))
-      (or (native-var memo-var)
+      (or (native-value memo-var)
           (_set memo-var (_argHash2 arg)))
       ;; common, fast case
       (.. ":" (subst "," " :" arg))))
@@ -438,16 +452,16 @@
               (subst "\n" (.. "\n" prefix)
                      (.. "define " name "\n" (native-value name) "\nendef"))
               (.. name " = " (native-value name)))
-          (.. name " := " (subst "\n" "$(\\n)" (native-var name))))))
+          (.. name " := " (subst "$" "$$" "\n" "$(\\n)" (native-value name))))))
 
 (export (native-name _describeVar) nil)
 
 (begin
-  (set-native "sv-s" "a\nb")
+  (set-native "sv-s" "a\nb$")
   (set-native-fn "sv-r1" "a b")
   (set-native-fn "sv-r2" "a\nb")
 
-  (expect (_describeVar "sv-s" "P: ")  "P: sv-s := a$(\\n)b")
+  (expect (_describeVar "sv-s" "P: ")  "P: sv-s := a$(\\n)b$$")
   (expect (_describeVar "sv-r1" "P: ")  "P: sv-r1 = a b")
   (expect (_describeVar "sv-r2" "P: ")  (.. "P: define sv-r2\n"
                                             "P: a\n"

@@ -19,12 +19,19 @@
 
 (export (native-name _idC) 1)
 
+;; Parent lists: a parent list is a list of zero or more classes that
+;; describe an "inheritance scope".  Each class implies all the classes it
+;; inherits, so parent lists have more than one item only when multiple
+;; inheritance is encountered.
 
-;; Return next level "up" in inheritance.  PARENTS = list of classes from
-;; which to inherit.
+
+;; Return the next parent list "up" in the inheritance search space.  This
+;; replaces the first class in the list with its inherited classes.
 ;;
 (define (_pup parents)
   &native
+  ;; Here filter-out removes the first name in PARENTS and stips extraneous
+  ;; spaces from the result.
   (filter-out
    "&%" (.. (native-var (.. (word 1 parents) ".inherit")) " &" parents)))
 
@@ -94,9 +101,9 @@
 (export (native-name _E1) 1)
 
 
-;; cap-memo holds a previously computed value of C(A).P.  Prior to that it
-;; may momentarily hold the compilation of its definition.  We use [], not
-;; (), because a literal ")" causes problems with native-var.
+;; cap-memo holds a previously computed value of C(A).P.  This is accessed
+;; using (native-value ...), so special characters in the variable name
+;; should not be a concern.
 ;;
 (define `(cap-memo p)
   (.. "~" _self "." p))
@@ -105,27 +112,37 @@
 ;; Compile a definition of P in the scope defined by PARENTS; return the
 ;; name of the variable holding the result.
 ;;
-;; PARENTS must be the location of a definition of P, or nil.
+;; PARENTS = a parent list describing an inheritance scope at which a
+;;     property definition has been found, or C(A) when IS-CAP is true.
+;;     In other words, SRC-VAR (see below) *must* be defined.
 ;;
 ;; WHO = who referenced the property (see e1-msg)
+;;
+;; IS-CAP => the definition is an instance property.  In this case, we need
+;;      to take extra precautions to ensure that OUT-VAR contains no ")",
+;;      and treat PARENTS as an instance name and not a valid parent list.
 ;;
 (define (_cx parents p who ?is-cap)
   &native
   (define `src-var (.. (word 1 parents) "." p))
   (define `memo-var (.. "&" parents "." p))
+  ;; OUT-VAR may not contain `)` because it will be expanded with `call`.
+  ;;   Accidental use of `=` in a variable name is unlikely for obvious
+  ;;   reasons so we don't guard against `:`-before-`=`.
+  ;; OUT-VAR == MEMO-VAR except in the CAP case, wherein we don't care about
+  ;;   MEMO-VAR because CAP-MEMO (see `.`) will cache the final result.
   (define `out-var (if is-cap (subst ")" "]" (cap-memo p)) memo-var))
   (define `inherit-var
     (_cx (_walk (if is-cap _class (_pup parents)) p)
          p
          (.. "^" parents)))
 
-
   (define `obj
     (foreach (src-var src-var)
       (define `src
         (native-value src-var))
       (if (simple? src-var)
-          (subst "$" "$$" (native-var src-var))
+          (subst "$" "$$" (native-value src-var))
           (subst "{inherit}" (if (findstring "{inherit}" src)
                                  (.. "$(call " inherit-var ")"))
                  "{" "$(call .,"
@@ -172,7 +189,7 @@
 (define (. p ?who)
   &native
   (if (simple? (cap-memo p))
-      (native-var (cap-memo p))
+      (native-value (cap-memo p))
       (_set (cap-memo p) (native-call (.& p who)))))
 
 (export (native-name .) nil)
@@ -372,7 +389,7 @@
   ;; .
 
   (expect (. "x") "<A.x:C>")
-  (expect (native-var (cap-memo "x")) "<A.x:C>")
+  (expect (native-value (cap-memo "x")) "<A.x:C>")
   (expect (. "x") "<A.x:C>")  ;; again (after caching)
   (let-global ((_self "C(X(f))"))
     (expect (. "s" nil) "<C(X(f)).s>"))           ;; challenging ARG?

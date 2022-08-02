@@ -479,12 +479,13 @@ $(word 1,$(MAKEFILE_LIST)) usage:
    make GOALS...            Build the named goals
    make help                Show this message
    make help GOALS...       Describe the named goals
-   make help C(A).P         Compute value of property P for C(A)
+   make help 'C(A).P'       Compute value of property P for C(A)
    make clean               `$(call get,command,Alias(clean))`
 
 Goals can be ordinary Make targets defined by your Makefile,
 instances (`Class(Arg)`), variable indirections (`@var`), or
-aliases defined by your Makefile.
+aliases defined by your Makefile.  Note that instances must
+be quoted for the shell.
 
 endef
 
@@ -619,15 +620,15 @@ _ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1)
 _EI = $(call _error,$(if $(filter %@,$1),Invalid target ID (ends in '@'): $1,Indirection '$1' references undefined variable '$(_ivar)')$(if $(and $(_self),$2),$(\n)Found while expanding $(if $(filter Goal$[%,$(_self)),command line goal $(patsubst Goal(%),%,$(_self)),$(_self).$2)))
 _expandX = $(foreach w,$1,$(if $(findstring @,$w),$(if $(findstring $[,$w)$(findstring $],$w),$w,$(if $(filter u%,$(flavor $(call _ivar,$w))),$(call _EI,$w,$2),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)),$2)))),$w))
 _expand = $(if $(findstring @,$1),$(call _expandX,$1,$2),$1)
-_set = $(eval $(subst \#,$$(\H),$(subst :,$$(or :),$(subst $$,$$$$,$1)):=$$(or )$(subst $(\n),$$(\n),$(subst $$,$$$$,$2))))$2
-_fset = $(eval $(subst $(\s),$$(if ,, ),$1) = $(if $(filter 1,$(word 1,1$21)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))$1
-_once = $(if $(filter u%,$(flavor _o~$1)),$(call _set,_o~$1,$($1)),$(_o~$1))
+_set = $(eval $$1 := $$2)$2
+_fset = $(eval $$1 = $(if $(filter 1,$(word 1,1$20)),$$(or ))$(subst \#,$$(\H),$(subst $(\n),$$(\n),$2)))$1
+_once = $(if $(filter u%,$(flavor _o~$1)),$(call _set,_o~$1,$($1)),$(value _o~$1))
 _argError = $(call _error,Argument '$(subst `,,$1)' is mal-formed:$(\n)   $(subst `,,$(subst `$], *$]* ,$(subst `$[, *$[*,$1)))$(\n)$(if $(C),during evaluation of $(C)($(A))))
 _argGroup = $(if $(findstring `$[,$(subst $],$[,$1)),$(if $(findstring $1,$2),$(_argError),$(call _argGroup,$(subst $(\s),,$(foreach w,$(subst $(\s) `$],$]` ,$(patsubst `$[%,`$[% ,$(subst `$], `$],$(subst `$[, `$[,$1)))),$(if $(filter %`,$w),$(subst `,,$w),$w))),$1)),$1)
 _argHash2 = $(subst `,,$(foreach w,$(subst $(if ,,`,), ,$(call _argGroup,$(subst :,`:,$(subst $;,$(if ,,`,),$(subst $],`$],$(subst $[,`$[,$1)))))),$(if $(findstring `:,$w),,:)$w))
-_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(or $(_h~$1),$(call _set,_h~$1,$(_argHash2))),:$(subst $;, :,$1))
+_argHash = $(if $(or $(findstring $[,$1),$(findstring $],$1),$(findstring :,$1)),$(or $(value _h~$1),$(call _set,_h~$1,$(_argHash2))),:$(subst $;, :,$1))
 _hashGet = $(patsubst $2:%,%,$(filter $2:%,$1))
-_describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$($1)))
+_describeVar = $2$(if $(filter r%,$(flavor $1)),$(if $(findstring $(\n),$(value $1)),$(subst $(\n),$(\n)$2,define $1$(\n)$(value $1)$(\n)endef),$1 = $(value $1)),$1 := $(subst $(\n),$$(\n),$(subst $$,$$$$,$(value $1))))
 
 # objects.scm
 
@@ -635,9 +636,9 @@ _idC = $(if $(findstring $[,$1),$(word 1,$(subst $[, ,$1)))
 _pup = $(filter-out &%,$($(word 1,$1).inherit) &$1)
 _walk = $(if $1,$(if $(findstring s,$(flavor $(word 1,$1).$2)),$1,$(call _walk,$(_pup),$2)))
 _E1 = $(call _error,Undefined property '$2' for $(_self) was referenced$(if $(filter u%,$(flavor $(_class).inherit)),;$(\n)$(_class) is not a valid class name ($(_class).inherit is not defined),$(if $3,$(if $(filter ^%,$3), from {inherit} in,$(if $(filter &&%,$3), from {$2} in, during evaluation of)):$(\n)$(call _describeVar,$(if $(filter &%,$3),$(foreach w,$(lastword $(subst ., ,$3)),$(word 1,$(call _walk,$(word 1,$(subst &, ,$(subst ., ,$3))),$w)).$w),$(if $(filter ^%,$3),$(subst ^,,$(word 1,$3)).$2,$3)))))$(\n))
-_cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$(_self).$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$($w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$(_class),$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
+_cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$(_self).$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$(value $w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$(_class),$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
 .& = $(if $(findstring s,$(flavor $(_self).$1)),$(call _cx,$(_self),$1,$2,1),$(if $(findstring s,$(flavor &$(_class).$1)),&$(_class).$1,$(call _fset,&$(_class).$1,$(value $(call _cx,$(call _walk,$(_class),$1),$1,$2)))))
-. = $(if $(filter s%,$(flavor ~$(_self).$1)),$(~$(_self).$1),$(call _set,~$(_self).$1,$(call $(.&))))
+. = $(if $(filter s%,$(flavor ~$(_self).$1)),$(value ~$(_self).$1),$(call _set,~$(_self).$1,$(call $(.&))))
 _E0 = $(call _error,Mal-formed target ID '$(_self)'; $(if $(filter $[%,$(_self)),no CLASS before '$[',$(if $(findstring $[,$(_self)),no '$]' at end,unbalanced '$]')))
 get = $(foreach _self,$2,$(foreach _class,$(if $(findstring $[,$(_self)),$(or $(filter-out |%,$(subst $[, |,$(filter %$],$(_self)))),$(_E0)),$(if $(findstring $],$(_self)),$(_E0),File)),$(call .,$1)))
 _argText = $(patsubst $(_class)(%),%,$(_self))
@@ -653,7 +654,7 @@ _chain = $(if $1,$(call _chain,$(_pup),$2 $(word 1,$1)),$(filter %,$2))
 _pairIDs = $(filter-out $$%,$(subst $$, $$,$1))
 _pairFiles = $(filter-out %$$,$(subst $$,$$ ,$1))
 _inferPairs = $(if $2,$(foreach w,$1,$(or $(foreach x,$(word 1,$(filter %$],$(patsubst %$(or $(suffix $(call _pairFiles,$w)),.),%($(call _pairIDs,$w)),$2))),$x$$$(call get,out,$x)),$w)),$1)
-_depsOf = $(or $(_&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %$],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
+_depsOf = $(or $(value _&deps-$1),$(call _set,_&deps-$1,$(or $(sort $(foreach w,$(filter %$],$(call get,needs,$1)),$w $(call _depsOf,$w))),$(if ,, ))))
 _rollup = $(sort $(foreach w,$(filter %$],$1),$w $(call _depsOf,$w)))
 _rollupEx = $(if $1,$(call _rollupEx,$(filter-out $3 $1,$(sort $(filter %$],$(call get,needs,$(filter-out $2,$1))) $(foreach w,$(filter $2,$1),$(value _$w_needs)))),$2,$3 $1),$(filter-out $2,$3))
 _relpath = $(if $(filter /%,$2),$2,$(if $(filter ..,$(subst /, ,$1)),$(error _relpath: '..' in $1),$(or $(foreach w,$(filter %/%,$(word 1,$(subst /,/% ,$1))),$(call _relpath,$(patsubst $w,%,$1),$(if $(filter $w,$2),$(patsubst $w,%,$2),../$2))),$2)))

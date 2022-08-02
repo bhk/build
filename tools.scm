@@ -83,7 +83,7 @@
   (define `xdeps
     (sort (foreach (i (isInstance (get "needs" id)))
             (._. i (_depsOf i)))))
-  (or (native-var memoVar)
+  (or (native-value memoVar)
       (_set memoVar (or xdeps " "))))
 
 (export (native-name _depsOf) nil)

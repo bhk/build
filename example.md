@@ -162,7 +162,7 @@ to underlying Make primitives.
 
 ```console
 $ make help 'Run(hello.c)'
-Target ID "Run(hello.c)" is an instance (a generated artifact).
+Target "Run(hello.c)" is an instance (a generated artifact).
 
 Output: .out/Run/hello.c
 
@@ -177,7 +177,7 @@ Indirect dependencies:
 ```
 ```console
 $ make help 'Exec(hello.c)'
-Target ID "Exec(hello.c)" is an instance (a generated artifact).
+Target "Exec(hello.c)" is an instance (a generated artifact).
 
 Output: .out/Exec.c/hello.out
 
@@ -569,9 +569,9 @@ gcc -c -o .out/CC.c/hello.o hello.c -ansi  -Wall -Werror    -MMD -MP -MF .out/CC
 #-> CCg(hello.c)
 gcc -c -o .out/CCg.c/hello.o hello.c -g -ansi  -Wall -Werror    -MMD -MP -MF .out/CCg.c/hello.o.d
 wc -c .out/CC.c/hello.o .out/CCg.c/hello.o
-     760 .out/CC.c/hello.o
-    2040 .out/CCg.c/hello.o
-    2800 total
+     720 .out/CC.c/hello.o
+    2168 .out/CCg.c/hello.o
+    2888 total
 
 ```
 
@@ -702,9 +702,9 @@ gcc -c -o .out/debug/CC.c/binsort.o binsort.c -g -MMD -MP -MF .out/debug/CC.c/bi
 #-> LinkC(binsort.c)
 gcc -o .out/debug/LinkC.c/binsort .out/debug/CC.c/binsort.o  
 wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
-   49648 .out/debug/LinkC.c/hello
-   49928 .out/debug/LinkC.c/binsort
-   99576 total
+   33672 .out/debug/LinkC.c/hello
+   33944 .out/debug/LinkC.c/binsort
+   67616 total
 
 ```
 ```console
@@ -718,21 +718,21 @@ gcc -c -o .out/fast/CC.c/binsort.o binsort.c -O3 -MMD -MP -MF .out/fast/CC.c/bin
 #-> LinkC(binsort.c)
 gcc -o .out/fast/LinkC.c/binsort .out/fast/CC.c/binsort.o  
 wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
-   49424 .out/fast/LinkC.c/hello
-   49456 .out/fast/LinkC.c/binsort
-   98880 total
+   33432 .out/fast/LinkC.c/hello
+   33480 .out/fast/LinkC.c/binsort
+   66912 total
 
 ```
 ```console
 $ make all-sizes       # sizes for *all* variants
 wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
-   49648 .out/debug/LinkC.c/hello
-   49928 .out/debug/LinkC.c/binsort
-   99576 total
+   33672 .out/debug/LinkC.c/hello
+   33944 .out/debug/LinkC.c/binsort
+   67616 total
 wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
-   49424 .out/fast/LinkC.c/hello
-   49456 .out/fast/LinkC.c/binsort
-   98880 total
+   33432 .out/fast/LinkC.c/hello
+   33480 .out/fast/LinkC.c/binsort
+   66912 total
 #-> CC(hello.c)
 gcc -c -o .out/small/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/small/CC.c/hello.o.d
 #-> LinkC(hello.c)
@@ -742,9 +742,9 @@ gcc -c -o .out/small/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/small/CC.c/b
 #-> LinkC(binsort.c)
 gcc -o .out/small/LinkC.c/binsort .out/small/CC.c/binsort.o  
 wc -c .out/small/LinkC.c/hello .out/small/LinkC.c/binsort
-   49424 .out/small/LinkC.c/hello
-   49456 .out/small/LinkC.c/binsort
-   98880 total
+   33432 .out/small/LinkC.c/hello
+   33480 .out/small/LinkC.c/binsort
+   66912 total
 
 ```
 

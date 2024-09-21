@@ -136,7 +136,7 @@
       (.. "Alias(" name ")")
       (if (or (_isInstance name)
               (_isIndirect name))
-          (.. "Goal(" name ")"))))
+          (.. "_Goal(" name ")"))))
 
 (export (native-name _goalID) 1)
 
@@ -173,12 +173,12 @@
   (_error
    (..
     (if (filter "%@" id)
-        (.. "Invalid target ID (ends in '@'): " id)
+        (.. "Invalid target (ends in '@'): " id)
         (.. "Indirection '" id "' references undefined variable '" (_ivar id) "'"))
     (if (and _self prop)
         (.. "\nFound while expanding "
-            (if (filter "Goal(%" _self)
-                (.. "command line goal " (patsubst "Goal(%)" "%" _self))
+            (if (filter "_Goal(%" _self)
+                (.. "command line goal " (patsubst "_Goal(%)" "%" _self))
                 (.. _self "." prop)))))))
 
 (export (native-name _EI) 1)
@@ -224,7 +224,7 @@
                (_self "C(A)"))
     (expect "" (_expand "a@" "x"))
     (expect "" (_expand "a@undef" "x"))
-    (expect 1 (see "Invalid target ID" (first *errorLog*)))
+    (expect 1 (see "Invalid target" (first *errorLog*)))
     (expect 1 (see "Found while expanding C(A).x" (first *errorLog*)))
     (expect 1 (see "undefined variable 'undef'" (nth 2 *errorLog*)))
     nil)

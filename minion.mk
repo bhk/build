@@ -4,170 +4,55 @@
 #
 # The following classes may be overridden by user makefiles.  Minion
 # attaches no property definitions to them; it just provides a default
-# inheritance.  For all other classes defined by Minion, user makefiles
-# cannot override `inherit` or property definitions (except in a couple of
-# cases where Builder uses "?=") and instead should customize by defining
-# their own sub-classes.
+# inheritance.  User makefiles may not override other make variables defined
+# in this file, except for a few cases where "?=" is used (see below).
 
-Phony.inherit ?= _Phony
-Compile.inherit ?= _Compile
-CC.inherit ?= _CC
 CC++.inherit ?= _CC++
-Link.inherit ?= _Link
-LinkC.inherit ?= _LinkC
-LinkC++.inherit ?= _LinkC++
-Shell.inherit ?= _Shell
-Exec.inherit ?= _Exec
-Run.inherit ?= _Run
+CC.inherit ?= _CC
+Compile.inherit ?= _Compile
 Copy.inherit ?= _Copy
-Mkdir.inherit ?= _Mkdir
-Touch.inherit ?= _Touch
-Remove.inherit ?= _Remove
-Print.inherit ?= _Print
-Tar.inherit ?= _Tar
+Exec.inherit ?= _Exec
 Gzip.inherit ?= _Gzip
-Zip.inherit ?= _Zip
+Link.inherit ?= _Link
+LinkC++.inherit ?= _LinkC++
+LinkC.inherit ?= _LinkC
+Mkdir.inherit ?= _Mkdir
+Phony.inherit ?= _Phony
+Print.inherit ?= _Print
+Remove.inherit ?= _Remove
+Run.inherit ?= _Run
+Shell.inherit ?= _Shell
+Tar.inherit ?= _Tar
+Touch.inherit ?= _Touch
 Unzip.inherit ?= _Unzip
 Write.inherit ?= _Write
+Zip.inherit ?= _Zip
 
 
 #--------------------------------
 # Built-in Classes
 #--------------------------------
 
-# The `File` class is used to construct an instance when `get` is called
-# with a target ID that is not an instance.  It implements the builder
-# interface, so plain files names can be supplied anywhere instances are
-# expected.  Property evaluation logic short-cuts the handling of File
-# instances, so inheritance is not available.
+# Alias(TARGETNAME) : Generate a phony rule whose {out} matches TARGETNAME.
+#     {command} and/or {in} are supplied by the user makefile.
 #
-File.out = $(_self)
-File.rule =
-File.needs =
+Alias.inherit = Phony
+Alias.out = $(subst :,\:,$(_argText))
+Alias.in =
 
 
-# Builder(ARGS):  Base class for builders.
-
-# Shorthand properties
-Builder.@ = {out}
-Builder.< = $(firstword {^})
-Builder.^ = {inFiles}
-
-# `needs` should include all explicit dependencies and any instances
-# required to build auto-generated implicit dependencies (which should be
-# included in `ooIDs`).
-Builder.needs = {inIDs} {upIDs} {depsIDs} {ooIDs}
-
-Builder.up^ = $(call get,out,{upIDs})
-Builder.up< = $(firstword {up^})
-
-# `in` is the user-supplied set of "inputs", in the form of a target list
-# (target IDs or indirections).  It is intended to be easily overridden
-# on a per-class or per-instance basis.
+# Variants(TARGETNAME) : Build {all} variants of TARGETNAME.  Each variant
+#    is defined in a separate rule so they can all proceed concurrently.
 #
-# The actual set of prerequisites differs from `in` in a few ways:
-#  - Indirections are expanded
-#  - Inference (as per `inferClasses`) may replace targets with
-#    intermediate results.
-#  - `up` targets are also dependencies (but not "inputs")
+Variants.inherit = Phony
+Variants.in = $(foreach v,{all},_Variant($(_argText),V:$v))
+
+
+# _Variant(TARGETNAME,V:VARIANT) : Build VARIANT of TARGETNAME.
 #
-Builder.in = $(_args)
-
-# list of ([ID,]FILE) pairs for inputs
-Builder.inPairs = $(call _inferPairs,$(foreach i,$(call _expand,{in},in),$i$(if $(filter %$],$i),$$$(call get,out,$i))),{inferClasses})
-
-Builder.inIDs = $(call _pairIDs,{inPairs})
-Builder.inFiles = $(call _pairFiles,{inPairs})
-
-# `up` lists dependencies that are typically specified by the class itself,
-# not by the instance argument or `in` property.
-Builder.up =
-Builder.upIDs = $(call _expand,{up},up)
-
-# `oo` lists order-only dependencies.
-Builder.oo =
-Builder.ooIDs = $(call _expand,{oo},oo)
-
-# `deps` lists implicit dependencies: artifacts that are not listed on the
-# command line, but that (may) affect the output file anyway.
-Builder.deps =
-Builder.depsIDs = $(call _expand,{deps})
-Builder.deps^ = $(call get,out,{depsIDs})
-
-# `inferClasses` a list of words in the format "CLASS.EXT", implying
-# that each input filename ending in ".EXT" should be replaced with
-# "CLASS(FILE.EXT)".  This is used to, for example, convert ".c" files
-# to ".o" when they are provided as inputs to a LinkC instance.
-Builder.inferClasses =
-
-# Note: By default, `outDir`, `outName`, and `outExt` are used to
-# construct `out`, but any of them can be overridden.  Do not assume
-# that, for example, `outDir` is always the same as `$(dir {out})`.
-Builder.out = {outDir}{outName}
-Builder.outDir = $(dir {outBasis})
-Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
-Builder.outExt = %
-Builder.outBasis = $(VOUTDIR)$(call _outBasis,$(_class),$(_argText),{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in},in)))),$(_arg1))
-
-_applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
-
-# Message to be displayed when/if the command executes.  By default, Minion
-# clases display this for non-phony rules.  The user can assign this
-# variable an empty value to prevent these messages.
-Builder.message ?= \#-> $(_self)
-
-Builder.mkdirs = $(sort $(dir {@} {vvFile}))
-
-# Validity value
-#
-# If {vvFile} is non-empty, the rule will compare {vvValue} will to the
-# value it had when the target file was last updated.  If they do not match,
-# the target file will be treated as stale.
-#
-Builder.vvFile ?= {outBasis}.vv
-Builder.vvValue = $(call _vvEnc,{command},{@})
-
-define Builder.vvRule
-_vv =
--include {vvFile}
-ifneq "$$(_vv)" "{vvValue}"
-  {@}: $(_forceTarget)
-endif
-
-endef
-
-# $(call _vvEnc,DATA,OUTFILE) : Encode to be shell-safe (within single
-#   quotes) and Make-safe (within double-quotes or RHS of assignment)
-#   and echo-safe (across /bin/echo and various shell builtins)
-_vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\n),!n,$(subst $(\t),!+,$(subst \#,!H,$(subst $2,!@,$(subst \,!B,$(subst !,!1,$1)))))))))).#'
-
-
-# $(call _lazy,MAKESRC) : Encode MAKESRC for inclusion in a recipe so that
-# it will be expanded when and if the recipe is executed.  Otherwise, all
-# "$" characters will be escaped to avoid expansion by Make. For example:
-# $(call _lazy,$$(info X=$$X))
-_lazy = $(subst $$,$(\e),$1)
-
-# Format recipe lines and escape for rule-phase expansion. Un-escape
-# _lazy encoding to enable on-demand execution of functions.
-_recipeEnc = $(subst $(\e),$$,$(subst $$,$$$$,$1))
-
-# Remove empty lines, prefix remaining lines with \t
-_recipe = $(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))
-
-# A Minion instance's "rule" is all the Make source code required to build
-# it.  It contains a Make rule (target, prereqs, recipe) and perhaps other
-# statements.
-#
-define Builder.rule
-{@} : {^} {up^} {deps^} | $(call get,out,{ooIDs})
-$(call _recipeEnc,$(call _recipe,
-$(if {message},@echo $(call _shellQuote,{message}))
-$(if {mkdirs},@mkdir -p {mkdirs})
-$(if {vvFile},@echo '_vv={vvValue}' > {vvFile})
-{command}))
-$(if {vvFile},{vvRule})
-endef
+_Variant.inherit = Phony
+_Variant.in =
+_Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(call _shellQuote,$(subst =,:,$(_arg1))) V=$(call _shellQuote,$(call _namedArg1,V))
 
 
 # _Phony(INPUTS) : Generate a phony rule.
@@ -183,75 +68,6 @@ _Phony.mkdirs = # not a real file => no need to create directory
 _Phony.message =
 _Phony.command = @true
 _Phony.vvFile = # always runs => no point in validating
-
-
-# Alias(TARGETNAME) : Generate a phony rule whose {out} matches TARGETNAME.
-#     {command} and/or {in} are supplied by the user makefile.
-#
-Alias.inherit = Phony
-Alias.out = $(subst :,\:,$(_argText))
-Alias.in =
-
-
-# Goal(TARGETNAME) : Generate a phony rule for an instance or indirection
-#    goal.  Its {out} should match the name provided on the command line,
-#    and its {in} is the named instance or indirection.
-#
-Goal.inherit = Alias
-Goal.in = $(_argText)
-
-
-# HelpGoal(TARGETNAME) : Generate a rule that invokes `_help!`
-#
-HelpGoal.inherit = Alias
-HelpGoal.command = @true$(call _lazy,$$(call _help!,$(call _escArg,$(_argText))))
-
-
-# Variants(TARGETNAME) : Build {all} variants of TARGETNAME.  Each variant
-#    is defined in a separate rule so they can all proceed concurrently.
-#
-Variants.inherit = Phony
-Variants.in = $(foreach v,{all},Variant($(_argText),V:$v))
-
-
-# Variant(TARGETNAME,V:VARIANT) : Build VARIANT of TARGETNAME.
-#
-Variant.inherit = Phony
-Variant.in =
-Variant.command = @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) --no-print-directory $(call _shellQuote,$(subst =,:,$(_arg1))) V=$(call _shellQuote,$(call _namedArg1,V))
-
-
-# Makefile(VAR) : Generate a makefile that includes rules for IDs in $(VAR)
-#   and their transitive dependencies, excluding IDs in $(VAR_exclude).
-#   Include rules that cancel Make's built-in implicit pattern rules.
-#
-#   Command expansion is deferred to the rule processing phase, so when the
-#   makefile is fresh we avoid the time it takes to compute all the rules.
-#
-Makefile.inherit = Builder
-Makefile.in = $(MAKEFILE_LIST)
-Makefile.vvFile = # too costly; defeats the purpose
-Makefile.command = $(call _lazy,$$(call get,lazyCommand,$(call _escArg,$(_self))))
-Makefile.excludeIDs = $(filter %$],$(call _expand,$($(_argText)_exclude)))
-Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$(_argText))))
-define Makefile.lazyCommand
-$(call _recipe,
-@rm -f {@}
-@echo '_cachedIDs = {IDs}' > {@}_tmp_
-$(foreach i,{IDs},
-@$(call _printf,$(call get,rule,$i)
-$(if {excludeIDs},_$i_needs = $(filter {excludeIDs},$(call _depsOf,$i))
-)) >> {@}_tmp_)
-@echo 'a:' | $(MAKE) -pf - | sed '/^[^: ]*%[^: ]*\::* /!d' >> {@}_tmp_
-@mv {@}_tmp_ {@})
-endef
-
-
-# Include(MAKEFILE) : Include a makefile.
-#
-Include.out =
-Include.needs = $(_argText)
-Include.rule = -include $(call get,out,$(_argText))
 
 
 # _Compile(SOURCE) : Base class for invoking a compiler.
@@ -280,7 +96,7 @@ _CC++.inherit = Compile
 _CC++.compiler = g++
 
 
-# _Link(INPUTS) : Link a command-line C program.
+# _Link(INPUTS) : Link an executable.
 #
 _Link.inherit = Builder
 _Link.outExt =
@@ -412,6 +228,190 @@ _Write.command = @$(call _printf,{data}) > {@}
 _Write.data = $($(_arg1))
 _Write.in =
 
+# Builder(ARGS):  Base class for builders.
+
+# Shorthand properties
+Builder.@ = {out}
+Builder.< = $(firstword {^})
+Builder.^ = {inFiles}
+
+# `needs` should include all explicit dependencies and any instances
+# required to build auto-generated implicit dependencies (which should be
+# included in `ooIDs`).
+Builder.needs = {inIDs} {upIDs} {depsIDs} {ooIDs}
+
+Builder.up^ = $(call get,out,{upIDs})
+
+# `in` is the user-supplied set of "inputs", in the form of a target list
+# (targets or indirections).  It is intended to be easily overridden
+# on a per-class or per-instance basis.
+#
+# The actual set of prerequisites differs from `in` in a few ways:
+#  - Indirections are expanded
+#  - Inference (as per `inferClasses`) may replace targets with
+#    intermediate results.
+#  - `up` targets are also dependencies (but not "inputs")
+#
+Builder.in = $(_args)
+
+# list of ([ID,]FILE) pairs for inputs
+Builder.inPairs = $(call _inferPairs,$(foreach i,$(call _expand,{in},in),$i$(if $(filter %$],$i),$$$(call get,out,$i))),{inferClasses})
+
+Builder.inIDs = $(call _pairIDs,{inPairs})
+Builder.inFiles = $(call _pairFiles,{inPairs})
+
+# `up` lists dependencies that are typically specified by the class itself,
+# not by the instance argument or `in` property.
+Builder.up =
+Builder.upIDs = $(call _expand,{up},up)
+
+# `oo` lists order-only dependencies.
+Builder.oo =
+Builder.ooIDs = $(call _expand,{oo},oo)
+
+# `deps` lists implicit dependencies: artifacts that are not listed on the
+# command line, but that (may) affect the output file anyway.
+Builder.deps =
+Builder.depsIDs = $(call _expand,{deps})
+Builder.deps^ = $(call get,out,{depsIDs})
+
+# `inferClasses` a list of words in the format "CLASS.EXT", implying
+# that each input filename ending in ".EXT" should be replaced with
+# "CLASS(FILE.EXT)".  This is used to, for example, convert ".c" files
+# to ".o" when they are provided as inputs to a LinkC instance.
+Builder.inferClasses =
+
+# Note: By default, `outDir`, `outName`, and `outExt` are used to
+# construct `out`, but any of them can be overridden.  Do not assume
+# that, for example, `outDir` is always the same as `$(dir {out})`.
+Builder.out = {outDir}{outName}
+Builder.outDir = $(dir {outBasis})
+Builder.outName = $(call _applyExt,$(notdir {outBasis}),{outExt})
+Builder.outExt = %
+Builder.outBasis = $(VOUTDIR)$(call _outBasis,$(_class),$(_argText),{outExt},$(call get,out,$(filter $(_arg1),$(word 1,$(call _expand,{in},in)))),$(_arg1))
+
+_applyExt = $(basename $1)$(subst %,$(suffix $1),$2)
+
+# Message to be displayed when/if the command executes.  By default, Minion
+# clases display this for non-phony rules.  The user can assign this
+# variable an empty value to prevent these messages.
+Builder.message ?= \#-> $(_self)
+
+Builder.mkdirs = $(sort $(dir {@} {vvFile}))
+
+# Validity value
+#
+# If {vvFile} is non-empty, the rule will compare {vvValue} will to the
+# value it had when the target file was last updated.  If they do not match,
+# the target file will be treated as stale.  The user can set this to an
+# empty value in order to disable validity checking.
+#
+Builder.vvFile ?= {outBasis}.vv
+Builder.vvValue = $(call _vvEnc,{command},{@})
+
+define Builder.vvRule
+_vv =
+-include {vvFile}
+ifneq "$$(_vv)" "{vvValue}"
+  {@}: $(_forceTarget)
+endif
+
+endef
+
+# $(call _vvEnc,DATA,OUTFILE) : Encode to be shell-safe (within single
+#   quotes) and Make-safe (within double-quotes or RHS of assignment)
+#   and echo-safe (across /bin/echo and various shell builtins)
+_vvEnc = .$(subst ',`,$(subst ",!`,$(subst `,!b,$(subst $$,!S,$(subst $(\n),!n,$(subst $(\t),!+,$(subst \#,!H,$(subst $2,!@,$(subst \,!B,$(subst !,!1,$1)))))))))).#'
+
+
+# $(call _lazy,MAKESRC) : Encode MAKESRC for inclusion in a recipe so that
+# it will be expanded when and if the recipe is executed.  Otherwise, all
+# "$" characters will be escaped to avoid expansion by Make. For example:
+# $(call _lazy,$$(info X=$$X))
+_lazy = $(subst $$,$(\e),$1)
+
+# Format recipe lines and escape for rule-phase expansion. Un-escape
+# _lazy encoding to enable on-demand execution of functions.
+_recipeEnc = $(subst $(\e),$$,$(subst $$,$$$$,$1))
+
+# Remove empty lines, prefix remaining lines with \t
+_recipe = $(subst $(\t)$(\n),,$(subst $(\n),$(\n)$(\t),$(\t)$1)$(\n))
+
+# A Minion instance's "rule" is all the Make source code required to build
+# it.  It contains a Make rule (target, prereqs, recipe) and perhaps other
+# statements.
+#
+define Builder.rule
+{@} : {^} {up^} {deps^} | $(call get,out,{ooIDs})
+$(call _recipeEnc,$(call _recipe,
+$(if {message},@echo $(call _shellQuote,{message}))
+$(if {mkdirs},@mkdir -p {mkdirs})
+$(if {vvFile},@echo '_vv={vvValue}' > {vvFile})
+{command}))
+$(if {vvFile},{vvRule})
+endef
+
+
+#--------------------------------
+# Minion internal classes
+#--------------------------------
+
+
+# _File(FILENAME) : Do nothing, and treat FILENAME as the output.  This class
+#    is used by `get` so that plain file names can be supplied instead of
+#    instance names.  Property evaluation logic short-cuts the handling of
+#    File instances, so inheritance is not available.
+#
+_File.out = $(_self)
+_File.rule =
+_File.needs =
+
+
+# _Goal(TARGETNAME) : Generate a phony rule for an instance or indirection
+#    goal.  Its {out} should match the name provided on the command line,
+#    and its {in} is the named instance or indirection.
+#
+_Goal.inherit = Alias
+_Goal.in = $(_argText)
+
+
+# _HelpGoal(TARGETNAME) : Generate a rule that invokes `_help!`
+#
+_HelpGoal.inherit = Alias
+_HelpGoal.command = @true$(call _lazy,$$(call _help!,$(call _escArg,$(_argText))))
+
+# Makefile(VAR) : Generate a makefile that includes rules for IDs in $(VAR)
+#   and their transitive dependencies, excluding IDs in $(VAR_exclude).
+#   Include rules that cancel Make's built-in implicit pattern rules.
+#
+#   Command expansion is deferred to the rule processing phase, so when the
+#   makefile is fresh we avoid the time it takes to compute all the rules.
+#
+Makefile.inherit = Builder
+Makefile.in = $(MAKEFILE_LIST)
+Makefile.vvFile = # too costly; defeats the purpose
+Makefile.command = $(call _lazy,$$(call get,lazyCommand,$(call _escArg,$(_self))))
+Makefile.excludeIDs = $(filter %$],$(call _expand,$($(_argText)_exclude)))
+Makefile.IDs = $(filter-out {excludeIDs},$(call _rollup,$(call _expand,@$(_argText))))
+define Makefile.lazyCommand
+$(call _recipe,
+@rm -f {@}
+@echo '_cachedIDs = {IDs}' > {@}_tmp_
+$(foreach i,{IDs},
+@$(call _printf,$(call get,rule,$i)
+$(if {excludeIDs},_$i_needs = $(filter {excludeIDs},$(call _depsOf,$i))
+)) >> {@}_tmp_)
+@echo 'a:' | $(MAKE) -pf - | sed '/^[^: ]*%[^: ]*\::* /!d' >> {@}_tmp_
+@mv {@}_tmp_ {@})
+endef
+
+
+# Include(MAKEFILE) : Include a makefile.
+#
+Include.out =
+Include.needs = $(_argText)
+Include.rule = -include $(call get,out,$(_argText))
+
 
 #--------------------------------
 # Variable & Function Definitions
@@ -507,7 +507,7 @@ endef
 
 
 define _helpInstance
-Target ID "$1" is an instance (a generated artifact).
+Target "$1" is an instance (a generated artifact).
 
 Output: $(call get,out,$1)
 
@@ -592,7 +592,7 @@ define _epilogue
     $$%: ; @#$(info $$$* = $(call _qv,$(call or,$$$*)))
     %: ; @echo 'Cannot build "$*" alongside $$(...)' && false
   else ifneq "" "$(filter help,$(MAKECMDGOALS))"
-    _goalIDs := $(MAKECMDGOALS:%=HelpGoal$[%$])
+    _goalIDs := $(MAKECMDGOALS:%=_HelpGoal$[%$])
     _error = $(info $(subst $(\n),$(\n)   ,ERROR: $1)$(\n))
   else
     _goalIDs := $(foreach g,$(MAKECMDGOALS),$(call _goalID,$g))
@@ -621,10 +621,10 @@ _error = $(error $1)
 _isInstance = $(filter %$],$1)
 _isIndirect = $(findstring @,$(filter-out %$],$1))
 _isAlias = $(filter s% r%,$(flavor Alias($1).in) $(flavor Alias($1).command))
-_goalID = $(if $(_isAlias),Alias($1),$(if $(or $(_isInstance),$(_isIndirect)),Goal($1)))
+_goalID = $(if $(_isAlias),Alias($1),$(if $(or $(_isInstance),$(_isIndirect)),_Goal($1)))
 _ivar = $(filter-out %@,$(subst @,@ ,$1))
 _ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1) % $(subst @, $] ,$1))))
-_EI = $(call _error,$(if $(filter %@,$1),Invalid target ID (ends in '@'): $1,Indirection '$1' references undefined variable '$(_ivar)')$(if $(and $(_self),$2),$(\n)Found while expanding $(if $(filter Goal$[%,$(_self)),command line goal $(patsubst Goal(%),%,$(_self)),$(_self).$2)))
+_EI = $(call _error,$(if $(filter %@,$1),Invalid target (ends in '@'): $1,Indirection '$1' references undefined variable '$(_ivar)')$(if $(and $(_self),$2),$(\n)Found while expanding $(if $(filter _Goal$[%,$(_self)),command line goal $(patsubst _Goal(%),%,$(_self)),$(_self).$2)))
 _expandX = $(foreach w,$1,$(if $(findstring @,$w),$(if $(findstring $[,$w)$(findstring $],$w),$w,$(if $(filter u%,$(flavor $(call _ivar,$w))),$(call _EI,$w,$2),$(patsubst %,$(call _ipat,$w),$(call _expandX,$($(call _ivar,$w)),$2)))),$w))
 _expand = $(if $(findstring @,$1),$(call _expandX,$1,$2),$1)
 _set = $(eval $$1 := $$2)$2
@@ -647,8 +647,8 @@ _E1 = $(call _error,Undefined property '$2' for $(_self) was referenced$(if $(fi
 _cx = $(if $1,$(if $(value &$1.$2),&$1.$2,$(call _fset,$(if $4,$(subst $],],~$(_self).$2),&$1.$2),$(foreach w,$(word 1,$1).$2,$(if $(filter s%,$(flavor $w)),$(subst $$,$$$$,$(value $w)),$(subst },$(if ,,,&$$0$]),$(subst {,$(if ,,$$$[call .,),$(subst {inherit},$(if $(findstring {inherit},$(value $w)),$$(call $(call _cx,$(call _walk,$(if $4,$(_class),$(_pup)),$2),$2,^$1))),$(value $w)))))))),$(_E1))
 .& = $(if $(findstring s,$(flavor $(_self).$1)),$(call _cx,$(_self),$1,$2,1),$(if $(findstring s,$(flavor &$(_class).$1)),&$(_class).$1,$(call _fset,&$(_class).$1,$(value $(call _cx,$(call _walk,$(_class),$1),$1,$2)))))
 . = $(if $(filter s%,$(flavor ~$(_self).$1)),$(value ~$(_self).$1),$(call _set,~$(_self).$1,$(call $(.&))))
-_E0 = $(call _error,Mal-formed target ID '$(_self)'; $(if $(filter $[%,$(_self)),no CLASS before '$[',$(if $(findstring $[,$(_self)),no '$]' at end,unbalanced '$]')))
-get = $(foreach _self,$2,$(foreach _class,$(if $(findstring $[,$(_self)),$(or $(filter-out |%,$(subst $[, |,$(filter %$],$(_self)))),$(_E0)),$(if $(findstring $],$(_self)),$(_E0),File)),$(call .,$1)))
+_E0 = $(call _error,Mal-formed target '$(_self)'; $(if $(filter $[%,$(_self)),no CLASS before '$[',$(if $(findstring $[,$(_self)),no '$]' at end,unbalanced '$]')))
+get = $(foreach _self,$2,$(foreach _class,$(if $(findstring $[,$(_self)),$(or $(filter-out |%,$(subst $[, |,$(filter %$],$(_self)))),$(_E0)),$(if $(findstring $],$(_self)),$(_E0),_File)),$(call .,$1)))
 _argText = $(patsubst $(_class)(%),%,$(_self))
 _args = $(call _hashGet,$(call _argHash,$(patsubst $(_class)(%),%,$(_self))))
 _arg1 = $(word 1,$(_args))

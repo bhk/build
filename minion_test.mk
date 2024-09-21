@@ -128,8 +128,8 @@ Alias(alias3).command = y3
 
 _aliases := alias1 alias2
 $(call _expectEQ,$(call _goalID,alias1),Alias(alias1))
-$(call _expectEQ,$(call _goalID,@asdf),Goal(@asdf))
-$(call _expectEQ,$(call _goalID,as(df)),Goal(as(df)))
+$(call _expectEQ,$(call _goalID,@asdf),_Goal(@asdf))
+$(call _expectEQ,$(call _goalID,as(df)),_Goal(as(df)))
 $(call _expectEQ,$(call _goalID,asdf),)
 
 

@@ -224,12 +224,12 @@
             "no ')' at end"
             "unbalanced ')'")))
 
-  (_error (.. "Mal-formed target ID '" _self "'; " reason)))
+  (_error (.. "Mal-formed target '" _self "'; " reason)))
 
 (export (native-name _E0) 1)
 
 
-;; Return the class of an ID: CLASS for CLASS(ARGS), "File" for others.
+;; Return the class of an ID: CLASS for CLASS(ARGS), "_File" for others.
 ;; Report an error if the ID is mal-formed.
 ;;
 (define `(idClass id)
@@ -238,11 +238,11 @@
           (_E0))
       (if (findstring ")" id)
           (_E0)
-          "File")))
+          "_File")))
 
 
 (let-global ((_error "-"))
-  (expect (idClass "f") "File")
+  (expect (idClass "f") "_File")
   (expect (idClass "C(a)") "C")
   (expect (idClass "(a)") "-")
   (expect (idClass "C(a") "-")
@@ -407,9 +407,9 @@
 
   nil)
 
-(set-native-fn "File.id" "$(_class)($(_argText))")
+(set-native-fn "_File.id" "$(_class)($(_argText))")
 (expect (get "x" "C(a)") "<A.x:C>")
-(expect (get "id" "f") "File(f)")
+(expect (get "id" "f") "_File(f)")
 
 ;; caching of &C.P
 

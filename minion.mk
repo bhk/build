@@ -426,6 +426,11 @@ OUTDIR ?= .out/
 # Build products for the current V are placed here
 VOUTDIR ?= $(OUTDIR)$(if $V,$V/)
 
+# $(call minion_alias,GOAL) returns an instance if GOAL is an alias,
+#   or an empty value otherwise.  User makefiles can override this to
+#   support other types of aliases.
+minion_alias ?= $(_aliasID)
+
 # Character constants
 
 \s := $(if ,, )
@@ -494,7 +499,7 @@ _fmtList = $(if $(word 1,$1),$(subst $(\s),$(\n)   , $(strip $1)),(none))
 _isProp = $(filter $].%,$(lastword $(subst $], $],$1)))
 
 # instance, indirection, alias, other
-_goalType = $(if $(_isProp),Property,$(if $(_isInstance),$(if $(_isClassInvalid),InvalidClass,Instance),$(if $(_isIndirect),Indirect,$(if $(_isAlias),Alias,Other))))
+_goalType = $(if $(_isProp),Property,$(if $(_isInstance),$(if $(_isClassInvalid),InvalidClass,Instance),$(if $(_isIndirect),Indirect,$(if $(_aliasID),Alias,Other))))
 
 _helpDeps = Direct dependencies: $(call _fmtList,$(call get,needs,$1))$(\n)$(\n)Indirect dependencies: $(call _fmtList,$(call filter-out,$(call get,needs,$1),$(call _rollup,$(call get,needs,$1))))
 
@@ -507,7 +512,7 @@ endef
 
 
 define _helpInstance
-Target "$1" is an instance (a generated artifact).
+"$1" is an instance.
 
 Output: $(call get,out,$1)
 
@@ -527,13 +532,14 @@ endef
 
 
 define _helpAlias
-Target "$1" is an alias defined by:
-$(foreach v,$(filter Alias($1).%,$(.VARIABLES)),
+"$1" is an alias for $(minion_alias).
+$(if $(filter Alias$[%,$(minion_alias)),
+It is defined by:$(foreach v,$(filter Alias($1).%,$(.VARIABLES)),
 $(call _describeVar,$v,   )
-)
-$(call _helpDeps,Alias($1))
+))
+$(call _helpDeps,$(minion_alias))
 
-$1 generates the following rule: $(call _qv,$(call get,rule,Alias($1)))
+It generates the following rule: $(call _qv,$(call get,rule,$(minion_alias)))
 endef
 
 
@@ -620,8 +626,8 @@ endef
 _error = $(error $1)
 _isInstance = $(filter %$],$1)
 _isIndirect = $(findstring @,$(filter-out %$],$1))
-_isAlias = $(filter s% r%,$(flavor Alias($1).in) $(flavor Alias($1).command))
-_goalID = $(if $(_isAlias),Alias($1),$(if $(or $(_isInstance),$(_isIndirect)),_Goal($1)))
+_aliasID = $(if $(filter s% r%,$(flavor Alias($1).in) $(flavor Alias($1).command)),Alias($1))
+_goalID = $(or $(call minion_alias,$1),$(if $(or $(_isInstance),$(_isIndirect)),_Goal($1)))
 _ivar = $(filter-out %@,$(subst @,@ ,$1))
 _ipat = $(if $(filter @%,$1),%,$(subst $(\s),,$(filter %( %% ),$(subst @,$[ ,$1) % $(subst @, $] ,$1))))
 _EI = $(call _error,$(if $(filter %@,$1),Invalid target (ends in '@'): $1,Indirection '$1' references undefined variable '$(_ivar)')$(if $(and $(_self),$2),$(\n)Found while expanding $(if $(filter _Goal$[%,$(_self)),command line goal $(patsubst _Goal(%),%,$(_self)),$(_self).$2)))

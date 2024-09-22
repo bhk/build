@@ -162,7 +162,7 @@ to underlying Make primitives.
 
 ```console
 $ make help 'Run(hello.c)'
-Target "Run(hello.c)" is an instance (a generated artifact).
+"Run(hello.c)" is an instance.
 
 Output: .out/Run/hello.c
 
@@ -177,7 +177,7 @@ Indirect dependencies:
 ```
 ```console
 $ make help 'Exec(hello.c)'
-Target "Exec(hello.c)" is an instance (a generated artifact).
+"Exec(hello.c)" is an instance.
 
 Output: .out/Exec.c/hello.out
 

@@ -6,7 +6,7 @@
 (require "export.scm")
 
 ;;--------------------------------
-;; Symbols defined elsewhere
+;; Symbols defined in minion.mk, not exported from Scam-compiled code.
 ;;--------------------------------
 
 ;; Defined in minion.mk: \\n \\H [ ] [[ ]] OUTDIR
@@ -115,15 +115,20 @@
 (export (native-name _isIndirect) 1)
 
 
-;; Return truthy if NAME is an alias.
+;; Return alias instance if goal NAME is an alias.
 ;;
-(define (_isAlias name)
-  &public
+(define (_aliasID name)
   &native
-  (filter "s% r%" (._. (native-flavor (.. "Alias(" name ").in"))
-                       (native-flavor (.. "Alias(" name ").command")))))
+  (if (filter "s% r%" (._. (native-flavor (.. "Alias(" name ").in"))
+                           (native-flavor (.. "Alias(" name ").command"))))
+      (.. "Alias(" name ")")))
 
-(export (native-name _isAlias) 1)
+(export (native-name _aliasID) 1)
+
+;; Not exported; this definition resides in minion.mk because it uses "?=".
+(define (minion_alias goal)
+  &native
+  (_aliasID goal))
 
 
 ;; Translate goal NAME into an instance that will generate a rule whose
@@ -132,8 +137,7 @@
 ;;
 (define (_goalID name)
   &native
-  (if (_isAlias name)
-      (.. "Alias(" name ")")
+  (or (minion_alias name)
       (if (or (_isInstance name)
               (_isIndirect name))
           (.. "_Goal(" name ")"))))

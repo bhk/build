@@ -99,10 +99,11 @@ to underlying Make primitives.
 
 ## Indirections
 
-An *indirection* is a way of referencing the contents of a variable.  There
-are two forms of indirections.  The first is called a simple indirection,
-written `@VARIABLE`.  It represents all of the targets identified in the
-variable.
+An *indirection* is a way of referencing the contents of a variable.  These
+can be used in contexts where input files or prerequisites are specified for
+Minion instances.  There are two forms of indirections.  The first is called
+a simple indirection, written `@VARIABLE`.  It represents all of the files
+or instances named in the variable.
 
     $ make 'Tar(@sources)' sources='hello.c binsort.c'
 
@@ -176,11 +177,11 @@ We can make this change apply more widely:
 
 So what's going on here?
 
-Each instance is described by a set of properties.  Instances inherit
-properties from classes, which may inherit properties from other classes,
-and so on.  Properties can refer to other properties.  Minion's notion of
-inheritance works like that of some object-oriented languages (hence the
-term "instance"), but in Minion there is no mutable state.
+Each instance consists of a set of properties.  Properties definitions can
+be given for a specific instance, or for a class.  There is a notion of
+*inheritance*, similar to that of some object-oriented languages (hence the
+term "instance"), but in Minion there is no mutable state associated with
+instances.
 
 We can best illustrate the basic principles of property evaluation with a
 simple example that avoids the complexities of `CC` and other Minion rules.
@@ -327,7 +328,7 @@ like this:
     CC-fast.flags = -O3
     CC-small.flags = -Os
 
-The following Makfile uses this approach.
+The following makefile uses this approach.
 
     $ cp Makefile4 Makefile
     $ cat Makefile
@@ -353,8 +354,8 @@ defaults to the first word in `Variants.all`.
 To summarize the key concepts in Minion:
 
  - *Instances* are function-like descriptions of build products.  They can
-   be given as targets, and named as inputs to other instances.  They
-   take the form `CLASS(ARGUMENTS)`.
+   be given as Make command line goals, and named as inputs to other
+   instances.  They take the form `CLASS(ARGUMENTS)`.
 
  - *Indirections* are ways to reference Make variables that hold lists of
    other targets.  They can be used as arguments to instances, or in the
@@ -368,9 +369,11 @@ To summarize the key concepts in Minion:
    associated with classes or instances, and classes may inherit property
    definitions from other classes.  Properties are defined using Make
    variables whose names identify the property, class, and perhaps instance
-   to which they apply.  The definitions can leverage Make variables and
-   functions, and can refer to other properties using `{NAME}`.
+   to which they apply.  Property definitions can use Make variables and
+   functions, and they can refer to other properties using the `{NAME}`
+   syntax.
 
  - To support multiple variants, list them in `Variants.all` putting the
-   default variant first, use `make V=VARIANT` to build a specific variant,
-   and use `Variants(TARGET)` to build all variants of a target.
+   default variant first.  Use `make V=VARIANT TARGET` to build a specific
+   variant of a target, and use `make 'Variants(TARGET)'` to build all
+   variants of a target.

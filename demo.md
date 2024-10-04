@@ -3,9 +3,9 @@
 
 ## Introduction
 
-Here is an example command line session that introduces Minion
+Here is an actual command line session that introduces Minion
 functionality.  You can follow along typing the commands yourself in the
-`example` subdirectory of the project.
+`demo` subdirectory of the project.
 
 We begin with a minimal makefile:
 
@@ -40,18 +40,19 @@ Minion:
 ```console
 $ make 'CC(hello.c)'
 #-> CC(hello.c)
-gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
+gcc -c -o .out/CC.c/hello.o hello.c -O2 -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/hello.c.d
 
 ```
 ```console
-$ make 'LinkC(CC(hello.c))'
-#-> LinkC(CC(hello.c))
-gcc -o .out/LinkC.o_CC.c/hello .out/CC.c/hello.o  
+$ make 'CExe(CC(hello.c))'
+#-> CExe(CC(hello.c))
+gcc -o .out/CExe.o_CC.c/hello .out/CC.c/hello.o 
 
 ```
 ```console
-$ make 'Run(LinkC(CC(hello.c)))'
-./.out/LinkC.o_CC.c/hello 
+$ make 'Run(CExe(CC(hello.c)))'
+#-> Run(CExe(CC(hello.c)))
+.out/CExe.o_CC.c/hello  
 Hello world.
 
 ```
@@ -61,13 +62,13 @@ Hello world.
 
 Some classes have the ability to *infer* intermediate build steps, based on
 the extension of the input file (or files).  For example, if we provide a
-".c" file as an argument to `LinkC`, it knows how to generate the
+".c" file as an argument to `CExe`, it knows how to generate the
 intermediate ".o" artifact.
 
 ```console
-$ make 'LinkC(hello.c)'
-#-> LinkC(hello.c)
-gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
+$ make 'CExe(hello.c)'
+#-> CExe(hello.c)
+gcc -o .out/CExe.c/hello .out/CC.c/hello.o 
 
 ```
 
@@ -81,26 +82,27 @@ defined by Minion, and it removes the "output directory", which, by default,
 contains all generated artifacts.
 
 ```console
-$ make clean; make 'LinkC(hello.c)'
+$ make clean; make 'CExe(hello.c)'
 rm -rf .out/
 #-> CC(hello.c)
-gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
-#-> LinkC(hello.c)
-gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
+gcc -c -o .out/CC.c/hello.o hello.c -O2 -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/hello.c.d
+#-> CExe(hello.c)
+gcc -o .out/CExe.c/hello .out/CC.c/hello.o 
 
 ```
 
-Likewise, `Run` can also infer a `LinkC` instance (which in turn will infer
+Likewise, `Run` can also infer a `CExe` instance (which in turn will infer
 a `CC` instance):
 
 ```console
 $ make clean; make 'Run(hello.c)'
 rm -rf .out/
 #-> CC(hello.c)
-gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d
-#-> LinkC(hello.c)
-gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
-./.out/LinkC.c/hello 
+gcc -c -o .out/CC.c/hello.o hello.c -O2 -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/hello.c.d
+#-> CExe(hello.c)
+gcc -o .out/CExe.c/hello .out/CC.c/hello.o 
+#-> Run(hello.c)
+.out/CExe.c/hello  
 Hello world.
 
 ```
@@ -117,7 +119,8 @@ a goal, and so on.
 
 ```console
 $ make 'Run(hello.c)'
-./.out/LinkC.c/hello 
+#-> Run(hello.c)
+.out/CExe.c/hello  
 Hello world.
 
 ```
@@ -128,7 +131,7 @@ file, so its targets are *not* phony.
 ```console
 $ make 'Exec(hello.c)'
 #-> Exec(hello.c)
-( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
+(  .out/CExe.c/hello   ) > .out/Exec.c/hello.out || ( rm -f .out/Exec.c/hello.out; false )
 
 ```
 
@@ -162,56 +165,58 @@ to underlying Make primitives.
 
 ```console
 $ make help 'Run(hello.c)'
-"Run(hello.c)" is an instance.
+Run(hello.c) is an instance.
 
-Output: .out/Run/hello.c
+{out} = .out/Run.c/hello.out
 
-Command: './.out/LinkC.c/hello '
+Command:  .out/CExe.c/hello  
 
 Direct dependencies: 
-   LinkC(hello.c)
+   CExe(hello.c)
 
 Indirect dependencies: 
    CC(hello.c)
+
 
 ```
 ```console
 $ make help 'Exec(hello.c)'
-"Exec(hello.c)" is an instance.
+Exec(hello.c) is an instance.
 
-Output: .out/Exec.c/hello.out
+{out} = .out/Exec.c/hello.out
 
-Command: '( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out'
+Command: (  .out/CExe.c/hello   ) > .out/Exec.c/hello.out || ( rm -f .out/Exec.c/hello.out; false )
 
 Direct dependencies: 
-   LinkC(hello.c)
+   CExe(hello.c)
 
 Indirect dependencies: 
    CC(hello.c)
+
 
 ```
 
 
 ## Indirections
 
-An *indirection* is a way of referencing the contents of a variable.  These
-can be used in contexts where input files or prerequisites are specified for
-Minion instances.  There are two forms of indirections.  The first is called
-a simple indirection, written `@VARIABLE`.  It represents all of the files
-or instances named in the variable.
+An *indirection* is a way of referencing a group of files.  These can be
+used in contexts where input files or prerequisites are specified for Minion
+instances.  There are two forms of indirections.  The first is called a
+simple indirection, written `@GROUP`, and it expands to the words in the
+group:
 
 ```console
-$ make 'Tar(@sources)' sources='hello.c binsort.c'
-#-> Tar(@sources)
-tar -cvf .out/Tar_@/sources.tar hello.c binsort.c
-a hello.c
-a binsort.c
+$ make 'CExe(@sources)' sources='hello.c empty.c'
+#-> CC(empty.c)
+gcc -c -o .out/CC.c/empty.o empty.c -O2 -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/empty.c.d
+#-> CExe(@sources)
+gcc -o .out/CExe_@/sources .out/CC.c/hello.o .out/CC.c/empty.o 
 
 ```
 
-The other form is called a mapped indirection, written `CLASS@VARIABLE`.
-This references a set of instances which are obtained by applying the class
-to each target identified in the variable.
+The other form is called a mapped indirection, written `CLASS@GROUP`.  This
+references a set of instances which are obtained by applying the class to
+each word in the group.
 
 ```console
 $ make help Run@sources sources='hello.c binsort.c'
@@ -223,31 +228,43 @@ It expands to the following targets:
    Run(hello.c)
    Run(binsort.c)
 
+
 ```
 ```console
 $ make Run@sources sources='hello.c binsort.c'
-./.out/LinkC.c/hello 
+#-> Run(hello.c)
+.out/CExe.c/hello  
 Hello world.
 #-> CC(binsort.c)
-gcc -c -o .out/CC.c/binsort.o binsort.c     -MMD -MP -MF .out/CC.c/binsort.o.d
-#-> LinkC(binsort.c)
-gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
-./.out/LinkC.c/binsort 
+gcc -c -o .out/CC.c/binsort.o binsort.c -O2 -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/binsort.c.d
+#-> CExe(binsort.c)
+gcc -o .out/CExe.c/binsort .out/CC.c/binsort.o 
+#-> Run(binsort.c)
+.out/CExe.c/binsort  
 srch(7) = 5
 srch(6) = 9
 srch(12) = 9
 srch(0) = 9
 
 ```
+
+The groups shown above were defined by variables, but if the group name
+contains a `*` it represents the results of `$(wildcard GROUP)`.  For
+example:
+
 ```console
-$ make 'Tar(CC@sources)' sources='hello.c binsort.c'
-#-> Tar(CC@sources)
-tar -cvf .out/Tar_CC@/sources.tar .out/CC.c/hello.o .out/CC.c/binsort.o
-a .out/CC.c/hello.o
-a .out/CC.c/binsort.o
+$ make help 'Run@*.c'
+"Run@*.c" is an indirection on the following wildcard:
+
+   *.c
+
+It expands to the following targets: 
+   Run(binsort.c)
+   Run(empty.c)
+   Run(hello.c)
+
 
 ```
-
 
 ## Aliases
 
@@ -279,17 +296,17 @@ $ cat Makefile
 sources = hello.c binsort.c
 
 Alias(default).in = Exec@sources
-Alias(deploy).in = Copy@LinkC@sources
+Alias(deploy).in = Copy@CExe@sources
 
 include ../minion.mk
 
 ```
 ```console
 $ make deploy
-#-> Copy(LinkC(hello.c))
-cp .out/LinkC.c/hello .out/Copy/hello
-#-> Copy(LinkC(binsort.c))
-cp .out/LinkC.c/binsort .out/Copy/binsort
+#-> Copy(CExe(hello.c))
+cp .out/CExe.c/hello .out/Copy/hello
+#-> Copy(CExe(binsort.c))
+cp .out/CExe.c/binsort .out/Copy/binsort
 
 ```
 
@@ -299,7 +316,7 @@ alias or target named `default`, so these commands do the same thing:
 ```console
 $ make
 #-> Exec(binsort.c)
-( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
+(  .out/CExe.c/binsort   ) > .out/Exec.c/binsort.out || ( rm -f .out/Exec.c/binsort.out; false )
 
 ```
 ```console
@@ -323,18 +340,18 @@ generated, and to define entirely new, unanticipated build steps.  Let's
 show a couple of examples, and then dive into how and why they work.
 
 ```console
-$ make 'CC(hello.c).flags=-Os'
+$ make 'CC(hello.c).objFlags=-Os'
 #-> CC(hello.c)
-gcc -c -o .out/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/CC.c/hello.o.d
-#-> LinkC(hello.c)
-gcc -o .out/LinkC.c/hello .out/CC.c/hello.o  
+gcc -c -o .out/CC.c/hello.o hello.c -Os -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/hello.c.d
+#-> CExe(hello.c)
+gcc -o .out/CExe.c/hello .out/CC.c/hello.o 
 #-> Exec(hello.c)
-( ./.out/LinkC.c/hello  ) > .out/Exec.c/hello.out || rm .out/Exec.c/hello.out
+(  .out/CExe.c/hello   ) > .out/Exec.c/hello.out || ( rm -f .out/Exec.c/hello.out; false )
 
 ```
 
-Observe how this `gcc` command line differs from that of the earlier
-`CC(hello.c)` example.  [By the way, also note that Minion knew to
+Observe how the resulting `gcc` command line differs from that of the
+earlier `CC(hello.c)`.  [By the way, also note that Minion knew to
 re-compile the object file, even when no input files had changed.  The
 previous build result became invalid when the command line changed.  This
 fine-grained dependency tracking means that when using Minion you almost
@@ -343,13 +360,13 @@ never need to `make clean`, even after you have edited your makefile.]
 We can make this change apply more widely:
 
 ```console
-$ make CC.flags=-Os
+$ make CC.objFlags=-Os
 #-> CC(binsort.c)
-gcc -c -o .out/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/CC.c/binsort.o.d
-#-> LinkC(binsort.c)
-gcc -o .out/LinkC.c/binsort .out/CC.c/binsort.o  
+gcc -c -o .out/CC.c/binsort.o binsort.c -Os -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/binsort.c.d
+#-> CExe(binsort.c)
+gcc -o .out/CExe.c/binsort .out/CC.c/binsort.o 
 #-> Exec(binsort.c)
-( ./.out/LinkC.c/binsort  ) > .out/Exec.c/binsort.out || rm .out/Exec.c/binsort.out
+(  .out/CExe.c/binsort   ) > .out/Exec.c/binsort.out || ( rm -f .out/Exec.c/binsort.out; false )
 
 ```
 
@@ -397,11 +414,12 @@ computed values.
 $ make -f MakefileP help 'C1(a).x'
 C1(a) inherits from: C1
 
-C1(a).x is defined by:
+{x} is defined by:
 
    C1(a).x = Xa
 
 Its value is: 'Xa'
+
 
 
 ```
@@ -416,11 +434,12 @@ definition is chosen:
 $ make -f MakefileP help 'C1(b).x'
 C1(b) inherits from: C1
 
-C1(b).x is defined by:
+{x} is defined by:
 
    C1.x = X1
 
 Its value is: 'X1'
+
 
 
 ```
@@ -435,11 +454,12 @@ inheritance.)
 $ make -f MakefileP help 'C2(b).x'
 C2(b) inherits from: C2 C1
 
-C2(b).x is defined by:
+{x} is defined by:
 
    C1.x = X1
 
 Its value is: 'X1'
+
 
 
 ```
@@ -451,11 +471,12 @@ syntax:
 $ make -f MakefileP help 'C2(b).value'
 C2(b) inherits from: C2 C1
 
-C2(b).value is defined by:
+{value} is defined by:
 
    C1.value = {x} {y} {z}
 
 Its value is: 'X1 Y1 C2'
+
 
 
 ```
@@ -469,7 +490,7 @@ evaluates it.
 $ make -f MakefileP help 'C3(b).z'
 C3(b) inherits from: C3 C2 C1
 
-C3(b).z is defined by:
+{z} is defined by:
 
    C3(b).z = {inherit}b
 
@@ -478,6 +499,7 @@ C3(b).z is defined by:
    C2.z = C2
 
 Its value is: 'C2b'
+
 
 
 ```
@@ -494,13 +516,14 @@ target file.
 
 ```console
 $ make help 'CC(hello.c).command'
-CC(hello.c) inherits from: CC _CC Compile _Compile Builder
+CC(hello.c) inherits from: CC _CC CCBase _CCBase Builder _Builder
 
-CC(hello.c).command is defined by:
+{command} is defined by:
 
-   _Compile.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsFile}
+   _CCBase.command = {compiler} -c -o {@} {<} {flags} -MMD -MP -MF {depsMF}
 
-Its value is: 'gcc -c -o .out/CC.c/hello.o hello.c     -MMD -MP -MF .out/CC.c/hello.o.d'
+Its value is: 'gcc -c -o .out/CC.c/hello.o hello.c -O2 -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/hello.c.d'
+
 
 
 ```
@@ -516,9 +539,9 @@ see that the `_Compile.command` definition concerns itself with specifying
 the input files, output files, and implied dependencies.  It refers to a
 property named `flags` for command-line options that address other concerns.
 
-We can now see how the earlier command that set `CC(hello.c).flags=-Os`
+We can now see how the earlier command that set `CC(hello.c).objFlags=-Os`
 defined an instance-specific property, so it only affected the command line
-for one object file, and the command that set `CC.flags` provided a
+for one object file, whereas the command that set `CC.objFlags` provided a
 definition inherited by both `CC` instances.
 
 ### User Classes
@@ -539,14 +562,13 @@ supported.  Instead, define your own sub-classes.
 
 ```console
 $ cp Makefile3 Makefile; diff Makefile2 Makefile3
-5a6,14
-> CC.flags = -ansi {inherit}
-> CC.warnFlags = -Wall -Werror {inherit}
+5a6,13
+> CC.langFlags = {inherit} -Wextra
 > 
 > CCg.inherit = CC
-> CCg.flags = -g {inherit}
+> CCg.objFlags = -g
 > 
-> Sizes.inherit = Phony
+> Sizes.inherit = Run
 > Sizes.command = wc -c {^}
 > 
 
@@ -566,37 +588,31 @@ only to define `command`.
 ```console
 $ make 'Sizes(CC(hello.c),CCg(hello.c))'
 #-> CC(hello.c)
-gcc -c -o .out/CC.c/hello.o hello.c -ansi  -Wall -Werror    -MMD -MP -MF .out/CC.c/hello.o.d
+gcc -c -o .out/CC.c/hello.o hello.c -O2 -std=c99 -Wall -Werror   -MMD -MP -MF .out/CC.c/hello.c.d
 #-> CCg(hello.c)
-gcc -c -o .out/CCg.c/hello.o hello.c -g -ansi  -Wall -Werror    -MMD -MP -MF .out/CCg.c/hello.o.d
+gcc -c -o .out/CCg.c/hello.o hello.c -g -std=c99 -Wall -Werror   -MMD -MP -MF .out/CCg.c/hello.c.d
+#-> Sizes(CC(hello.c),CCg(hello.c))
 wc -c .out/CC.c/hello.o .out/CCg.c/hello.o
-     720 .out/CC.c/hello.o
-    2168 .out/CCg.c/hello.o
-    2888 total
+     744 .out/CC.c/hello.o
+    2160 .out/CCg.c/hello.o
+    2904 total
 
 ```
 
-This makefile also defines a class named `CCg`, and defines `CCg.flags`
+This makefile also defines a class named `CCg`, and defines `CCg.objFlags`
 using `{inherit}` so that it will extend, not replace, the set of flags it
 inherits.
 
 ```console
-$ make help 'CCg(hello.c).flags'
-CCg(hello.c) inherits from: CCg CC _CC Compile _Compile Builder
+$ make help 'CCg(hello.c).objFlags'
+CCg(hello.c) inherits from: CCg CC _CC CCBase _CCBase Builder _Builder
 
-CCg(hello.c).flags is defined by:
+{objFlags} is defined by:
 
-   CCg.flags = -g {inherit}
+   CCg.objFlags = -g
 
-...wherein {inherit} references:
+Its value is: '-g'
 
-   CC.flags = -ansi {inherit}
-
-...wherein {inherit} references:
-
-   _Compile.flags = {optFlags} {warnFlags} {libFlags} $(addprefix -I,{includes})
-
-Its value is: '-g -ansi  -Wall -Werror   '
 
 
 ```
@@ -610,8 +626,8 @@ overall structure, but may differ from each other in various ways.  For
 example, we may have "release" and "debug" variants, or "ARM" and "Intel"
 variants of a C project.
 
-We have shown how typing `make CC.flags=-g` and then later `make
-CC.flags=-O3` could be used to achieve different builds.  With this
+We have shown how typing `make CC.objFlags=-g` and then later `make
+CC.objFlags=-O3` could be used to achieve different builds.  With this
 approach, however, each time we "switch" between the two builds, all
 affected files will have to be recompiled.
 
@@ -629,17 +645,24 @@ achieve that by doing the following:
 
 When defining variant-dependent properties, we could use Make's functions:
 
-    CC.flags = $(if $(filter debug,$V),-g, ... )
+    CC.objFlags = $(if $(filter debug,$V),{dbgFlags},{optFlags})
+    CC.dbgFlags = ...
+    CC.optFlags = ...
 
-Instead, it is much more elegant to leverage Minion's property evaluation
-and group property definitions into classes whose names incorporate `$V`,
-like this:
+Alternatively, we could leverage Minion's property inheritance and define
+classes for each variant by incorporating `$V` into the class name.  That
+would look like this:
 
     CC.inherit = CC-$V _CC
 
-    CC-debug.flags = -g
-    CC-fast.flags = -O3
-    CC-small.flags = -Os
+    CC-debug.objFlags = -g
+    CC-fast.objFlags = -O3
+    CC-small.objFlags = -Os
+
+[Note that these classes do not appear last in the list of parents of `CC`,
+so they do not have to inherit from `Builder` or define the essential
+properties that it defines.  Instead, they are concerned only with
+purpose-specific customizations.  We call classes like this **mixins**.]
 
 The following makefile uses this approach.
 
@@ -651,7 +674,7 @@ $ cp Makefile4 Makefile
 $ cat Makefile
 Variants.all = debug fast small
 
-Alias(sizes).in = Sizes(LinkC@sources)
+Alias(sizes).in = Sizes(CExe@sources)
 Alias(all-sizes).in = Variants(Alias(sizes))
 Alias(default).in = Alias(sizes)
 
@@ -659,29 +682,29 @@ sources = hello.c binsort.c
 
 CC.inherit = CC-$V _CC
 
-CC-debug.flags = -g
-CC-fast.flags = -O3
-CC-small.flags = -Os
+CC-debug.objFlags = -g
+CC-fast.objFlags = -O3
+CC-small.objFlags = -Os
 
-Sizes.inherit = Phony
+Sizes.inherit = Run
 Sizes.command = wc -c {^}
 
 include ../minion.mk
 
 ```
 ```console
-$ make V=debug help 'CC(hello.c).flags'
-CC(hello.c) inherits from: CC CC-debug _CC Compile _Compile Builder
+$ make V=debug help 'CC(hello.c).objFlags'
+CC(hello.c) inherits from: CC CC-debug _CC CCBase _CCBase Builder _Builder
 
-CC(hello.c).flags is defined by:
+{objFlags} is defined by:
 
-   CC-debug.flags = -g
+   CC-debug.objFlags = -g
 
 Its value is: '-g'
 
 
-```
 
+```
 
 Finally, we want to be able to build multiple variants with a single
 invocation.  Minion provides a built-in class, `Variants(TARGET)`, that
@@ -695,56 +718,61 @@ defaults to the first word in `Variants.all`.
 ```console
 $ make sizes           # sizes for the default (first) variant "debug"
 #-> CC(hello.c)
-gcc -c -o .out/debug/CC.c/hello.o hello.c -g -MMD -MP -MF .out/debug/CC.c/hello.o.d
-#-> LinkC(hello.c)
-gcc -o .out/debug/LinkC.c/hello .out/debug/CC.c/hello.o  
+gcc -c -o .out/debug/CC.c/hello.o hello.c -g -std=c99 -Wall -Werror   -MMD -MP -MF .out/debug/CC.c/hello.c.d
+#-> CExe(hello.c)
+gcc -o .out/debug/CExe.c/hello .out/debug/CC.c/hello.o 
 #-> CC(binsort.c)
-gcc -c -o .out/debug/CC.c/binsort.o binsort.c -g -MMD -MP -MF .out/debug/CC.c/binsort.o.d
-#-> LinkC(binsort.c)
-gcc -o .out/debug/LinkC.c/binsort .out/debug/CC.c/binsort.o  
-wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
-   33672 .out/debug/LinkC.c/hello
-   33944 .out/debug/LinkC.c/binsort
+gcc -c -o .out/debug/CC.c/binsort.o binsort.c -g -std=c99 -Wall -Werror   -MMD -MP -MF .out/debug/CC.c/binsort.c.d
+#-> CExe(binsort.c)
+gcc -o .out/debug/CExe.c/binsort .out/debug/CC.c/binsort.o 
+#-> Sizes(CExe@sources)
+wc -c .out/debug/CExe.c/hello .out/debug/CExe.c/binsort
+   33672 .out/debug/CExe.c/hello
+   33944 .out/debug/CExe.c/binsort
    67616 total
 
 ```
 ```console
 $ make sizes V=fast    # sizes for the "fast" variant
 #-> CC(hello.c)
-gcc -c -o .out/fast/CC.c/hello.o hello.c -O3 -MMD -MP -MF .out/fast/CC.c/hello.o.d
-#-> LinkC(hello.c)
-gcc -o .out/fast/LinkC.c/hello .out/fast/CC.c/hello.o  
+gcc -c -o .out/fast/CC.c/hello.o hello.c -O3 -std=c99 -Wall -Werror   -MMD -MP -MF .out/fast/CC.c/hello.c.d
+#-> CExe(hello.c)
+gcc -o .out/fast/CExe.c/hello .out/fast/CC.c/hello.o 
 #-> CC(binsort.c)
-gcc -c -o .out/fast/CC.c/binsort.o binsort.c -O3 -MMD -MP -MF .out/fast/CC.c/binsort.o.d
-#-> LinkC(binsort.c)
-gcc -o .out/fast/LinkC.c/binsort .out/fast/CC.c/binsort.o  
-wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
-   33432 .out/fast/LinkC.c/hello
-   33480 .out/fast/LinkC.c/binsort
+gcc -c -o .out/fast/CC.c/binsort.o binsort.c -O3 -std=c99 -Wall -Werror   -MMD -MP -MF .out/fast/CC.c/binsort.c.d
+#-> CExe(binsort.c)
+gcc -o .out/fast/CExe.c/binsort .out/fast/CC.c/binsort.o 
+#-> Sizes(CExe@sources)
+wc -c .out/fast/CExe.c/hello .out/fast/CExe.c/binsort
+   33432 .out/fast/CExe.c/hello
+   33480 .out/fast/CExe.c/binsort
    66912 total
 
 ```
 ```console
 $ make all-sizes       # sizes for *all* variants
-wc -c .out/debug/LinkC.c/hello .out/debug/LinkC.c/binsort
-   33672 .out/debug/LinkC.c/hello
-   33944 .out/debug/LinkC.c/binsort
+#-> Sizes(CExe@sources)
+wc -c .out/debug/CExe.c/hello .out/debug/CExe.c/binsort
+   33672 .out/debug/CExe.c/hello
+   33944 .out/debug/CExe.c/binsort
    67616 total
-wc -c .out/fast/LinkC.c/hello .out/fast/LinkC.c/binsort
-   33432 .out/fast/LinkC.c/hello
-   33480 .out/fast/LinkC.c/binsort
+#-> Sizes(CExe@sources)
+wc -c .out/fast/CExe.c/hello .out/fast/CExe.c/binsort
+   33432 .out/fast/CExe.c/hello
+   33480 .out/fast/CExe.c/binsort
    66912 total
 #-> CC(hello.c)
-gcc -c -o .out/small/CC.c/hello.o hello.c -Os -MMD -MP -MF .out/small/CC.c/hello.o.d
-#-> LinkC(hello.c)
-gcc -o .out/small/LinkC.c/hello .out/small/CC.c/hello.o  
+gcc -c -o .out/small/CC.c/hello.o hello.c -Os -std=c99 -Wall -Werror   -MMD -MP -MF .out/small/CC.c/hello.c.d
+#-> CExe(hello.c)
+gcc -o .out/small/CExe.c/hello .out/small/CC.c/hello.o 
 #-> CC(binsort.c)
-gcc -c -o .out/small/CC.c/binsort.o binsort.c -Os -MMD -MP -MF .out/small/CC.c/binsort.o.d
-#-> LinkC(binsort.c)
-gcc -o .out/small/LinkC.c/binsort .out/small/CC.c/binsort.o  
-wc -c .out/small/LinkC.c/hello .out/small/LinkC.c/binsort
-   33432 .out/small/LinkC.c/hello
-   33480 .out/small/LinkC.c/binsort
+gcc -c -o .out/small/CC.c/binsort.o binsort.c -Os -std=c99 -Wall -Werror   -MMD -MP -MF .out/small/CC.c/binsort.c.d
+#-> CExe(binsort.c)
+gcc -o .out/small/CExe.c/binsort .out/small/CC.c/binsort.o 
+#-> Sizes(CExe@sources)
+wc -c .out/small/CExe.c/hello .out/small/CExe.c/binsort
+   33432 .out/small/CExe.c/hello
+   33480 .out/small/CExe.c/binsort
    66912 total
 
 ```
@@ -758,9 +786,9 @@ To summarize the key concepts in Minion:
    be given as Make command line goals, and named as inputs to other
    instances.  They take the form `CLASS(ARGUMENTS)`.
 
- - *Indirections* are ways to reference Make variables that hold lists of
-   other targets.  They can be used as arguments to instances, or in the
-   value of an `in` property, or on the command line.
+ - *Indirections* are short names that identify groups of targets.  They can
+   be used as arguments to instances, or in the value of an `in` property,
+   or on the command line.
 
  - *Aliases* are short names that can be specified as goals on the command
    line.  An alias can identify a set of other targets to be built, or a

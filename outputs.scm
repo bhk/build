@@ -30,7 +30,7 @@
 ;;
 ;;     Instance Name          outDir                   outName
 ;;     --------------------   ----------------------   -------------
-;;     CLASS(DIRS/NAME.EXT)   OUTDIR/CLASS.EXT/DIRS/   NAME{outExt}
+;;     CLASS(DIRS/NAME.EXT)   VOUTDIR/CLASS.EXT/DIRS/  NAME{outExt}
 ;;     CC(f.c)                .out/CC.c/               f.o
 ;;     CC(d/f.cpp)            .out/CC.cpp/d/           f.o
 ;;     CC(.././f.c)           .out/CC.c/_../_./        f.o
@@ -38,7 +38,7 @@
 ;;
 ;;     Differentiate CLASS(FILE) from CLASS(ID) (where ID.out = FILE) by
 ;;     appending `_` to the class directory.  For readability, collapse
-;;     "CLASS.EXT_/OUTDIR/..." to "CLASS.EXT_...":
+;;     "CLASS.EXT_/VOUTDIR/..." to "CLASS.EXT_...":
 ;;
 ;;     Instance Name          outDir                   outName
 ;;     ---------------------  ----------------------   -------
@@ -64,14 +64,14 @@
 ;; after including the entirety of the argument in the class directory,
 ;; with these transformations:
 ;;
-;;   1. Enode unsafe characters
+;;   1. Encode unsafe characters
 ;;   2. Replace the first unnamed argument with a special character
 ;;      sequence.  This avoids excessively long directory names and reduces
 ;;      the number of directories needed for a large project.
 ;;
 ;;     Instance Name           outDir                          outName
 ;;     ---------------------   -----------------------------   ------------
-;;     CLASS(D/NAME.EXT,...)   OUTDIR/CLASS.EXT__{encArg}/D/   NAME{outExt}
+;;     CLASS(D/NAME.EXT,...)   VOUTDIR/CLASS.EXT__{encArg}/D/  NAME{outExt}
 ;;     P(d/a.c,x.c,opt:=3)      .out/P.c__@1,x.c,opt@C3/d/      a
 ;;
 ;;
@@ -85,8 +85,8 @@
 ;; Class:  _ - + { } / ^   ~ !
 ;; Value:  _ - + { } / ^ . ~ ! @ : ( ) < >
 ;; Arg:    _ - + { } / ^ . ~ ! @ : ( ) < > ,
-;; ~Make:                  ~     :     < >   [ ] * ? # $ % ; \ =
-;; ~Bash:                  ~ !     ( ) < >   [ ] * ? # $ % ; \   | & ` ' "
+;; ~Make:                  ~     :     < >       [ ] * ? # $ % ; \ =
+;; ~Bash:        { }       ~ !     ( ) < >   { } [ ] * ? # $ % ; \   | & ` ' "
 ;;
 
 
@@ -100,12 +100,15 @@
          "|" "@1"
          "(" "@+"
          ")" "@-"
+         "*" "@S"
          ":" "@C"
          "!" "@B"
          "~" "@T"
          "/" "@D"
          "<" "@l"
          ">" "@r"
+         "{" "@L"
+         "}" "@R"
          str))
 
 (export (native-name _fsenc) 1)
@@ -143,7 +146,6 @@
 (expect (_outBX "C@var") "_C@/var")
 (expect (_outBX "abc") "/abc")
 
-
 ;; _outBasis for simple arguments
 ;;
 ;; arg = argument (a single value)
@@ -156,7 +158,7 @@
     (if (findstring "%" outExt) "" (suffix file)))
 
   (define `(collapse x)
-    (patsubst (.. "_/" OUTDIR "%") "_%" x))
+    (patsubst (.. "_/" VOUTDIR "%") "_%" x))
 
   (.. (_fsenc class)
       .EXT

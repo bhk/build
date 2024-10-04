@@ -50,6 +50,7 @@ flagdiff: ; @true\
 #
 
 ifdef setflags
+  $(info MAKEFLAGS := $(setflags))
   MAKEFLAGS := $(setflags)
 endif
 
@@ -68,3 +69,129 @@ par: 1.sleep 2.sleep 3.sleep 4.sleep 5.sleep
 submake ?= par
 
 submake: ; @$(MAKE) -f $(word 1,$(MAKEFILE_LIST)) $(submake)
+
+
+#
+# Expansion of recipes
+#
+#  * When recipes are expanded at build time, they can contain
+#    newlines without tabs, even when in a one-line rule context.
+#
+
+define lazyRecipe
+# comment
+echo foo
+@echo bar
+echo baz
+endef
+
+lazy-test:
+	$(lazyRecipe)
+
+lazy2-test: ; $(lazyRecipe)
+
+
+#
+# Odd variable names
+#
+#  * We can define and use @ prior to rule processing phase, but during rule
+#    processing phase it will use Make's automatic definition.
+#
+#  * $(VAR) is a problem when VAR contains ":" ... even if it is expanded
+#    from a var or function call.
+#
+#  * $(call VAR) is a problem when VAR contains ":" or ")" ... even if those
+#    are expanded from vars!
+#
+#  * Make 3.81
+#       a<b = A<B
+#       a>b = A<B
+#       a$(EQ)n = A=B (if)
+#       a$Cn = A:B (if)
+#       a$(if ,,:)b = A:B (if)
+#       a$Hb = A#B (if)
+#       a$(if ,,\#)b =
+#       @ = var-test now; but was MYDEF before rule processing.
+#
+
+E = =
+C = :
+H = \#
+L = (
+R = )
+P = %
+
+a = !A!
+b = !B!
+a b = A B
+a<b = A<B
+a>b = A<B
+a$(if ,,=)b = A=B
+a$(if ,,:)b = A:B
+a$(if ,,\#)b = A\#B
+a)b = A)B
+a(b)c = A(B)C
+a$(if ,,:%=%)b = A:%=%B
+
+
+@ = MYDEF
+
+PRE@ := $@
+ifneq "$@" "MYDEF"
+  $(error Cannot override "@" prior in expansion phase)
+endif
+
+var-test:
+	@echo '$$(a b)             = $(a b)'
+	@echo '$$(a>b)             = $(a>b)'
+	@echo '$$(a$$En)            = $(a$Eb)'
+	@echo '$$(a#b)             = $(a#b)'
+	@echo '$$(a:b)             = $(a:b)'
+	@echo '$$(a$$(if ,,:)%=%b)  = $(a$(if ,,:%=)%b)       ***'
+	@echo '$$(call a:%=%b)     = $(call a:%=%b)       ***'
+	@echo '$$(call a$$C$$P$$E$$Pb) = $(call a$C$P$E$Pb)       ***'
+	@echo '$$(value a:%=%b)    = $(value a:%=%b)'
+	@echo '$$(a)b)             = $(a$Rb)'
+	@echo '$$(call a)b)        = $(call a$Rb)      ***'
+	@echo '$$(call a(b)c)      = $(call a(b)c)         ***'
+	@echo '$$(@) = $@ now; but was $(PRE@) before rule processing.'
+
+
+#
+# Escaping characters in targets
+#
+# Make 3.81:
+#   * `a\ b` escapes "a b", as target or prereq.
+#   * `a*b` globs as prereq (and as target!).  "Glob" means if there no file
+#      matching the wildcard expression, then the wildcard expression
+#      remains unchanges.
+#   * `a\*b` does NOT escape the "*" (the "\" remains).
+#   * `a\:b` escapes "a:b" in target; NOT in prereq.
+#   * `a\=b` escapes "a=b" in prereq; NOT in target.
+#
+
+
+.PHONY: minion.md
+
+m*d: ; @echo 'A: $$@ = "$@"'
+a*b: ; @echo 'B: $$@ = "$@"'
+m\*d: ; @echo 'C: $$@ = "$@"'
+a\ b: ; @echo 'D: $$@ = "$@"'
+a\:b: ; @echo 'E: $$@ = "$@"'
+a\\\:b: ; @echo 'F: $$@ = "$@"'
+a\b: ; @echo 'G: $$@ = "$@"'
+a\#b: ; @echo 'H: $$@ = "$@"'
+a$Eb: ; @echo 'I: $$@ = "$@"'
+a\=b: ; @echo 'J: $$@ = "$@"'
+
+wc1: m*d m\*d a\ b ; @echo '$@="$@";  $$^ = "$^"'
+wc2: minion.md ; @echo '$$@ = "$@";  $$^ = "$^"'
+wc3: a*b ; @echo '$$@ = "$@";  $$^ = "$^"'
+wc\:x: ; @echo 'wcx1: $$@ = "$@";  $$^ = "$^"'     # make wc4:x
+wc\\\:x: ; @echo 'wcx2: $$@ = "$@";  $$^ = "$^"'
+#wc4: wc:x ; @echo '$$@ = "$@";  $$^ = "$^"' # ERROR: target pattern contains no %
+wc5: wc\:x ; @echo '$$@ = "$@";  $$^ = "$^"'
+wc7: a\b ; @echo '$$@ = "$@";  $$^ = "$^"'
+wc8: a\#b ; @echo '$$@ = "$@";  $$^ = "$^"'
+wc9: a\:b ; @echo '$$@ = "$@";  $$^ = "$^"'
+wc10: a\=b ; @echo '$$@ = "$@";  $$^ = "$^"'

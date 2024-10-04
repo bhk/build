@@ -21,9 +21,6 @@ the following:
   * An [*indirection*](#indirections).
   * An [*alias*](#aliases).
 
-If you invoke make with `help` as one of the goals, Minion will output a
-description of the other goals, rather than build them.
-
 
 ## Ingredients
 
@@ -77,8 +74,9 @@ example:
 
 ## Indirections
 
-An **indirection** is an expression that takes the form `@VAR` or
-`CLASS@VAR`.
+An **indirection** is an expression that takes the form `@GROUP` or
+`CLASS@GROUP`.  `GROUP` is the name of a varible, or if it contains `*`, it
+is a pattern to be expanded with `$(wildcard ...)`.
 
 Indirections may appear in [ingredient lists](#ingredients) or on the
 command line.  When Minion examines a goal or an ingredient list, it
@@ -88,21 +86,21 @@ file names.
 
 The two forms are called "simple" and "mapped":
 
- - `@VAR`      : a simple indirection
- - `CLASS@VAR` : a mapped indirection
+ - `@GROUP`      : a simple indirection
+ - `CLASS@GROUP` : a mapped indirection
 
-A *simple* indirection expands to the value of the variable `VAR`.  That value
-might contain other indirections, in which case they will be expanded
-recursively.
+A *simple* indirection expands to the members of `GROUP`.  If `GROUP` is a
+variable name, then that value might contain other indirections, in which
+case they will be expanded recursively.
 
 A *mapped* indirection applies the `CLASS` constructor individually to the
-names resulting from the expansion of `@VAR`.  For example, if `@sources`
+names resulting from the expansion of `@GROUP`.  For example, if `@sources`
 expands to `a.c b.c`, then `CC@sources` will expand to `CC(a.c) CC(b.c)`.
 
 Mapped indirections can also use a "chained" syntax to apply two or more
 classes at once.  Using the same `sources` variable as in the example above,
-the indirection `LinkC@CC@sources` would expand to `LinkC(CC(a.c))
-LinkC(CC(b.c))`.
+the indirection `CExe@CC@sources` would expand to `CExe(CC(a.c))
+CExe(CC(b.c))`.
 
 Indirections may not contain the characters `(` or `)`.  For example, the
 instance `Link(CC@sources)` is not treated as an indirection, and it will
@@ -154,7 +152,7 @@ somewhat elaborate and multifacted, but ultimately a function -- that yields
 a set of property definitions.  An instance identifies the function (class)
 and its inputs (argument list).
 
-### "Simple" Definitions
+### Simple and Recursive Variables
 
 Make supports two "flavors" of variables, "simple" (using `:=`) and
 "recursive" (using `=`).  The above discussion assumes that properties are
@@ -189,46 +187,43 @@ build steps, this can take a perceptible amount of time.  To accelerate
 incremental builds, Minion can write many or all of its generated rules to a
 "cache" file, and avoid re-computing them every time `make` is invoked.
 
-To enable caching, assign to the variable `minion_cache` an [ingredient
-list](#ingredients) that identifies the instances to be cached.  All of the
-rules of the referenced instances and their transitive dependencies will be
-written to a cache file.
+To enable caching, define in your makefile the variable `minionCache`,
+setting it to a list of goals to be cached.  The rules of these goals and
+their transitive dependencies will be written to a cache file.
 
-When using `minion_cache`, you can still build either cached or uncached
-goals.  Minion will use cached rules when they are present, and dynamically
-generate any other required rules.
+When using `minionCache`, you can still build uncached goals.  Minion will
+use cached rules when they are present, and dynamically generate any other
+required rules.
 
 The cache file will be re-generated whenever your makefile changes, so
 generally the results of building with cached rules will be the same as when
-you build without cached rules.  However, if the commands in your build
-steps depend on the dynamic state of the system, then the cached rules will
-reflect those values as of the time when the cache file was generated, which
-may differ from what those values are when you invoke make.
+you build without cached rules.  Be aware that cached rules could be "stale"
+*if* the your makefile specifies isntances that depend on things other than
+the contents of makefiles.  If your rules depend on, for example, directory
+contents or environment variables, or if you invoke make with command-line
+assignments (e.g. `make CC.compiler=gcc`), then these external variables
+will not be detected.
 
-One such scenario occurs when you override variables on the Make command
-line in order to perform a one-off customized build.  When doing so, you can
-also set `minion_cache` to the empty string to perform that build without
-caching, avoiding any problems with stale cached rules.  For example:
+When it comes to command-line variable assignments, they are generally
+incompatible with rule caching, but if you assign `minionCache` to an empty
+value on the same command line, it will disable caching for that invocation,
+ensuring the build results would be as you expect.
 
-    $ make CC.optFlags=-Ot minion_cache=
-
-Another such scenario occurs when you have instances whose commands or
-inputs may vary according to information pulled from the system via, for
-example, `$(wildcard ...)` or `$(shell ...)`.  When this is the case, you
-can list those specific instances in the variable `minion_cache_exclude`, so
-that their rules will be excluded from the cache file and instead be
-generated each time you invoke make.  For example:
+When your build depends on directory contents, via `$(wildcard ...)`, or
+other system state via `$(shell ...)`, your makefile can set `minionNoCache`
+to a list the affected instances, and they will be ecluded from the cache.
+For example:
 
     ...
-    minion_cache = Alias(default)
-    minion_cache_exclude = LinkC(@prog)
+    minionCache = default
+    minionNoCache = CExe(@prog)
     ...
     prog = $(wildcard *.c)
     ...
 
-Note that whereas `minion_cache` implicitly includes all transitive
-dependencies of the listed instances, `minion_cache_exclude` does not.  It
-is intended to target individual build steps.
+Note that whereas `minionCache` includes all transitive dependencies of the
+listed instances, `minionNoCache` does not.  It is intended to target
+individual build steps.
 
 
 ## Builders
@@ -236,15 +231,16 @@ is intended to target individual build steps.
 All instances being built must implement this interface.  It consists of
 just three properties:
 
- * `rule` : a string of Make source code, that, when eval'ed, will define a
-   Make rule for the instance.
+ * `rule` : Make source code that defines a rule for the instance.
+
+ * `needs`: a list of target IDs that generate rules that are prerequisites
+   of `rule`.
 
  * `out`: the resulting file path, or phony target name.
 
- * `needs`: an ingredients list giving the prerequisites of `rule`.
-
-User-defined classes do not need to implement these directly.  Instead, they
-should inherit from `Builder`.
+User-defined classes do not need to implement these directly.  Generally,
+they will benefit from inheriting from `Builder` and overriding properties
+to customize behavior to their needs.
 
 ## Builder
 
@@ -253,7 +249,7 @@ handles a number of low-level responsibilities, including the following:
 
  * An output file name and location is computed.
 
- * Inputs are obtained from the unnamed arguments.
+ * Inputs are obtained from instance arguments.
 
  * The build command is escaped for Make syntax to avoid unintended
    evaluation, and the output file's directory is created prior to execution
@@ -263,8 +259,83 @@ handles a number of low-level responsibilities, including the following:
    affected artifacts (and only those) will be rebuilt.  See (validity
    values)[#validity-values].
 
+ * Directories are created as necessary to hold files written to by the
+   build recipe.
+
 Subclasses can leverage this functionality by inheriting from Builder, and
-can then customize their functionality by defining or overriding properties.
+can then customize their functionality by defining or overriding some of
+these properties.
+
+
+### `{rule}`
+
+A Minion instance's `{rule}` property evaluates to the Make source code
+necessary to define an ordinary Make target.  Builder provides a definition
+that insulates most subclasses from many peculiarities of Make.  Subclasses
+can customize behavior by defining the following:
+
+ * `{command}`: (see below)
+ * `{message}`: (see minion.mk)
+ * `{vvFile}`: (see minion.mk)
+
+### `{needs}`
+
+Builder's `{needs}` definition is computed from `{in}`, `{up}`, `{deps}`,
+and `{oo}`.
+
+### `{out}` and related properties
+
+The value of `{out}` is a file path.  It identifies the file that is
+generated by the instance, or, in the case of a phony instance, the phony
+target name.
+
+Users should rely on Builder's definition of `{out}` because it satisfies a
+very important requirement that different instances will not have conficting
+output file paths.  Users can customize this behavior by overriding the
+following properties:
+
+ * `{outExt}`: This is the extension to replace the input file's extension
+   when constructing the output file name.  For example, `.o` or `%.gz`.  A
+   `%` in `{outExt}` is replaced with the extension of the input file name.
+
+   It is expected that most subclasses wil override `{outExt}` to
+   appropriately designate output file types.
+
+ * `{outDir}`: By default, this identifies a directory that is underneath
+   `$(OUTDIR)`.
+
+ * `{outName}`: By default, this is constructed from `{outExt}` and the
+   input file name.  The input file name is taken from the `{out}` property
+   of the first input to the instance, unless the instance's first argument
+   is an indirection, in which case the indirection group name is used.
+
+When using Minion, we generally don't care where intermediate output files
+are located or what they are named, since we refer to them by their instance
+names.  As a result, most derived classes override only `{outExt}` and leave
+the other properties unchanged.  Users overriding `{outDir}` or `{outName}`
+shoud take care to avoid conflicts with other instances.
+
+Overriding `{outDir}` will affect the location of the target, but not the
+location of ancillary files like `{vvFile}` or `{depsMF}` (if they exist).
+
+[To simplify the output directory computation, you can override
+`{outBasis}`.  In particular, you can use Builder's definition, replacing
+`{outExt}` with `%`, in order to remove the ".EXT" suffix from output
+directories.]
+
+Remember that these properties -- `outExt`, `outDir`, and `outName` -- are
+*inputs* to the computation of `out`, and `out` can be overridden
+independently by subclasses or instances.  Do not assume that, for example,
+`{outDir}` is always the same as `$(dir {out})`.
+
+The `Copy` class exists to deploy files to a specific, well-known location,
+rather than an automatically-generated unique location, so it allows the
+output file location to be specified by an argument with the name `out`:
+
+    _Copy.out = $(or $(call _namedArg1,out),{inherit})
+
+For example, `Copy(CC(foo.c),out:deploy/foo.o)` will place its result in
+"deploy/foo.o".
 
 ### `{command}`
 
@@ -280,89 +351,41 @@ make use of the following property references:
 These properties correspond to Make's "automatic variables" `$@`, `$<`, and
 `$^`, which are unavailable in Minion property definitions, since command
 expansion happens prior to the rule processing phase.  The value of `{^}` is
-not identical to Make's `$^`, but it is more often what you want: it is a
-list of the *input* files, which are derived from the ingredients named in
-the `{in}` property, which defaults to `$(_args)`.  By contrast, make's `$^`
-includes all prerequisites, which may include tools, implied dependencies,
-and other files that would not normally appear as command line arguments.
+not identical to Make's `$^`, but it is more often what is relevant to rule
+construction: it is a list of the files that correspond to target IDs in
+{in}, and it does not include {deps}, {oo}, or implicit dependencies
+(declared as prerequisited via {depsFile}), or other files that would not
+normally appear as command line arguments.  Also, duplicate entries are not
+pruned, so in that respect it is more like `$+` than `$^`.
 
-For example, the `Tar` class inherits this definition of `command`:
+For example, the `Copy` class inherits this definition of `command`:
 
-    _Tar.command = tar -cvf {@} {^}
-
-### `{outExt}`
-
-Most subclasses of `Builder` will define `{outExt}`, which specifies the
-extension (including the ".") that the output file will have.  Any `%`
-character in `{outExt}` will be replaced with the extension of the first
-input file.  Builder.outExt is defined as `%`, so by default the output file
-will have the same extension as the first input file.
-
-For example, `Tar` outputs files with a `.tar` extension, so it defines:
-
-    _Tar.outExt = .tar
+    _Copy.command = cp {<} {@}
 
 ### `{in}`
 
-The value of `{in}` is an [ingredient list](#ingredients).
+The value of `{in}` is an [ingredient list](#ingredients) that describes
+prerequisites of this instance.  Builder defines `{in}` as `$(_args)`, which
+defaults to all unnamed instance arguments.  Other classes may define `{in}`
+differently.
 
-Typically, the arguments to an instance name its inputs, so `in` defaults to
-`$(_args)`, which evaluates to all unnamed arguments.  Classes that are
-exceptions to this rule, such as `Alias` and `MkDir`, override this property.
+Expansion of [indirections](#indirections) and [inference](#inferClasses) of
+intermediate targets is performed to generate `{inIDs}`, which is a list of
+target IDs.  These are in turn translated to file names -- each instance is
+replaced with its `{out}` property -- to generate `{^}`, which can be used
+to construct the command line.
 
-Ingredients listed in `{in}` will be treated as pre-requisites of the
-instance's rule.  The output files for all ingredients listed in `{in}` are
-available as `{^}`, and `{<}` holds the first of them.
+For convenience or readability, instead of listing all ingredients in
+arguments, users can use a placeholder argument and then define `in` for
+that instance, as in:
 
-### `{out}` and related properties
+   Alias(default).in = Exe(prog)
+   Exe(prog).in = foo.c bar.c baz.c
 
-The value of `{out}` is a file path.  It identifies the file that is
-generated by the instance, or, in the case of phony instances, the phony
-target name.
-
-We generally rely on Builder's definition of `{out}`, which provides a
-number of finer-grained opportunities for customization:
-
- * `{outExt}`: This is the extension to replace the input file's extension
-   when constructing the output file name.  A `%` in `{outExt}` is replaced
-   with the extension of the input file name.
-
- * `{outDir}`: By default, this identifies a directory that is underneath
-   `$(OUTDIR)`.
-
- * `{outName}`: By default, this is constructed from `{outExt}` and the
-   input file name.  The input file name is taken from the `{out}` property
-   of the first input to the instance, unless the instance's first argument
-   is an indirection, in which case the indirection variable name is used.
-
-When using Minion, we generally don't care where intermediate output files
-are located, since we refer to them by their instance names.  As a result,
-most derived classes override only `{outExt}` and leave the other properties
-unchanged.
-
-Note that Builder's definition of `{out}` is designed to ensure that
-different instances will not generate conflicting output file paths.  Its
-directory components incorporate the class name and all the arguments.  When
-overriding `{outDir}`, `{outName}`, or `{out}` itself, keep in mind that no
-two instances can share the same output file name.  Also, be aware that
-Minion's `make clean` simply executes `rm -rf $(OUTDIR)`, so it will not
-remove any output files whose `{out}` properties have placed them outside of
-`$(OUTDIR)`.
-
-The `Mkdir` class has no input files, and uses its first argument to specify
-the *output* name.  It inherits this from `_Mkdir`:
-
-    _Mkdir.in =
-    _Mkdir.out = $(_arg1)
-
-The `Copy` class exists to deploy files to a specific, well-known location,
-rather than an automatically-generated unique location, so it allows the
-output file location to be specified by an argument with the name `out`:
-
-    _Copy.out = $(or $(call _namedArg1,out),{inherit})
-
-For example, `Copy(CC(foo.c),out:deploy/foo.o)` will place its result in
-"deploy/foo.o".
+`Exe(prog)` will create an executable equivalent to
+`Exe(foo.c,bar.c,baz.c)`, but with a different default name ("prog" vs
+"foo").  Alternatively, one could define use an indirection, as in
+`Exe(@prog)` and place all the ingredients in the variable `prog`.
 
 ### `{up}`
 
@@ -374,9 +397,9 @@ into" the class definition, so when using the class one needs to name only
 the files that will be processed by the tool.  This is akin to the notion of
 captured values in lexically scoped programming languages.  These built-in
 dependencies are stored in the `up` property, which is an [ingredient
-list](#ingredients).  The property `up^` evaluates to the output file names
-obtained from the ingredients in `up`, analogously to how `^` is computed
-from `in`.
+list](#ingredients).  The `{ooIDs}` property gives the target IDs that
+result from expansion of `{oo}`, and `{up^}` contains the files
+corresponding to those target IDs.
 
 ### `{oo}`
 
@@ -385,12 +408,12 @@ Order-only dependencies can be specified by defining the `oo` property (an
 appropriate when we know there is a dependency on the existence of a file,
 but not necessarily on the content of the file.
 
-Order-only dependencies are typically used to deal with *implied
-dependencies* that need to be generated by the Makefile.
+Order-only dependencies are typically used to deal with *implicit
+dependencies* that *are generated* by the Makefile.
 
-Implied dependencies are files that are not specified on the command line,
+Implicit dependencies are files that are not specified on the command line,
 but are read during execution of the build command.  The classic example is
-files included by C sources using `#include`.  In Make, implied dependencies
+files included by C sources using `#include`.  In Make, implicit dependencies
 are trakced using the following strategy:
 
  a) The command that compiles the C file also generates a dependency
@@ -403,60 +426,163 @@ are trakced using the following strategy:
 Minion's `CC` and `CC++` clases implement this strategy.  This ensures
 accurate *rebuilds* of object files when included headers are modified.
 
-Order-only dependencies enter the picture when some of the implied
+Order-only dependencies enter the picture when some of the implicit
 dependencies are generated by our makefile.  When we are building an object
 file for the first time, we do not know beforehand what include files will
 be included, so we need to ensure that any *potential* dependencies are
-generated before it is compiled.  The solution is to name all generated
-header files as order-only dependencies of all object files.  It might look
-something like this:
+generated before C files are compiled.  The solution is to name all
+generated header files as order-only dependencies of all object files.  It
+might look something like this:
 
    CC.oo = IDLCompile@idlFiles
 
+### `{deps}`
+
+This property lists dependencies that are but are not listed on the command
+line and are not inherent in the class.
+
+One use case for `{deps}` is when there are implicit dependencies that are
+not automatically detected.  Users can manually express these using
+`{deps}`.
+
+One example of this is ordering of unit tests.  For example, we might want
+to execute test A before test B because A *validates* some of the code
+relied upon by test B.  Running B before A might waste the user's time.
+Automatic detection of these kinds of dependencies might not be avialable.
+
 ### `{inferClasses}`
 
-Rule inference is performed on input files.  Each class can define its own
-inference rules by overriding `{inferClasses}`.  This consists of a list of
-entries of the form `CLASS.EXT`, each indicating that `CLASS` should be
-applied to a input file ending in `.EXT`.
+By default, rule inference is performed on input files.  Each class can
+define its own inference rules by overriding `{inferClasses}`.  This
+consists of a list of entries of the form `CLASS.EXT`, each indicating that
+`CLASS` should be applied to a input file ending in `.EXT`.
 
 For example, inference allows a ".c" file to be supplied where a ".o" file
-is expected.  The instance `LinkC(hello.c)` will infer the instance
-`CC(hello.c)`, because `LinkC.inferClasses` contains `CC.c`.
-
+is expected.  The instance `CExe(hello.c)` will infer the instance
+`CC(hello.c)`, because `CExe.inferClasses` contains `CC.c`.
 
 ### Validity Values
 
-By default, the *command* used to build a Minion target is treated as a
-dependency of the target.  That is, if any changes to makefiles result in
-changes to the build command, any previous build results will be considered
-stale, and will be rebuilt the next time they are freshened with `make`.
+By default, `Builder` treats the *command* used to build a file as a
+dependency.  That is, if any changes to makefiles or he environment result
+in changes to `{command}`, previous build results will be considered
+invalid and a rebuild will be forced on a subsequent invocation of make.
 
-This behavior is controlled by `{vvFile}`, which identifies a makefile that
-will store the command used to generate `{out}`.  If `{vvFile}` is empty,
-this validity check is disabled.  Builder provides a value for `{vvFile}`
-that is underneath `$(OUTDIR)`.  Phony targets disable this feature because
-they are always treated as stale.  User makefiles can disable this on a
-per-instance or per-class basis by overriding `{vvFile}`, and they can
-disable it globally by setting `Builder.vvFile` to the empty string.
+This `{vvFile}` property identifies a makefile that will store this
+dependency information.  Subclasses or user makefiles can set `{vvFile}` to
+an empty value to disable this behavior, or the can override `{vvValue}` to
+include information other than `{command}` that might affect target
+validity.
+
+
+## Debugging
+
+The variable `minionDebug` can be used to turn on debug messages.  Each
+debug message has a value and an associated name, and the value of
+`minionDebug` is a pattern to be matched with the name using `filter` (so
+`minionDebug=%` will turn on all debug messages).  Notably,
+`minionDebug=EVAL%` will enable messages for all text that Minion feeds to
+Make's `$(eval ...)` function.
+
+The `_?` function makes it very easy to instrument your Make functions or
+property definitions with debugging output.  Replacing `$(call
+func,...args...)` with `$(call _?,func,...args...)` will retain the behavior
+but write inputs and outputs to stdout.
+
+
+## Built-in Targets
+
+
+### `make clean`
+
+By default, `make clean` will remove `$(VOUTDIR)`.  User makefiles can
+change this behavior by defining `in` or `command` properties for
+`Alias(clean)`.
+
+When goals not named `clean` are named along with `clean` on the command
+line, it changes the handling of those other goals and `clean`.  Instead of
+deleting `$(VOUTDIR)`, it will delete the targets of the listed goals and
+all of their dependencies.  This can be useful for removing build outputs
+that fall outside of `$(VOUTDIR)`, or for triggering more limited cleanup.
+
+The `Clean` class is used by `make clean`.  For example, `make
+'Clean(Alias(default))'` is equivalent to `make clean default`.  Instances
+of `Clean` can be named as dependencies of `Alias(clean)` to ensure that
+outputs outside of `$(VOUTDIR)` are cleaned.  For example,
+
+    Alias(default).in = Copy(Exe(prog.c),dir:../deploy)
+    Alias(clean).in = Clean(Alias(default))
+
+
+### `make help [TARGETS...]`
+
+When `help` is named as the only goal, a message describing basic usage is
+displayed.  User makefiles can override this by defining `in` or `command`
+properties for `Alias(help)`.  The message displayed by default is available
+in `$(_helpMessage)`.
+
+When `help` is listed with other command line goals, it changes the handling
+of those goals.  Minion will output a description of the other goals, rather
+than build them.  Additionally, instance properties can be listed as goals
+along with `help`.  For example:
+
+   make help 'CC(foo.c).command'
+
+will show the value of `out`, the property definitions that were inherited,
+and the inheritance chain for `CC`.
+
+
+### `make graph`
+
+The `graph` targets draws a textual representation of the dependency tree
+for the default target.  Use `make 'Graph(INSTANCE)'` to see the
+dependencies of some other given instance.
 
 
 ## Exported Definitions
 
+### Naming Conventions
+
+Camel case is generally used for naming in Minion and recommended for user
+makefiles.  Function, variable, and property names begin lowercase, while
+class names begin uppercase.  All-caps names might conflict with environment
+variables or Make's built-in variable settings (e.g LINK.c, COMPILE.c,
+etc.).  Variables defined by by minion.mk begin with "minion" or "_" to avoid
+unintentional conflicts with user makefiles, except for built-in classes and
+the following "unprefixed" names:
+
+    V, OUTDIR, VOUTDIR            Control of build output
+    ., get                        Core object system functions
+    \s \t \n \e \H ; [ ] [[ ]]    Character constants
+    minionStart
+    minionEnd
+    minionDebug
+    minionCache
+    minionNoCache
+
+We generally avoid single-letter global variables so that they can be used
+as "local" variables (in Make `foreach` expressions).  Underscore ("_")
+may be used as a namespace delimiter for variables that are associated with
+a class but not property definitions.
+
+
+### Supported Functions
+
 Minion defines a number of variables and functions for use by user Makefiles
-within recursive property definitions.
+within [recursive](#simple-and-recursive-variables) property definitions.
 
 * Character constants
 
   - `$(\n)`: newline
   - `$(\t)`: tab
   - `$(\s)`: space
+  - `$(\e)`: escape
+  - `$(\H)`: `#`
   - `$;` : `,`
   - `$[` : `(`
   - `$]` : `)`
   - `$([[)`: `{`
   - `$(]])`: `}`
-  - `$(\H)`: `#`
 
 * `$(call get,PROP,IDS)`
 
@@ -485,7 +611,7 @@ within recursive property definitions.
 
 * `$(call _printfEsc,STR)`
 
-  Escape STR for inclusion in a `printf` format string on a command line.
+  Escape STR for inclusion in a `printf` command line argument.
 
 * `$(call _printf,STR)`
 
@@ -540,33 +666,37 @@ within recursive property definitions.
   If `TO` is an absolute path, it is returned as the result.  Otherwise, both
   `FROM` must be a relative path and the result will be a relative path.
 
+* `$(call _traverse,CF,CC,ROOTS)`
+
+  Traverse a graph, starting at root nodes ROOTS, returning a list of nodes
+  ordered such that each parent precedes all its children.
+
+  `CF` = name of a function to get children of a node
+  `CC` = a context value to pass to `CF`
+
+     $(call CF,CC,node) -> children
+
 
 ## Syntax
 
-A target ID is either a `Name` (identifying a source file or target of a
-Make rule) or an `Instance`.
-
-Names avoids characters that are interpreted by POSIX shells or GNU Make as
-special, except for `~`, which is interpreted similarly by both.  As a
-result, there should be no need for special quoting or escaping of file
-names in commands.
-
 The following BNF describes target names:
 
-    TargetID := Name | Instance
-    Instance := Class '(' ArgList ')'
-    ArgList  := ( Arg ( ',' Arg )* )?
-    Arg      := ( Name `:` )? Value
-    Value    := ( Instance | Name | Property )+
-    Name     := NameChar+
-    Class    := ClassChar+
-    Property := PropChar+
+    TargetID  := Name | Instance
+    Instance  := Class '(' ArgList ')'
+    Class     := ClassChar+
+    ArgList   := ( Arg ( ',' Arg )* )?
+    Arg       := ( Name `:` )? Value
+    Value     := ( ArgList | ValueChar )+
+    Name      := NameChar+
+    Property  := PropChar+
 
 These definitions rely on the following character classes:
 
     ClassChar:  A-Z a-z 0-9 _ - + / ^ ~ { }
     NameChar:   A-Z a-z 0-9 _ - + / ^ ~ { } .
     PropChar:   A-Z a-z 0-9 _ - + / ^ ~       @ < >
+    ValueChar:  A-Z a-z 0-9 _ - + / ^ ~ { } . @ < > ! *
+
 
 Note that an argument list contains zero or more arguments, and each
 argument must contain at least one character.  Each argument may contain
@@ -576,3 +706,26 @@ and `:`, but only within nested parentheses.
 
 In general, instances will contain special shell characters, so they may
 have to be quoted when being passed on the command line.
+
+### Notes on Special Characters
+
+Characters that are "special" in POSIX shells or GNU Make can complicate
+things so we generally assume they are not present in input and output file
+names.  Quoting every file name for the shell is tedious, and the additional
+layer of quoting in Make can make things confusing.  Make quoting can vary
+by context and sometimes even be impossible.  That makes for a fairly large
+set of undesirable characters, including whitespace characters and the
+following:
+
+    Make specials:  ~   :        [ ] * ? # $ % ; \ =
+    Bash specials:  ~ !  ( ) < > [ ] * ? # $ % ; \   | & ` ' " { }
+
+Minion instances and indirections may contain a number of these special
+characters because instances generally do not appear as targets and
+prerequisites in Make rules, and they are not passed to the shell as file
+names.  When Minion constructs output file paths from instance names, but it
+is careful to use shell-safe characters to escape any unsafe characters in
+instance names.  The following shell-unsafe characters may appear in
+instances or indirections:
+
+    ( ) < > { } : ! * ~ < >

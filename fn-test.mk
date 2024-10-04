@@ -1,4 +1,4 @@
-# minion_test.mk
+# fn_test.mk : Test make functions implemented in minion.mk
 
 Alias(default).in = #nothing
 MINION ?= minion.mk
@@ -36,9 +36,9 @@ $(call _expectEQ,$(call _shellQuote,'a'),''\''a'\''')
 $(call _expectEQ,$(call _printfEsc,a\b$(\t)c$(\n)d%e%%f),a\\b\tc\nd%e%%f)
 
 
-# _escArg
+# _escape
 
-$(call _expectEQ,$(call _escArg,(a,b)),$$[a$$;b$$])
+$(call _expectEQ,$(call _escape,(a,b)),$$[a$$;b$$])
 
 
 # Catch & re-enable fatal errors
@@ -119,7 +119,7 @@ $(call _expectEQ,\
   <B(a).r:TB;<A.r:a;<B(a).s:$$(_argText);{}>>;<A.p>>)
 
 
-# _goalID
+# _goalToID
 
 Alias(alias1).in = x
 Alias(alias2).command = y
@@ -127,10 +127,10 @@ Alias(alias3).in = x3
 Alias(alias3).command = y3
 
 _aliases := alias1 alias2
-$(call _expectEQ,$(call _goalID,alias1),Alias(alias1))
-$(call _expectEQ,$(call _goalID,@asdf),_Goal(@asdf))
-$(call _expectEQ,$(call _goalID,as(df)),_Goal(as(df)))
-$(call _expectEQ,$(call _goalID,asdf),)
+$(call _expectEQ,$(call _goalToID,alias1),Alias(alias1))
+$(call _expectEQ,$(call _goalToID,@asdf),_Goal(@asdf))
+$(call _expectEQ,$(call _goalToID,as(df)),_Goal(as(df)))
+$(call _expectEQ,$(call _goalToID,asdf),)
 
 
 # _depsOf, _rollup, _rollupEx
@@ -232,10 +232,9 @@ $(call _expectEQ,$(call get,outDir,P(a.o)),.out/P/)
 $(call _expectEQ,$(call get,out,P(a.o)),.out/P/a.o.p)
 
 p1 = a.c
-$(call _expectEQ,$(call get,out,LinkC(@p1)),.out/LinkC_@/p1)
+$(call _expectEQ,$(call get,out,CExe(@p1)),.out/CExe_@/p1)
 
-$(call _expectEQ,$(call get,out,Tar(@p1)),.out/Tar_@/p1.tar)
-$(call _expectEQ,$(call get,out,Zip(@p1)),.out/Zip_@/p1.zip)
+$(call _expectEQ,$(call get,out,CC(@p1)),.out/CC_@/p1.o)
 
 # Inference
 
@@ -250,8 +249,8 @@ Inf(x).in = a.c b.cpp Dup(c.c) d.o
 
 $(call _expectEQ,$(call get,in,Inf(x)),a.c b.cpp Dup(c.c) d.o)
 $(call _expectEQ,\
-  $(call get,inPairs,Inf(x)),\
-  C(a.c)$$.out/C.c/a.o C(b.cpp)$$.out/C.cpp/b.o C(Dup(c.c))$$.out/C.c_/dup/c.o d.o)
+  $(call get,inIDs,Inf(x)),\
+  C(a.c) C(b.cpp) C(Dup(c.c)) d.o)
 
 # _recipe
 
@@ -285,7 +284,7 @@ Defer.command = true $(call _lazy,$$($(_argText)))
 Defer.vvFile =
 
 define DeferRule
-.out/Defer/a : a   | 
+.out/Defer/a : a  | 
 	@echo '#-> Defer(a)'
 	@mkdir -p .out/Defer/
 	true $(a)
@@ -295,12 +294,13 @@ endef
 
 $(call _expectEQ,$(call get,rule,Defer(a)),$(value DeferRule))
 
+
 # Built-in classes
 
 WVAR = test
 
 define WWrule
-.out/Write/WVAR :    | 
+.out/Write/WVAR :   | 
 	@echo '#-> Write(WVAR)'
 	@mkdir -p .out/Write/
 	@echo '_vv=.@printf !`%b!` `test` > !@.' > .out/Write/WVAR.vv
@@ -317,5 +317,3 @@ endef
 $(call _expectEQ,\
   $(call get,rule,Write(WVAR)),\
   $(value WWrule))
-
-$(info $(MINION) ok)

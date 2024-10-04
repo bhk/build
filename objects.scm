@@ -1,6 +1,12 @@
 ;;----------------------------------------------------------------
 ;; Object system
 ;;----------------------------------------------------------------
+;;
+;; Property evaluation makes use of memoization and compilation:
+;;    - Property definitions are compiled before evaluation (see _cx).
+;;    - Property compilation is memoized (per parents & property)
+;;    - Property evaluation is memoized (per instance & property)
+;;
 
 (require "core")
 (require "export.scm")
@@ -61,6 +67,15 @@
           (_walk (_pup parents) p))))
 
 (export (native-name _walk) nil)
+
+
+(define (_hasProperty p id)
+  &native
+  (if (or (defined? (.. id "." p))
+          (_walk (filter-out " |%" (subst "(" " |" id)) p))
+      1))
+
+(export (native-name _hasProperty) nil)
 
 
 ;; Construct an E1 (undefined property) error message
@@ -293,7 +308,6 @@
   (word 1 (_namedArgs key)))
 (export (native-name _namedArg1) 1)
 
-
 ;;--------------------------------
 ;; describeDefn
 ;;--------------------------------
@@ -322,8 +336,7 @@
           (recur)
           (.. (_describeVar C1.P "   ")
               (if has-inherit
-                  (.. "\n\n...wherein {inherit} references:\n\n" (recur)))))
-      "Error: no definition found!"))
+                  (.. "\n\n...wherein {inherit} references:\n\n" (recur)))))))
 
 (export (native-name _describeProp) nil)
 
@@ -336,6 +349,26 @@
 
 (export (native-name _chain) nil)
 
+
+;; Detect (as best as we can) what context we are in
+;;
+;; FN = name of function (e.g. $0 during evaluation of a variable)
+(define (_whereAmI fn)
+  &native
+
+  (define `(q str) (.. "'" str "'"))
+  (.. "during evaluation of "
+      (if (filter "~%" fn)
+          ;; compiled C(A).P function
+          (q (patsubst "~%" "%" (subst "]" ")" fn)))
+          (.. (if (filter "&%" fn)
+                  ;; "&PARENTS.P"
+                  (q (patsubst "&%" "%" fn))
+                  ;; some other function
+                  (.. "$(" fn ")"))
+              (patsubst "%" " in context of %" _self)))))
+
+(export (native-name _whereAmI) 1)
 
 ;;--------------------------------
 ;; Tests
@@ -367,8 +400,12 @@
 (expect (_walk "C" "un") nil)
 (expect (_walk "XX B2" "i") "A")
 
-;; _chain
+;; _hasProperty
+(expect (_hasProperty "p" "C(a)") 1)
+(expect (_hasProperty "x" "C(a)") 1)
+(expect (_hasProperty "un" "C(a)") nil)
 
+;; _chain
 (expect (_chain "C") "C B1 A B2 A")
 
 ;; E1 "who" logic
@@ -468,5 +505,18 @@
             "\n"
             "   A.i :=  (A.i) "))
 
-(expect (_describeProp "UNDEF(a)" "foo")
-        (.. "Error: no definition found!"))
+(expect (_describeProp "UNDEF(a)" "foo") "")
+
+;; _whereAmI
+(set-native-fn "C(a).w0" "$(call _whereAmI,$0)")
+(set-native-fn "C.w1" "$(call _whereAmI,$0)")
+(set-native-fn "C.w2" "$(call _whereAmI,foo)")
+
+(expect (get "w0" "C(a)")
+        "during evaluation of 'C(a).w0'")
+(expect (get "w1" "C(a)")
+        "during evaluation of 'C.w1' in context of C(a)")
+(expect (get "w2" "C(a)")
+        "during evaluation of $(foo) in context of C(a)")
+(expect (_whereAmI "foo")
+        "during evaluation of $(foo)")

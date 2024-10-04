@@ -3,9 +3,9 @@
 
 ## Introduction
 
-Here is an example command line session that introduces Minion
+Here is an actual command line session that introduces Minion
 functionality.  You can follow along typing the commands yourself in the
-`example` subdirectory of the project.
+`demo` subdirectory of the project.
 
 We begin with a minimal makefile:
 
@@ -31,18 +31,18 @@ makefile.  To get started, let's use some classes that are built into
 Minion:
 
     $ make 'CC(hello.c)'
-    $ make 'LinkC(CC(hello.c))'
-    $ make 'Run(LinkC(CC(hello.c)))'
+    $ make 'CExe(CC(hello.c))'
+    $ make 'Run(CExe(CC(hello.c)))'
 
 
 ## Inference
 
 Some classes have the ability to *infer* intermediate build steps, based on
 the extension of the input file (or files).  For example, if we provide a
-".c" file as an argument to `LinkC`, it knows how to generate the
+".c" file as an argument to `CExe`, it knows how to generate the
 intermediate ".o" artifact.
 
-    $ make 'LinkC(hello.c)'
+    $ make 'CExe(hello.c)'
 
 This command linked the program, but did not rebuild `hello.o`.  This is
 because we have already built the inferred dependency, `CC(hello.c)`.  Doing
@@ -53,9 +53,9 @@ re-issuing this command after invoking `make clean`.  The `clean` target is
 defined by Minion, and it removes the "output directory", which, by default,
 contains all generated artifacts.
 
-    $ make clean; make 'LinkC(hello.c)'
+    $ make clean; make 'CExe(hello.c)'
 
-Likewise, `Run` can also infer a `LinkC` instance (which in turn will infer
+Likewise, `Run` can also infer a `CExe` instance (which in turn will infer
 a `CC` instance):
 
     $ make clean; make 'Run(hello.c)'
@@ -99,22 +99,26 @@ to underlying Make primitives.
 
 ## Indirections
 
-An *indirection* is a way of referencing the contents of a variable.  These
-can be used in contexts where input files or prerequisites are specified for
-Minion instances.  There are two forms of indirections.  The first is called
-a simple indirection, written `@VARIABLE`.  It represents all of the files
-or instances named in the variable.
+An *indirection* is a way of referencing a group of files.  These can be
+used in contexts where input files or prerequisites are specified for Minion
+instances.  There are two forms of indirections.  The first is called a
+simple indirection, written `@GROUP`, and it expands to the words in the
+group:
 
-    $ make 'Tar(@sources)' sources='hello.c binsort.c'
+    $ make 'CExe(@sources)' sources='hello.c empty.c'
 
-The other form is called a mapped indirection, written `CLASS@VARIABLE`.
-This references a set of instances which are obtained by applying the class
-to each target identified in the variable.
+The other form is called a mapped indirection, written `CLASS@GROUP`.  This
+references a set of instances which are obtained by applying the class to
+each word in the group.
 
     $ make help Run@sources sources='hello.c binsort.c'
     $ make Run@sources sources='hello.c binsort.c'
-    $ make 'Tar(CC@sources)' sources='hello.c binsort.c'
 
+The groups shown above were defined by variables, but if the group name
+contains a `*` it represents the results of `$(wildcard GROUP)`.  For
+example:
+
+    $ make help 'Run@*.c'
 
 ## Aliases
 
@@ -162,10 +166,10 @@ A build system should make it easy to customize the way build results are
 generated, and to define entirely new, unanticipated build steps.  Let's
 show a couple of examples, and then dive into how and why they work.
 
-    $ make 'CC(hello.c).flags=-Os'
+    $ make 'CC(hello.c).objFlags=-Os'
 
-Observe how this `gcc` command line differs from that of the earlier
-`CC(hello.c)` example.  [By the way, also note that Minion knew to
+Observe how the resulting `gcc` command line differs from that of the
+earlier `CC(hello.c)`.  [By the way, also note that Minion knew to
 re-compile the object file, even when no input files had changed.  The
 previous build result became invalid when the command line changed.  This
 fine-grained dependency tracking means that when using Minion you almost
@@ -173,7 +177,7 @@ never need to `make clean`, even after you have edited your makefile.]
 
 We can make this change apply more widely:
 
-    $ make CC.flags=-Os
+    $ make CC.objFlags=-Os
 
 So what's going on here?
 
@@ -246,9 +250,9 @@ see that the `_Compile.command` definition concerns itself with specifying
 the input files, output files, and implied dependencies.  It refers to a
 property named `flags` for command-line options that address other concerns.
 
-We can now see how the earlier command that set `CC(hello.c).flags=-Os`
+We can now see how the earlier command that set `CC(hello.c).objFlags=-Os`
 defined an instance-specific property, so it only affected the command line
-for one object file, and the command that set `CC.flags` provided a
+for one object file, whereas the command that set `CC.objFlags` provided a
 definition inherited by both `CC` instances.
 
 ### User Classes
@@ -282,11 +286,11 @@ only to define `command`.
 
     $ make 'Sizes(CC(hello.c),CCg(hello.c))'
 
-This makefile also defines a class named `CCg`, and defines `CCg.flags`
+This makefile also defines a class named `CCg`, and defines `CCg.objFlags`
 using `{inherit}` so that it will extend, not replace, the set of flags it
 inherits.
 
-    $ make help 'CCg(hello.c).flags'
+    $ make help 'CCg(hello.c).objFlags'
 
 
 ## Variants
@@ -297,8 +301,8 @@ overall structure, but may differ from each other in various ways.  For
 example, we may have "release" and "debug" variants, or "ARM" and "Intel"
 variants of a C project.
 
-We have shown how typing `make CC.flags=-g` and then later `make
-CC.flags=-O3` could be used to achieve different builds.  With this
+We have shown how typing `make CC.objFlags=-g` and then later `make
+CC.objFlags=-O3` could be used to achieve different builds.  With this
 approach, however, each time we "switch" between the two builds, all
 affected files will have to be recompiled.
 
@@ -316,24 +320,30 @@ achieve that by doing the following:
 
 When defining variant-dependent properties, we could use Make's functions:
 
-    CC.flags = $(if $(filter debug,$V),-g, ... )
+    CC.objFlags = $(if $(filter debug,$V),{dbgFlags},{optFlags})
+    CC.dbgFlags = ...
+    CC.optFlags = ...
 
-Instead, it is much more elegant to leverage Minion's property evaluation
-and group property definitions into classes whose names incorporate `$V`,
-like this:
+Alternatively, we could leverage Minion's property inheritance and define
+classes for each variant by incorporating `$V` into the class name.  That
+would look like this:
 
     CC.inherit = CC-$V _CC
 
-    CC-debug.flags = -g
-    CC-fast.flags = -O3
-    CC-small.flags = -Os
+    CC-debug.objFlags = -g
+    CC-fast.objFlags = -O3
+    CC-small.objFlags = -Os
+
+[Note that these classes do not appear last in the list of parents of `CC`,
+so they do not have to inherit from `Builder` or define the essential
+properties that it defines.  Instead, they are concerned only with
+purpose-specific customizations.  We call classes like this **mixins**.]
 
 The following makefile uses this approach.
 
     $ cp Makefile4 Makefile
     $ cat Makefile
-    $ make V=debug help 'CC(hello.c).flags'
-
+    $ make V=debug help 'CC(hello.c).objFlags'
 
 Finally, we want to be able to build multiple variants with a single
 invocation.  Minion provides a built-in class, `Variants(TARGET)`, that
@@ -357,9 +367,9 @@ To summarize the key concepts in Minion:
    be given as Make command line goals, and named as inputs to other
    instances.  They take the form `CLASS(ARGUMENTS)`.
 
- - *Indirections* are ways to reference Make variables that hold lists of
-   other targets.  They can be used as arguments to instances, or in the
-   value of an `in` property, or on the command line.
+ - *Indirections* are short names that identify groups of targets.  They can
+   be used as arguments to instances, or in the value of an `in` property,
+   or on the command line.
 
  - *Aliases* are short names that can be specified as goals on the command
    line.  An alias can identify a set of other targets to be built, or a

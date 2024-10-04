@@ -13,16 +13,10 @@
 
 (export-text "# base.scm")
 
-(define OUTDIR
+(define VOUTDIR
   &public
   &native
   ".out/")
-
-
-(define (_isIndirect target)
-  &public
-  &native
-  (findstring "@" (word 1 (subst "(" "( " target))))
 
 
 (define \H &native &public "#")
@@ -90,11 +84,11 @@
   (set *errorLog* (._. *errorLog* [msg])))
 
 
-;; Discriminate instances -- CLASS(ARGS) -- from other target list entries or
-;; goals.  We assume ID is either a valid target (instance, make target),
-;; alias, or indirection.
+;; If ID is an instance, return it unmodified.
 ;;
-;; Return truth if ID is an instance:  CLASS(ARGS)
+;; This function does not perform a deep validation of the instance syntax,
+;; but it discriminates them from valid indirections, aliases, or file names.
+;;
 (define (_isInstance id)
   &public
   &native
@@ -103,46 +97,41 @@
 (export (native-name _isInstance) 1)
 
 
-;; Discriminate indirections (@VAR, C@VAR, D@C@VAR, ...) from other target
-;; list entries or goals.  We assume ID is either a valid target (instance,
-;; make target), alias, or indirection.
+;; If ID is an indirection (@GROUP, CLASS@GROUP, C1@C2@GROUP, ...) return
+;; it unmodified.
 ;;
 (define (_isIndirect id)
   &public
   &native
-  (findstring "@" (filter-out "%)" id)))
+  (if (findstring "@" id)
+      (filter-out "%)" id)))
 
 (export (native-name _isIndirect) 1)
 
 
 ;; Return alias instance if goal NAME is an alias.
 ;;
-(define (_aliasID name)
+(define (_isAlias name)
   &native
   (if (filter "s% r%" (._. (native-flavor (.. "Alias(" name ").in"))
                            (native-flavor (.. "Alias(" name ").command"))))
       (.. "Alias(" name ")")))
 
-(export (native-name _aliasID) 1)
-
-;; Not exported; this definition resides in minion.mk because it uses "?=".
-(define (minion_alias goal)
-  &native
-  (_aliasID goal))
+(export (native-name _isAlias) 1)
 
 
 ;; Translate goal NAME into an instance that will generate a rule whose
 ;; `out` will match NAME, *if* NAME is an alias, instance, or indirection.
 ;; Otherwise, it must be a valid target in a Make rule, and we return empty.
 ;;
-(define (_goalID name)
+(define (_goalToID name)
   &native
-  (or (minion_alias name)
-      (if (or (_isInstance name)
-              (_isIndirect name))
-          (.. "_Goal(" name ")"))))
+  (if (or (_isInstance name)
+          (_isIndirect name))
+      (.. "_Goal(" name ")")
+      (_isAlias name)))
 
-(export (native-name _goalID) 1)
+(export (native-name _goalToID) 1)
 
 
 ;; Return the variable portion of indirection ID.  Return nil if the ID ends
@@ -157,21 +146,7 @@
 (export (native-name _ivar) 1)
 
 
-;; Return a pattern for expanding an indirection.
-;;    @VAR, C@VAR, D@C@VAR  -->  %, C(%), D(C(%))
-;;
-(define (_ipat ref)
-  &native
-  (if (filter "@%" ref)
-      "%"
-      (subst " " ""
-             (filter "%( %% )"
-                     (.. (subst "@" "( " ref) " % " (subst "@" " ) " ref))))))
-
-(export (native-name _ipat) 1)
-
-
-(define (_EI id prop)
+(define (_EI id where)
   &native
 
   (_error
@@ -179,36 +154,53 @@
     (if (filter "%@" id)
         (.. "Invalid target (ends in '@'): " id)
         (.. "Indirection '" id "' references undefined variable '" (_ivar id) "'"))
-    (if (and _self prop)
+    (if where
         (.. "\nFound while expanding "
-            (if (filter "_Goal(%" _self)
-                (.. "command line goal " (patsubst "_Goal(%)" "%" _self))
-                (.. _self "." prop)))))))
+            (if (filter "_Goal(%" where)
+                "command line goal"
+                where))))))
 
 (export (native-name _EI) 1)
 
 
-(define (_expandX list prop)
+;; WHERE = C(A).P or variable name
+;;
+(define (_expandX list where)
   &native
+  (define `(expand var indir)
+    (if (findstring "*" var)
+        (wildcard var)
+        (if (undefined? var)
+            (_EI indir where)
+            (_expandX (native-var var) var))))
+
+  ;; Create a pattern for indirection expansion
+  ;;      @var   ==>   %
+  ;;     C@var   ==>   C(%)
+  ;;   D@C@var   ==>   D(C(%))
+  (define `(ipat ref)
+    (if (filter "@%" ref)
+        "%"
+        (subst " " ""
+               (filter "%( %% )"
+                       (.. (subst "@" "( " ref) " % " (subst "@" " ) " ref))))))
+
   (foreach (w list)
-    (if (findstring "@" w)
-        (if (.. (findstring "(" w) (findstring ")" w))
-            w
-            (if (undefined? (_ivar w))
-                (_EI w prop)
-                (patsubst "%" (_ipat w)
-                          (_expandX (native-var (_ivar w)) prop))))
+    (if (_isIndirect w)
+        (foreach (v (or (_ivar w) "=@"))
+          (patsubst "%" (ipat w) (expand v w)))
         w)))
 
 (export (native-name _expandX) nil)
 
 
 ;; Expand indirections in LIST
+;; PROP is used in reporting "Found while expanding C(A).PROP" errors
 ;;
 (define (_expand list ?prop)
   &native
   (if (findstring "@" list)
-      (_expandX list prop)
+      (_expandX list (.. _self "." prop))
       list))
 
 (export (native-name _expand) nil)
@@ -231,6 +223,7 @@
     (expect 1 (see "Invalid target" (first *errorLog*)))
     (expect 1 (see "Found while expanding C(A).x" (first *errorLog*)))
     (expect 1 (see "undefined variable 'undef'" (nth 2 *errorLog*)))
+    (expect "minion.md minion.mk" (_expand "@minion.m*"))
     nil)
 
   nil)
